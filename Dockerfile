@@ -18,6 +18,6 @@ WORKDIR /usr/share/nginx/html
 COPY --from=build-env /app/out/wwwroot .
 
 # 🌟 On écrase la configuration par défaut de Nginx avec notre fichier propre
-COPY Finama.Web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
