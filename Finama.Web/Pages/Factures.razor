@@ -1,0 +1,480 @@
+@page "/factures"
+@using Finama.Web.Models
+@layout MainLayout
+@inject FinamaApiService Api
+@inject IJSRuntime JS
+
+<PageTitle>Factures — Finama</PageTitle>
+
+<div class="page-wrapper">
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="page-title"><i class="bi bi-file-earmark-text-fill text-primary me-2"></i>Factures</h2>
+            <p class="page-subtitle text-muted">Gestion de vos factures de ventes (clients) et d'achats (fournisseurs)</p>
+        </div>
+        <button class="btn btn-primary shadow-sm px-4" @onclick="OuvrirCreation">
+            <i class="bi bi-plus-circle-fill me-2"></i>Nouvelle facture
+        </button>
+    </div>
+
+    @if (_chargement)
+    {
+        <div class="d-flex justify-content-center align-items-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <span class="ms-2 text-muted">Chargement de vos factures...</span>
+        </div>
+    }
+    else if (_factures?.Items.Count == 0)
+    {
+        <div class="text-center py-5 border rounded bg-white shadow-sm">
+            <div class="fs-1 text-muted mb-3"><i class="bi bi-folder-x"></i></div>
+            <h4 class="fw-bold text-dark">Aucune facture pour le moment</h4>
+            <p class="text-muted small px-3">Commencez à éditer vos pièces comptables pour générer vos écritures automatiques.</p>
+            <button class="btn btn-primary btn-sm mt-2" @onclick="OuvrirCreation">Créer la première facture</button>
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light text-secondary small text-uppercase">
+                            <tr>
+                                <th class="ps-4">Numéro</th>
+                                <th>Partenaire (Tiers)</th>
+                                <th>Émission</th>
+                                <th>Échéance</th>
+                                <th class="text-end">Total TTC</th>
+                                <th class="text-end">Reste à payer</th>
+                                <th>Statut</th>
+                                <th class="text-end pe-4">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var f in _factures!.Items)
+                            {
+                                <tr class="@(EstEnRetard(f) ? "table-danger-subtle" : "")">
+                                    <td class="ps-4 font-monospace fw-bold text-primary">@f.Numero</td>
+                                    <td>
+                                        <div class="fw-bold text-dark">@f.TiersNom</div>
+                                        <span class="text-muted small font-monospace">@f.TiersCode</span>
+                                    </td>
+                                    <td class="text-muted small">@f.DateFacture.ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        @if (f.DateEcheance.HasValue)
+                                        {
+                                            <span class="@(EstEnRetard(f) ? "text-danger fw-bold" : "text-muted small")">
+                                                @f.DateEcheance.Value.ToString("dd/MM/yyyy")
+                                                @if (EstEnRetard(f))
+                                                {
+                                                    <i class="bi bi-exclamation-triangle-fill ms-1" title="En retard de paiement"></i>
+                                                }
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </td>
+                                    <td class="text-end fw-bold">@Fmt(f.TotalTTC, f.EntrepriseDeviseSymbole)</td>
+                                    <td class="text-end font-monospace">
+                                        @if (f.Solde > 0)
+                                        {
+                                            <span class="text-danger fw-bold">@Fmt(f.Solde, f.EntrepriseDeviseSymbole)</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle px-2">Soldé</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="badge @ObtenirBadgeStatut(f.Statut) text-uppercase px-2 py-1" style="font-size:0.75rem;">
+                                            @f.Statut
+                                        </span>
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        <div class="btn-group shadow-sm border rounded">
+                                            <button class="btn btn-sm btn-light text-secondary" title="Voir détail" @onclick="() => VoirDetail(f)">
+                                                <i class="bi bi-eye-fill"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-light text-primary" title="Télécharger PDF" @onclick="() => TelechargerPdf(f.Id)">
+                                                <i class="bi bi-file-earmark-pdf-fill"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer bg-light d-flex justify-content-between align-items-center py-3 border-top-0">
+                <span class="text-muted small">
+                    <strong>@_factures!.TotalItems</strong> facture(s) au total — Page @_factures.Page / @_factures.TotalPages
+                </span>
+                <div class="btn-group btn-group-sm shadow-sm">
+                    <button class="btn btn-white border" disabled="@(_page <= 1)" @onclick="PagePrecedente"><i class="bi bi-chevron-left"></i> Précédent</button>
+                    <button class="btn btn-white border" disabled="@(_page >= _factures.TotalPages)" @onclick="PageSuivante">Suivant <i class="bi bi-chevron-right"></i></button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (_factureDetail is not null)
+{
+    <div class="modal fade show finama-adjusted-modal" tabindex="-1" style="background: rgba(0,0,0,0.4); backdrop-filter: blur(3px); display:block;">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-light border-0 p-3 px-4">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-receipt me-2 text-primary fs-4"></i>Facture @_factureDetail.Numero</h5>
+                    <button type="button" class="btn-close" @onclick="() => _factureDetail = null"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3 p-3 bg-light rounded border mb-4 small">
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted d-block uppercase fw-bold font-monospace text-xs mb-1">Partenaire</span>
+                            <strong class="text-dark">@_factureDetail.TiersNom</strong>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted d-block uppercase fw-bold font-monospace text-xs mb-1">Date Émission</span>
+                            <span class="text-dark">@_factureDetail.DateFacture.ToString("dd/MM/yyyy")</span>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted d-block uppercase fw-bold font-monospace text-xs mb-1">Date Échéance</span>
+                            <span class="text-dark">@(_factureDetail.DateEcheance?.ToString("dd/MM/yyyy") ?? "—")</span>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <span class="text-muted d-block uppercase fw-bold font-monospace text-xs mb-1">Statut Courant</span>
+                            <span class="badge @ObtenirBadgeStatut(_factureDetail.Statut)">@_factureDetail.Statut</span>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light small">
+                                <tr>
+                                    <th>Description de l'article / prestation</th>
+                                    <th class="text-end" style="width:15%">Quantité</th>
+                                    <th class="text-end" style="width:20%">Prix Unitaire HT</th>
+                                    <th class="text-end" style="width:12%">TVA</th>
+                                    <th class="text-end" style="width:20%">Montant HT</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var l in _factureDetail.Lignes)
+                                {
+                                    <tr>
+                                        <td>@l.Description</td>
+                                        <td class="text-end font-monospace">@l.Quantite.ToString("N2")</td>
+                                        <td class="text-end font-monospace">@Fmt(l.PrixUnitaireHT, _factureDetail.EntrepriseDeviseSymbole)</td>
+                                        <td class="text-end text-muted font-monospace small">@l.TauxTVA %</td>
+                                        <td class="text-end font-monospace fw-bold text-dark">@Fmt(l.MontantHT, _factureDetail.EntrepriseDeviseSymbole)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="row justify-content-end mt-4">
+                        <div class="col-12 col-md-6">
+                            <div class="p-3 bg-light rounded border border-secondary-subtle">
+                                <div class="d-flex justify-content-between small mb-1">
+                                    <span class="text-muted">Total Hors Taxes :</span>
+                                    <span class="font-monospace text-dark">@Fmt(_factureDetail.TotalHT, _factureDetail.EntrepriseDeviseSymbole)</span>
+                                </div>
+                                <div class="d-flex justify-content-between small mb-2 pb-2 border-bottom">
+                                    <span class="text-muted">Total Taxes (TVA) :</span>
+                                    <span class="font-monospace text-dark">@Fmt(_factureDetail.TotalTVA, _factureDetail.EntrepriseDeviseSymbole)</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="fw-bold text-dark">Net à Payer (TTC) :</span>
+                                    <span class="fs-5 fw-bold text-primary font-monospace">@Fmt(_factureDetail.TotalTTC, _factureDetail.EntrepriseDeviseSymbole)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0 p-3">
+                    <button class="btn btn-light px-3 fw-semibold border" @onclick="() => _factureDetail = null">Fermer</button>
+                    <button class="btn btn-primary px-4 fw-bold shadow-sm" @onclick="() => TelechargerPdf(_factureDetail.Id)"><i class="bi bi-file-earmark-pdf me-1"></i> Imprimer PDF</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_creationOuverte)
+{
+    <div class="modal fade show finama-adjusted-modal" tabindex="-1" style="background: rgba(0,0,0,0.4); backdrop-filter: blur(3px); display:block;">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-light border-0 p-3 px-4">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-plus-circle-fill text-primary me-2 fs-4"></i>Émission d'une nouvelle pièce</h5>
+                    <button type="button" class="btn-close" @onclick="() => _creationOuverte = false"></button>
+                </div>
+                <div class="modal-body p-4" style="max-height: 65vh; overflow-y: auto;">
+                    @if (!string.IsNullOrEmpty(_erreur))
+                    {
+                        <div class="alert alert-danger border-0 shadow-sm small py-2 mb-3"><i class="bi bi-exclamation-octagon-fill me-2"></i> @_erreur</div>
+                    }
+
+                    <div class="row g-3">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small fw-bold text-secondary">Nature de l'opération *</label>
+                            <select class="form-select fw-bold text-dark" value="@_cType" @onchange="OnTypeFactureChanged">
+                                <option value="0">🧾 Facture de Vente</option>
+                                <option value="1">📦 Facture d'Achat</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-8">
+                            <label class="form-label small fw-bold text-secondary">Tiers référencé *</label>
+                            <select class="form-select" @bind="_cTiersId">
+                                <option value="">— Choisir le tiers partenaire —</option>
+                                @foreach (var t in _tiersSelect)
+                                {
+                                    <option value="@t.Id">@t.Code — @t.Nom</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small fw-bold text-secondary">Date Émission *</label>
+                            <input class="form-control" type="date" @bind="_cDateFacture" />
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small fw-bold text-secondary">Échéance</label>
+                            <input class="form-control" type="date" @bind="_cDateEcheance" />
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small text-muted">Notes internes ou commentaires annexes</label>
+                            <input class="form-control" @bind="_cNotes" placeholder="S'affichera au bas du livrable PDF..." />
+                        </div>
+                    </div>
+
+                    <div class="mt-4 border-top pt-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold text-secondary mb-0"><i class="bi bi-list-ol me-2"></i>Postes de facturation</h6>
+                            <button class="btn btn-outline-secondary btn-sm px-3 shadow-sm" @onclick="AjouterLigne"><i class="bi bi-plus-lg me-1"></i> Ajouter un poste</button>
+                        </div>
+
+                        @foreach (var (l, i) in _cLignes.Select((l, i) => (l, i)))
+                        {
+                            <div class="row g-2 mb-2 align-items-center bg-light p-2 rounded border border-light-subtle">
+                                <div class="col-12 col-md-5">
+                                    <input class="form-control form-control-sm" @bind="l.Description" placeholder="Désignation de la prestation/marchandise" />
+                                </div>
+                                <div class="col-4 col-md-2">
+                                    <input class="form-control form-control-sm text-end" type="number" @bind="l.Quantite" placeholder="Qté" min="0" step="0.01" />
+                                </div>
+                                <div class="col-4 col-md-3">
+                                    <div class="input-group input-group-sm">
+                                        <input class="form-control text-end font-monospace" type="number" @bind="l.PrixHT" placeholder="P.U HT" min="0" />
+                                        <span class="input-group-text font-xs">@_devise</span>
+                                    </div>
+                                </div>
+                                <div class="col-3 col-md-1.5">
+                                    <div class="input-group input-group-sm">
+                                        <input class="form-control text-end small" type="number" @bind="l.TauxTVA" placeholder="TVA" min="0" max="100" />
+                                        <span class="input-group-text font-xs">%</span>
+                                    </div>
+                                </div>
+                                <div class="col-1 text-end">
+                                    <button class="btn btn-sm btn-link text-danger p-0" title="Supprimer" @onclick="() => SupprimerLigne(i)">
+                                        <i class="bi bi-trash-fill fs-5"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        }
+
+                        @if (_cLignes.Any())
+                        {
+                            <div class="p-3 bg-dark text-white rounded mt-3 small shadow-inner font-monospace d-flex flex-wrap justify-content-between gap-3">
+                                <span>Total HT : <strong class="text-warning">@Fmt(_cLignes.Sum(l => l.Quantite * l.PrixHT), _devise)</strong></span>
+                                <span>TVA : <strong class="text-warning">@Fmt(_cLignes.Sum(l => l.Quantite * l.PrixHT * l.TauxTVA / 100), _devise)</strong></span>
+                                <span>Total TTC : <strong class="text-info">@Fmt(_cLignes.Sum(l => l.Quantite * l.PrixHT * (1 + l.TauxTVA / 100)), _devise)</strong></span>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0 p-3">
+                    <button class="btn btn-light px-3 fw-semibold border" @onclick="() => _creationOuverte = false">Annuler</button>
+                    <button class="btn btn-primary px-4 fw-bold shadow-sm" @onclick="CreerFacture" disabled="@_sauvegarde">
+                        @if (_sauvegarde)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    
+                            <span>Validation...</span>
+                        }
+                        else
+                        {
+                            <span><i class="bi bi-check-circle-fill me-1"></i> Émettre la pièce</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    /* 🌟 LE STYLE DE CENTRAGE INTELLIGENT POUR FINAMA 🌟 */
+    @@media (min-width: 992px) {
+        .finama-adjusted-modal {
+            /* On décale la zone d'affichage du modal de la taille du menu de gauche */
+            padding-left: 260px !important;
+        }
+    }
+
+    .font-xs {
+        font-size: 0.72rem;
+        padding: 0.25rem 0.4rem;
+    }
+
+    .text-xs {
+        font-size: 0.7rem;
+    }
+</style>
+
+@code {
+    // ... Garde ton code C# strictement identique, il est déjà parfait !
+    private PagedResultDto<FactureDto>? _factures;
+    private FactureDto? _factureDetail;
+    private List<TiersDto> _tiersSelect = [];
+    private ExerciceDto? _exerciceCourant;
+    private bool _chargement = true;
+    private bool _creationOuverte = false;
+    private bool _sauvegarde = false;
+    private string _erreur = "";
+    private int _page = 1;
+    private string _devise = "XOF";
+
+    private string _cType = "0";
+    private string _cTiersId = "";
+    private DateTime _cDateFacture = DateTime.Today;
+    private DateTime? _cDateEcheance;
+    private string? _cNotes;
+    private List<LigneForm> _cLignes = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _exerciceCourant = await Api.GetExerciceCourantAsync();
+        await ChargerAsync();
+
+        if (_factures?.Items?.Any() == true)
+        {
+            _devise = _factures.Items.First().EntrepriseDeviseSymbole;
+        }
+        else if (_exerciceCourant is not null)
+        {
+            _devise = await Api.GetDeviseSymboleAsync() ?? "XOF";
+        }
+    }
+
+    private async Task ChargerAsync()
+    {
+        _chargement = true;
+        _factures = await Api.GetFacturesAsync(_page, 20);
+        _chargement = false;
+    }
+
+    private async Task OuvrirCreation()
+    {
+        _cType = "0";
+        await ChargerTiersParNatureAsync("Client");
+        _cTiersId = "";
+        _cDateFacture = DateTime.Today;
+        _cDateEcheance = null;
+        _cNotes = null;
+        _cLignes = [new LigneForm()];
+        _erreur = "";
+        _creationOuverte = true;
+    }
+
+    private async Task OnTypeFactureChanged(ChangeEventArgs e)
+    {
+        _cType = e.Value?.ToString() ?? "0";
+        _cTiersId = "";
+
+        string nature = _cType == "0" ? "Client" : "Fournisseur";
+        await ChargerTiersParNatureAsync(nature);
+    }
+
+    private async Task ChargerTiersParNatureAsync(string nature)
+    {
+        try
+        {
+            _tiersSelect = await Api.GetTiersSelectAsync(nature);
+        }
+        catch (Exception ex)
+        {
+            _erreur = "Erreur de chargement des tiers : " + ex.Message;
+        }
+    }
+
+    private void VoirDetail(FactureDto f) => _factureDetail = f;
+    private void AjouterLigne() => _cLignes.Add(new LigneForm());
+    private void SupprimerLigne(int i) => _cLignes.RemoveAt(i);
+    private async Task PageSuivante() { _page++; await ChargerAsync(); }
+    private async Task PagePrecedente() { _page--; await ChargerAsync(); }
+
+    private async Task TelechargerPdf(Guid id)
+    {
+        var pdf = await Api.GetFacturePdfAsync(id);
+        if (pdf is null) return;
+        var base64 = Convert.ToBase64String(pdf);
+        await JS.InvokeVoidAsync("downloadPdf", base64, $"Facture_{id}.pdf");
+    }
+
+    private async Task CreerFacture()
+    {
+        if (string.IsNullOrEmpty(_cTiersId)) { _erreur = "Sélectionnez un partenaire d'affaires (tiers)."; return; }
+        if (!_cLignes.Any() || _cLignes.Any(l => string.IsNullOrWhiteSpace(l.Description))) { _erreur = "Chaque ligne ajoutée doit comporter une désignation valide."; return; }
+        if (_exerciceCourant is null) { _erreur = "Impossible d'enregistrer la facture : aucun exercice comptable actif pour l'année courante."; return; }
+
+        _sauvegarde = true; _erreur = "";
+        try
+        {
+            await Api.CreerFactureAsync(new CreerFactureRequest(
+                Type: int.Parse(_cType),
+                DateFacture: _cDateFacture,
+                DateEcheance: _cDateEcheance,
+                TiersId: Guid.Parse(_cTiersId),
+                ExerciceId: _exerciceCourant.Id,
+                Notes: _cNotes,
+                Lignes: _cLignes.Select(l => new CreerLigneFactureRequest(
+                    Description: l.Description,
+                    Quantite: l.Quantite,
+                    PrixUnitaireHT: l.PrixHT,
+                    TauxTVA: l.TauxTVA)).ToList()
+            ));
+            _creationOuverte = false;
+            await ChargerAsync();
+        }
+        catch (Exception ex) { _erreur = ex.Message; }
+        finally { _sauvegarde = false; }
+    }
+
+    private string ObtenirBadgeStatut(string statut) => statut.ToLower() switch
+    {
+        "regle" or "payee" or "soldé" => "bg-success-subtle text-success border border-success-subtle",
+        "brouillon" => "bg-light text-dark border",
+        "attente" or "envoyee" => "bg-warning-subtle text-warning border border-warning-subtle",
+        "annulee" => "bg-secondary-subtle text-secondary border border-secondary-subtle",
+        _ => "bg-danger-subtle text-danger border border-danger-subtle"
+    };
+
+    private static bool EstEnRetard(FactureDto f)
+        => f.DateEcheance.HasValue && f.DateEcheance < DateTime.Today
+           && f.Statut != "Regle" && f.Statut != "Annulee";
+
+    private static string Fmt(decimal m, string s) => $"{m:N0} {s}";
+
+    private class LigneForm
+    {
+        public string Description { get; set; } = "";
+        public decimal Quantite { get; set; } = 1;
+        public decimal PrixHT { get; set; } = 0;
+        public decimal TauxTVA { get; set; } = 18;
+    }
+}

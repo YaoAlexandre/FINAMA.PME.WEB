@@ -1,0 +1,425 @@
+﻿@page "/referentiel/tiers"
+@using Finama.Web.Models
+@inject FinamaApiService Api
+@inject AppState State
+
+<div class="page-header d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+    <div>
+        <h1 class="page-title mb-1">Référentiel Tiers</h1>
+        <p class="text-muted small mb-0">Gérez l'ensemble de vos partenaires commerciaux (Clients et Fournisseurs).</p>
+    </div>
+    <button @onclick="OuvrirCreation" class="btn btn-primary shadow-sm px-4 py-2">
+        <i class="bi bi-plus-lg me-2"></i>Nouveau Tiers
+    </button>
+</div>
+
+<div class="card shadow-sm border-0 rounded-3">
+    <div class="card-header bg-white py-3 border-bottom border-light">
+        <div class="row g-3 align-items-center">
+            <div class="col-12 col-sm-7 col-md-6 col-lg-5">
+                <div class="search-container">
+                    <i class="bi bi-search search-icon text-muted"></i>
+                    <input type="text" class="form-control ps-5 py-2 w-100" placeholder="Rechercher un tiers..."
+                           @bind="_filtre.Recherche" @onkeyup="OnRechercheKeyUp" />
+                </div>
+            </div>
+            <div class="col-12 col-sm-5 col-md-5 col-lg-6">
+                <select class="form-select py-2 w-100" @bind="_filtre.Type" @bind:after="ChargerDonnees">
+                    <option value="">Tous les types</option>
+                    <option value="Client">Clients</option>
+                    <option value="Fournisseur">Fournisseurs</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light text-uppercase font-monospace" style="font-size: 0.75rem; letter-spacing: 0.5px;">
+                <tr>
+                    <th class="ps-4 py-3">Code</th>
+                    <th class="py-3">Nom / Raison Sociale</th>
+                    <th class="py-3">Type</th>
+                    <th class="py-3">Contact</th>
+                    <th class="py-3">Statut</th>
+                    <th class="text-end pe-4 py-3">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_resultat.Items == null || !_resultat.Items.Any())
+                {
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            <i class="bi bi-people fs-2 d-block mb-2 opacity-50"></i>
+                            Aucun tiers trouvé correspondant aux critères.
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var tiers in _resultat.Items)
+                    {
+                        <tr @key="tiers.Id">
+                            <td class="ps-4"><span class="badge-code font-monospace fw-bold">@tiers.Code</span></td>
+                            <td>
+                                <span class="text-main fw-semibold">@tiers.Nom</span>
+                            </td>
+                            <td>
+                                <span class="badge @(tiers.Type == "Client" ? "bg-info-subtle text-info border border-info-subtle" : "bg-warning-subtle text-warning border border-warning-subtle") px-2.5 py-1 rounded-2 fw-medium small">
+                                    <i class="bi @(tiers.Type == "Client" ? "bi-wallet2" : "bi-truck") me-1.5"></i>@tiers.Type
+                                </span>
+                            </td>
+                            <td>
+                                <div class="d-flex flex-column gap-0.5">
+                                    @if (!string.IsNullOrEmpty(tiers.Email))
+                                    {
+                                        <span class="small text-main"><i class="bi bi-envelope me-1.5 text-muted"></i>@tiers.Email</span>
+                                    }
+                                    @if (!string.IsNullOrEmpty(tiers.Telephone))
+                                    {
+                                        <span class="small text-muted"><i class="bi bi-telephone me-1.5 text-muted"></i>@tiers.Telephone</span>
+                                    }
+                                    @if (string.IsNullOrEmpty(tiers.Email) && string.IsNullOrEmpty(tiers.Telephone))
+                                    {
+                                        <span class="small text-muted italic">Aucun contact</span>
+                                    }
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge-status @(tiers.EstActif ? "active" : "inactive") fw-medium">
+                                    <span class="badge-dot me-1.5"></span>@(tiers.EstActif ? "Actif" : "Inactif")
+                                </span>
+                            </td>
+                            <td class="text-end pe-4">
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-light border p-2 me-1.5 rounded-2 text-secondary" @onclick="() => OuvrirEdition(tiers)" title="Modifier">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-light border p-2 rounded-2 text-danger" @onclick="() => ConfirmerSuppression(tiers)" title="Supprimer">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card-footer bg-white py-3 d-flex flex-column flex-sm-row justify-content-between align-items-center gap-3 border-top border-light">
+        <small class="text-muted font-monospace">Page @_resultat.Page sur @_resultat.TotalPages (@_resultat.TotalItems au total)</small>
+        <div class="pagination-controls d-flex gap-1.5">
+            <button class="btn btn-sm btn-light border px-3" disabled="@(_resultat.Page <= 1)" @onclick="() => ChangerPage(-1)">
+                <i class="bi bi-chevron-left me-1"></i> Précédent
+            </button>
+            <button class="btn btn-sm btn-light border px-3" disabled="@(_resultat.Page >= _resultat.TotalPages)" @onclick="() => ChangerPage(1)">
+                Suivant <i class="bi bi-chevron-right ms-1"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+@if (_showEditModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-3 bg-card">
+                <div class="modal-header border-bottom border-light px-4 py-3">
+                    <div class="d-flex align-items-center gap-2.5">
+                        <div class="bg-primary-subtle text-primary p-2 rounded-3 d-inline-flex">
+                            <i class="bi bi-pencil-square fs-5"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title fw-bold mb-0" style="color: var(--text-main);">Modifier le Tiers</h5>
+                            <span class="text-muted small font-monospace">Code : @_editModel.Code</span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close shadow-none" @onclick="() => _showEditModal = false"></button>
+                </div>
+                <div class="modal-body px-4 py-3" style="color: var(--text-main);">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nom / Raison Sociale</label>
+                        <input type="text" class="form-control py-2" @bind="_editModel.Nom" placeholder="Nom de l'entité" />
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label small fw-bold">Email</label>
+                            <input type="email" class="form-control py-2" @bind="_editModel.Email" placeholder="contact@email.com" />
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label small fw-bold">Téléphone</label>
+                            <input type="text" class="form-control py-2" @bind="_editModel.Telephone" placeholder="+228 90 00 00 00" />
+                        </div>
+                    </div>
+                    <div class="form-check form-switch bg-light border rounded p-3 ps-5 m-0 d-flex align-items-center justify-content-between">
+                        <div>
+                            <label class="form-check-label fw-bold small d-block">Statut opérationnel du tiers</label>
+                            <span class="text-muted small">Désactiver ce tiers bloquera ses futures écritures comptables.</span>
+                        </div>
+                        <input class="form-check-input mt-0" type="checkbox" @bind="_editModel.EstActif" style="width: 2.5em; height: 1.25em; cursor: pointer;">
+                    </div>
+                </div>
+                <div class="modal-footer border-top border-light px-4 py-3">
+                    <button class="btn btn-light px-3.5 border" @onclick="() => _showEditModal = false">Annuler</button>
+                    <button class="btn btn-primary px-4" @onclick="SauvegarderModification" disabled="@_isSubmitting">
+                        @if (_isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Sauvegarder
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showCreateModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-3 bg-card">
+                <div class="modal-header border-bottom border-light px-4 py-3">
+                    <div class="d-flex align-items-center gap-2.5">
+                        <div class="bg-primary-subtle text-primary p-2 rounded-3 d-inline-flex">
+                            <i class="bi bi-person-plus-fill fs-5"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title fw-bold mb-0" style="color: var(--text-main);">Nouveau Tiers</h5>
+                            <span class="text-muted small">Ajouter une entité à votre plan de tiers</span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close shadow-none" @onclick="() => _showCreateModal = false"></button>
+                </div>
+                <div class="modal-body px-4 py-3" style="color: var(--text-main);">
+                    <EditForm Model="_createModel" OnValidSubmit="ExecuterEnregistrement">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Nom / Raison Sociale <span class="text-danger">*</span></label>
+                            <InputText class="form-control py-2" @bind-Value="_createModel.Nom" placeholder="Ex: Établissements Koffi ou SARL" />
+                            <div class="text-danger small mt-1 font-monospace"><ValidationMessage For="@(() => _createModel.Nom)" /></div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small fw-bold">Classification</label>
+                                <InputSelect class="form-select py-2" @bind-Value="_createModel.Type">
+                                    <option value="0">Client</option>
+                                    <option value="1">Fournisseur</option>
+                                    <option value="2">Les deux (Mixte)</option>
+                                </InputSelect>
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small fw-bold">Devise de transaction</label>
+                                <InputText class="form-control py-2 font-monospace" @bind-Value="_createModel.Devise" placeholder="Ex: XOF, EUR..." />
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-1">
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small fw-bold">Adresse Email</label>
+                                <InputText type="email" class="form-control py-2" @bind-Value="_createModel.Email" placeholder="adresse@domaine.com" />
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small fw-bold">Téléphone principal</label>
+                                <InputText class="form-control py-2" @bind-Value="_createModel.Telephone" placeholder="+228 90 12 34 56" />
+                            </div>
+                        </div>
+
+                        <div class="modal-footer px-0 pb-0 mt-4 border-top border-light pt-3">
+                            <button type="button" class="btn btn-light px-3.5 border" @onclick="() => _showCreateModal = false">Annuler</button>
+                            <button type="submit" class="btn btn-primary px-4" disabled="@_isSubmitting">
+                                @if (_isSubmitting)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                Créer l'entité
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showDeleteModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px);">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-3 bg-card" style="color: var(--text-main);">
+                <div class="modal-body text-center p-4">
+                    <div class="bg-danger-subtle text-danger p-3 rounded-circle d-inline-flex mb-3">
+                        <i class="bi bi-exclamation-triangle-fill fs-2"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2">Confirmer la suppression ?</h5>
+                    <p class="text-muted small mb-0">Voulez-vous vraiment supprimer définitivement le tiers <strong class="text-main">@_selectedTiers?.Nom</strong> ? Cette action est irréversible.</p>
+
+                    <div class="d-flex gap-2 justify-content-center mt-4 w-100">
+                        <button class="btn btn-light border flex-grow-1 py-2" @onclick="() => _showDeleteModal = false">Annuler</button>
+                        <button class="btn btn-danger flex-grow-1 py-2" @onclick="ExecuterSuppression">Supprimer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .search-container {
+        position: relative;
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.95rem;
+    }
+
+    .badge-code {
+        background: var(--btn-nav-bg, #e9ecef);
+        color: var(--btn-nav-text, #495057);
+        border: 1px solid var(--border-color, #e2e8f0);
+        padding: 5px 10px;
+        border-radius: 6px;
+        Tarification financière font size */ font-size: 0.75rem;
+    }
+
+    .badge-status {
+        padding: 5px 12px;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        display: inline-flex;
+        align-items: center;
+    }
+
+        .badge-status.active {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+            .badge-status.active .badge-dot {
+                background-color: #198754;
+            }
+
+        .badge-status.inactive {
+            background: #f8d7da;
+            color: #842029;
+        }
+
+            .badge-status.inactive .badge-dot {
+                background-color: #dc3545;
+            }
+
+    .badge-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    /* Variables fallback au cas où le layout n'est pas hydraté */
+    .text-main {
+        color: var(--text-main, #1e293b);
+    }
+</style>
+
+@code {
+    private PagedResult<TiersDto> _resultat = new();
+    private FiltreTiersQuery _filtre = new();
+    private bool _showEditModal = false;
+    private bool _isSubmitting = false;
+    private bool _showDeleteModal = false;
+    private bool _showCreateModal = false;
+    private CreerTiersRequest _createModel = new();
+
+    private TiersDto _selectedTiers;
+    private ModifierTiersRequest _editModel = new();
+
+    protected override async Task OnInitializedAsync() => await ChargerDonnees();
+
+    private async Task ChargerDonnees() => _resultat = await Api.ListerTiersAsync(_filtre);
+
+    private async Task OnRechercheKeyUp(KeyboardEventArgs e) => await ChargerDonnees();
+
+    private async Task ChangerPage(int delta) { _filtre.Page += delta; await ChargerDonnees(); }
+
+    private void OuvrirEdition(TiersDto tiers)
+    {
+        _selectedTiers = tiers;
+        _editModel = new ModifierTiersRequest
+        {
+            Nom = tiers.Nom,
+            Email = tiers.Email,
+            Telephone = tiers.Telephone,
+            EstActif = tiers.EstActif,
+            Code = tiers.Code
+        };
+        _showEditModal = true;
+    }
+
+    private async Task SauvegarderModification()
+    {
+        _isSubmitting = true;
+        try
+        {
+            var success = await Api.ModifierTiersAsync(_selectedTiers.Id, _editModel);
+            if (success)
+            {
+                _showEditModal = false;
+                await ChargerDonnees();
+            }
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private void ConfirmerSuppression(TiersDto tiers)
+    {
+        _selectedTiers = tiers;
+        _showDeleteModal = true;
+    }
+
+    private async Task ExecuterSuppression()
+    {
+        if (_selectedTiers == null) return;
+
+        var success = await Api.SupprimerTiersAsync(_selectedTiers.Id);
+        if (success)
+        {
+            _showDeleteModal = false;
+            await ChargerDonnees();
+        }
+    }
+
+    private void OuvrirCreation()
+    {
+        _createModel = new CreerTiersRequest { Devise = "XOF" }; // Aligné avec ton implémentation pivot
+        _showCreateModal = true;
+    }
+
+    private async Task ExecuterEnregistrement()
+    {
+        _isSubmitting = true;
+        try
+        {
+            _createModel.TenantId = State.Utilisateur.TenantId;
+            var resultat = await Api.CreerTiersAsync(_createModel);
+            if (resultat != null)
+            {
+                _showCreateModal = false;
+                await ChargerDonnees();
+            }
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Finama</title>
+    <base href="/" />
+
+    <link href="/lib/bootstrap/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="/lib/bootstrap-icons/font/bootstrap-icons.min.css" rel="stylesheet" />
+
+    <link href="/css/app.css" rel="stylesheet" />
+    <link href="/css/finama.css" rel="stylesheet" />
+    <link href="/css/auth.css" rel="stylesheet" />
+    <link href="favicon.png" rel="icon" type="image/png" />
+    <link href="Finama.Web.styles.css" rel="stylesheet" />
+    <script>
+        window.themeManager = {
+            setTheme: (theme) => {
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem('theme', theme);
+            },
+            getPreferredTheme: () => {
+                const savedTheme = localStorage.getItem('theme');
+                if (savedTheme) return savedTheme;
+                return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+        };
+        document.documentElement.setAttribute('data-theme', themeManager.getPreferredTheme());
+    </script>
+</head>
+
+<body>
+    <div id="app">
+        <div class="splash-container">
+            <div class="glow-sphere glow-blue"></div>
+            <div class="glow-sphere glow-purple"></div>
+
+            <div class="splash-card">
+                <div class="splash-logo-wrapper">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" fill="currentColor" class="bi bi-cpu-fill" viewBox="0 0 16 16">
+                        <path d="M6.5 1A1.5 1.5 0 0 0 5 2.5V3H4a2 2 0 0 0-2 2v1H1.5a.5.5 0 0 0 0 1H2v2H1.5a.5.5 0 0 0 0 1H2v1a2 2 0 0 0 2 2h1v.5a1.5 1.5 0 0 0 1.5 1.5h3A1.5 1.5 0 0 0 11 14.5V14h1a2 2 0 0 0 2-2v-1h.5a.5.5 0 0 0 0-1H14V8h.5a.5.5 0 0 0 0-1H14V5a2 2 0 0 0-2-2h-1v-.5A1.5 1.5 0 0 0 9.5 1zM5 5h6v6H5z" />
+                    </svg>
+                </div>
+
+                <h2 class="splash-title">FINAMA</h2>
+                <div class="badge-gradient-neon mb-3">Système Comptable Sécurisé</div>
+
+                <p class="splash-subtitle">Analyse et synchronisation des journaux comptables...</p>
+
+                <div class="splash-progress-bar">
+                    <div class="splash-progress-line"></div>
+                </div>
+
+                <span class="splash-footer-text">Connexion sécurisée locale active</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="." class="reload">Reload</a>
+        <span class="dismiss">🗙</span>
+    </div>
+
+    <script src="/lib/bootstrap/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        window.downloadFile = (fileName, contentType, base64Data) => {
+            const link = document.createElement('a');
+            link.download = fileName;
+            link.href = `data:${contentType};base64,${base64Data}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        window.downloadPdf = (base64String, fileName) => {
+            const byteCharacters = atob(base64String);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: 'application/pdf' });
+            const link = document.createElement('a');
+            link.href = window.URL.createObjectURL(blob);
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(link.href);
+        };
+    </script>
+
+    <script src="_framework/blazor.webassembly.js"></script>
+</body>
+
+</html>

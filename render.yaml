@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: finama-web
+    env: static
+    buildCommand: dotnet publish -c Release -o release
+    publishPath: release/wwwroot
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

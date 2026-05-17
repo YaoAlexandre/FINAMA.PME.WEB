@@ -1,0 +1,276 @@
+﻿@page "/comptabilite/saisie"
+@page "/comptabilite/saisie/{Id:guid}"
+@using Finama.Web.Models
+@using Finama.Web.Services
+@inject FinamaApiService Api
+@inject NavigationManager Nav
+@inject AppState State
+
+<div class="container py-4">
+    @if (!string.IsNullOrEmpty(_messageErreur))
+    {
+        <div class="alert-error-container">
+            <span>⚠️</span>
+            <p>@_messageErreur</p>
+            <button @onclick="() => _messageErreur = null">×</button>
+        </div>
+    }
+    <EditForm Model="_request" OnValidSubmit="SoumettreEcriture">
+        <div class="card shadow border-0 mb-4">
+            <div class="card-header bg-primary text-white py-3">
+                <h5 class="mb-0">
+                    <i class="bi @(Id.HasValue ? "bi-pencil-square" : "bi-journal-plus") me-2"></i>
+                    @(Id.HasValue ? "Modification du Brouillon" : "Saisie d'écriture")
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">Date</label>
+                        <InputDate @bind-Value="_request.DateEcriture" class="form-control" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold">Journal</label>
+                        <select class="form-select" value="@_request.Journal" @onchange="OnJournalChanged">
+                            <option value="OD">OD - Divers</option>
+                            <option value="BQ">BQ - Banque</option>
+                            <option value="AC">AC - Achats</option>
+                            <option value="VT">VT - Ventes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-7">
+                        <label class="form-label fw-bold">Libellé de l'opération</label>
+                        <InputText @bind-Value="_request.Libelle" class="form-control" placeholder="Entrez le libellé général..." />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive bg-white rounded shadow-sm">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 35%">Compte</th>
+                        <th>Libellé Ligne</th>
+                        <th class="text-end" style="width: 15%">Débit</th>
+                        <th class="text-end" style="width: 15%">Crédit</th>
+                        <th style="width: 50px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var ligne in _request.Lignes)
+                    {
+                        <tr>
+                            <td>
+                                <select class="form-select form-select-sm" @bind="ligne.CompteId">
+                                    <option value="">-- Sélectionner --</option>
+                                    @foreach (var c in _comptesDisponibles)
+                                    {
+                                        <option value="@c.Id">@c.Code - @c.Libelle</option>
+                                    }
+                                </select>
+                            </td>
+                            <td>
+                                <input type="text" class="form-control form-control-sm" @bind="ligne.Libelle" />
+                            </td>
+                            <td>
+                                <input type="number" class="form-control form-control-sm text-end"
+                                       @bind="ligne.Debit" @bind:event="oninput" />
+                            </td>
+                            <td>
+                                <input type="number" class="form-control form-control-sm text-end"
+                                       @bind="ligne.Credit" @bind:event="oninput" />
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-sm text-danger border-0" @onclick="() => SupprimerLigne(ligne)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <div class="p-3 border-top">
+                <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => _request.Lignes.Add(new())">
+                    <i class="bi bi-plus-lg me-1"></i> Ajouter une ligne
+                </button>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-4">
+            <div class="alert @(EstEquilibre ? "alert-success" : "alert-warning") mb-0 py-2 shadow-sm">
+                <i class="bi @(EstEquilibre ? "bi-check-circle" : "bi-exclamation-triangle") me-2"></i>
+                <strong>Débit:</strong> @TotalDebit.ToString("N0") |
+                <strong>Crédit:</strong> @TotalCredit.ToString("N0")
+                @if (!EstEquilibre)
+                {
+                    <span class="ms-3 fw-bold text-danger">Différence: @Math.Abs(TotalDebit - TotalCredit).ToString("N0")</span>
+                }
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-light border px-4" @onclick="Annuler">Annuler</button>
+                <button type="submit" class="btn btn-success px-5 fw-bold" disabled="@(!EstEquilibre || _isSubmitting)">
+                    @if (_isSubmitting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    <i class="bi bi-cloud-arrow-up me-2"></i>Enregistrer
+                </button>
+            </div>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    // 🌟 AJOUT : Paramètre d'URL optionnel capturé par Blazor
+    [Parameter] public Guid? Id { get; set; }
+
+    private string? _messageErreur;
+    private List<CompteSelectDto> _comptesDisponibles = new();
+    private CreerEcritureRequest _request = new()
+    {
+        DateEcriture = DateTime.Today,
+        Journal = "OD",
+        Lignes = new List<CreerLigneEcritureRequest>()
+    };
+    private bool _isSubmitting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ChargerComptes();
+
+        // 🌟 LOGIQUE D'ÉDITION : Si un ID est fourni, on va charger le brouillon existant
+        if (Id.HasValue && Id.Value != Guid.Empty)
+        {
+            await ChargerBrouillonPourModification();
+        }
+        else
+        {
+            // Initialisation classique pour une nouvelle saisie
+            _request.Lignes.Add(new());
+            _request.Lignes.Add(new());
+        }
+    }
+
+    private async Task ChargerBrouillonPourModification()
+    {
+        try
+        {
+            // Récupère l'écriture complète depuis l'API (avec ses lignes)
+            var ecritureExistante = await Api.GetEcritureAsync(Id.Value);
+
+            if (ecritureExistante != null)
+            {
+                // Vérification de sécurité : on ne peut modifier qu'un brouillon
+                if (ecritureExistante.Statut != "Brouillon")
+                {
+                    _messageErreur = "Action impossible : Cette écriture a déjà été validée et est verrouillée.";
+                    _isSubmitting = true; // Bloque le bouton d'enregistrement
+                    return;
+                }
+
+                // Mapping de l'objet existant vers l'objet de formulaire CreerEcritureRequest
+                _request = new CreerEcritureRequest
+                {
+                    DateEcriture = ecritureExistante.DateEcriture,
+                    Journal = ecritureExistante.Journal,
+                    Libelle = ecritureExistante.Libelle,
+                    ExerciceId = ecritureExistante.ExerciceId,
+                    Lignes = ecritureExistante.Lignes.Select(l => new CreerLigneEcritureRequest
+                    {
+                        CompteId = l.CompteId,
+                        Libelle = l.Libelle,
+                        Debit = l.Debit,
+                        Credit = l.Credit
+                    }).ToList()
+                };
+
+                // Rafraîchir les filtres de comptes au besoin selon le journal chargé
+                if (_request.Journal == "BQ") await ChargerComptes("5");
+            }
+            else
+            {
+                _messageErreur = "L'écriture demandée est introuvable.";
+            }
+        }
+        catch (Exception)
+        {
+            _messageErreur = "Erreur lors de la récupération des détails du brouillon.";
+        }
+    }
+
+    private async Task ChargerComptes(string? classe = null)
+    {
+        _comptesDisponibles = await Api.GetPlanComptableSelectAsync(classe);
+    }
+
+    private async Task OnJournalChanged(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString() ?? "OD";
+        _request.Journal = val;
+
+        if (val == "BQ") await ChargerComptes("5");
+        else await ChargerComptes();
+    }
+
+    private decimal TotalDebit => _request.Lignes.Sum(l => l.Debit);
+    private decimal TotalCredit => _request.Lignes.Sum(l => l.Credit);
+    private bool EstEquilibre => TotalDebit > 0 && TotalDebit == TotalCredit;
+
+    private void SupprimerLigne(CreerLigneEcritureRequest ligne)
+    {
+        if (_request.Lignes.Count > 2) _request.Lignes.Remove(ligne);
+    }
+
+    private void Annuler() => Nav.NavigateTo("/comptabilite/ecritures");
+
+    private async Task SoumettreEcriture()
+    {
+        if (_isSubmitting) return;
+        _messageErreur = null;
+
+        if (State.DonneesTableauBord?.ExerciceId == null)
+        {
+            _messageErreur = "Action impossible : aucun exercice comptable n'est sélectionné.";
+            return;
+        }
+
+        _isSubmitting = true;
+
+        try
+        {
+            _request.ExerciceId = State.DonneesTableauBord.ExerciceId;
+
+            // 🌟 LOGIQUE MISE À JOUR : Si on est en mode édition, on appelle l'API de mise à jour
+            // sinon on appelle la création classique.
+            EcritureDto? res;
+            if (Id.HasValue)
+            {
+                // Appelle la mise à jour (Tu dois vérifier la présence de cette méthode dans ton API service, voir remarque)
+                res = await Api.ModifierEcritureAsync(Id.Value, _request);
+            }
+            else
+            {
+                res = await Api.CreerEcritureAsync(_request);
+            }
+
+            if (res != null && res.Id != Guid.Empty)
+            {
+                Nav.NavigateTo("/comptabilite/ecritures");
+            }
+            else
+            {
+                _messageErreur = "Le serveur n'a pas pu sauvegarder l'écriture. Veuillez vérifier la cohérence.";
+            }
+        }
+        catch (Exception)
+        {
+            _messageErreur = "Une erreur technique est survenue lors de la sauvegarde sur le serveur Finama.";
+        }
+        finally
+        {
+            _isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+}

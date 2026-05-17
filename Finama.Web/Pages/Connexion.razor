@@ -1,0 +1,83 @@
+﻿@page "/connexion"
+@page "/login"
+@using Finama.Web.Models
+@using Finama.Web.Services
+@layout EmptyLayout
+@inject FinamaApiService Api
+@inject NavigationManager Nav
+@inject AppState State
+
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-header">
+            <div class="brand-logo">F</div>
+            <h1 class="auth-title">Bienvenue sur Finama</h1>
+        </div>
+
+        <EditForm Model="_model" OnValidSubmit="GererConnexion">
+            <div class="form-group">
+                <label>Email professionnel</label>
+                <InputText @bind-Value="_model.Email" class="form-control" placeholder="nom@entreprise.com" />
+            </div>
+            <div class="form-group">
+                <label>Mot de passe</label>
+                <InputText @bind-Value="_model.MotDePasse" type="password" class="form-control" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <p style="color:red; font-size: 13px; margin-bottom: 10px;">⚠️ @_errorMessage</p>
+            }
+
+            <button type="submit" class="btn-auth" disabled="@_isSubmitting">
+                @(_isSubmitting ? "Connexion..." : "Se connecter")
+            </button>
+        </EditForm>
+
+        <div class="auth-footer">
+            <p>Pas encore de compte ? <a href="/inscription" @onclick="Inscription" class="auth-link">Créer un compte</a></p>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginModel _model = new();
+    private bool _isSubmitting = false;
+    private string? _errorMessage;
+
+    private async Task GererConnexion()
+    {
+        _isSubmitting = true;
+        _errorMessage = null;
+
+        try
+        {
+            var authData = await Api.LoginAsync(_model.Email, _model.MotDePasse);
+
+            if (authData != null)
+            {
+                State.Utilisateur = authData;
+                Nav.NavigateTo("/");
+            }
+            else
+            {
+                _errorMessage = "Identifiants invalides. Veuillez réessayer.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Impossible de joindre le service d'authentification.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task Inscription()
+    {
+        await Api.LogoutAsync();
+        Nav.NavigateTo("/inscription");
+    }
+}

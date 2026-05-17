@@ -1,0 +1,257 @@
+﻿@page "/utilisateurs"
+@using Finama.Web.Models
+@using Finama.Web.Services
+@inject FinamaApiService Api
+@inject NavigationManager Nav
+
+<div class="page-wrapper position-relative">
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="page-title"><i class="bi bi-shield-lock me-2"></i>Gestion des Utilisateurs</h2>
+            <p class="page-subtitle text-muted">Attribuez les accès et gérez l'équipe de votre entreprise</p>
+        </div>
+        <button class="btn btn-primary shadow-sm px-4" @onclick="() => _afficherFormulaire = true">
+            <i class="bi bi-person-plus-fill me-2"></i>Nouvel Utilisateur
+        </button>
+    </div>
+
+    @if (_messageAlerte != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show shadow-sm border-0 mb-3" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>@_messageAlerte
+            <button type="button" class="btn-close" @onclick="() => _messageAlerte = null"></button>
+        </div>
+    }
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Utilisateur</th>
+                            <th>Email</th>
+                            <th>Rôle</th>
+                            <th class="text-center">Statut</th>
+                            <th class="text-end pe-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_utilisateurs == null)
+                        {
+                            <tr>
+                                <td colspan="5" class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status"></div>
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var user in _utilisateurs)
+                            {
+                                <tr>
+                                    <td class="ps-4">
+                                        <div class="d-flex align-items-center">
+                                            <div class="avatar bg-primary-subtle text-primary rounded-circle me-2 d-flex align-items-center justify-content-center fw-bold" style="width: 35px; height: 35px;">
+                                                @user.Prenom[0].ToString().ToUpper()@user.Nom[0].ToString().ToUpper()
+                                            </div>
+                                            <span class="fw-bold">@user.Prenom @user.Nom</span>
+                                        </div>
+                                    </td>
+                                    <td>@user.Email</td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border">
+                                            <i class="bi bi-person-badge me-1"></i>@ConvertirRoleAffichage(user.Role)
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge rounded-pill @(user.EstActif ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger") px-2 py-1">
+                                            @(user.EstActif ? "Actif" : "Inactif")
+                                        </span>
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => AfficherDetails(user)">
+                                            <i class="bi bi-eye-fill me-1"></i>Voir détails
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_utilisateurSelectionne != null)
+{
+    <div class="offcanvas show offcanvas-end border-0 shadow-lg" tabindex="-1" style="visibility: visible; background: #fff; width: 400px; z-index: 1050;">
+        <div class="offcanvas-header bg-light border-bottom p-4">
+            <h5 class="offcanvas-title fw-bold"><i class="bi bi-card-text me-2"></i>Fiche Utilisateur</h5>
+            <button type="button" class="btn-close" @onclick="FermerDetails"></button>
+        </div>
+        <div class="offcanvas-body p-4">
+            <div class="text-center mb-4">
+                <div class="avatar bg-primary text-white rounded-circle mx-auto d-flex align-items-center justify-content-center fw-bold shadow-sm mb-2" style="width: 70px; height: 70px; font-size: 1.5rem;">
+                    @_utilisateurSelectionne.Prenom[0].ToString().ToUpper()@_utilisateurSelectionne.Nom[0].ToString().ToUpper()
+                </div>
+                <h4 class="fw-bold mb-1">@_utilisateurSelectionne.Prenom @_utilisateurSelectionne.Nom</h4>
+                <span class="badge @(_utilisateurSelectionne.EstActif ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger") px-3 py-1 rounded-pill">
+                    @(_utilisateurSelectionne.EstActif ? "Compte Actif" : "Compte Suspendu")
+                </span>
+            </div>
+
+            <hr class="text-muted opacity-25My" />
+
+            <div class="mb-4">
+                <h6 class="text-uppercase text-muted small fw-bold mb-3">Informations de connexion</h6>
+                <div class="mb-3">
+                    <label class="text-muted small d-block">Identifiant unique (ID)</label>
+                    <span class="font-monospace small text-secondary">@_utilisateurSelectionne.Id</span>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small d-block">Adresse Email</label>
+                    <span class="fw-semibold">@_utilisateurSelectionne.Email</span>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <h6 class="text-uppercase text-muted small fw-bold mb-3">Permissions & Droits</h6>
+                <div class="p-3 bg-light rounded border">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="bi bi-shield-check text-primary me-2 fs-5"></i>
+                        <span class="fw-bold">@ConvertirRoleAffichage(_utilisateurSelectionne.Role)</span>
+                    </div>
+                    <p class="small text-muted mb-0">
+                        @ObtenirDescriptionRole(_utilisateurSelectionne.Role)
+                    </p>
+                </div>
+            </div>
+
+            <div class="d-grid gap-2 mt-5">
+                <button class="btn btn-outline-primary btn-sm" disabled>
+                    <i class="bi bi-key me-2"></i>Réinitialiser le mot de passe
+                </button>
+                <button class="btn @(_utilisateurSelectionne.EstActif ? "btn-outline-danger" : "btn-outline-success") btn-sm" disabled>
+                    <i class="bi @(_utilisateurSelectionne.EstActif ? "bi-person-x" : "bi-person-check") me-2"></i>
+                    @(_utilisateurSelectionne.EstActif ? "Suspendre l'accès" : "Réactiver l'accès")
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop fade show" style="z-index: 1040; backdrop-filter: blur(2px); background: rgba(0,0,0,0.2);" @onclick="FermerDetails"></div>
+}
+
+@if (_afficherFormulaire)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 1060;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-light border-0">
+                    <h5 class="fw-bold modal-title"><i class="bi bi-person-plus me-2"></i>Ajouter un collaborateur</h5>
+                    <button type="button" class="btn-close" @onclick="() => _afficherFormulaire = false"></button>
+                </div>
+                <EditForm Model="_request" OnValidSubmit="EnregistrerUtilisateur">
+                    <DataAnnotationsValidator />
+                    <div class="modal-body p-4">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Nom</label>
+                                <input class="form-control" @bind="_request.Nom" required />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Prénom</label>
+                                <input class="form-control" @bind="_request.Prenom" required />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold">Adresse Email</label>
+                                <input type="email" class="form-control" @bind="_request.Email" required />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold">Mot de passe temporaire</label>
+                                <input type="password" class="form-control" @bind="_request.MotDePasse" required />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold">Rôle d'accès</label>
+                                <select class="form-select" @bind="_request.Role">
+                                    <option value="1">Comptable (Saisie et consultation)</option>
+                                    <option value="2">Lecture seule (Consultation seule)</option>
+                                    <option value="0">AdminTenant (Accès total entreprise)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0">
+                        <button type="button" class="btn btn-light" @onclick="() => _afficherFormulaire = false">Annuler</button>
+                        <button type="submit" class="btn btn-primary px-4">Créer l'accès</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<UtilisateurDto>? _utilisateurs;
+    private UtilisateurDto? _utilisateurSelectionne;
+    private bool _afficherFormulaire = false;
+    private string? _messageAlerte;
+    private CreerCollaborateurRequest _request = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ChargerUtilisateurs();
+    }
+
+    private async Task ChargerUtilisateurs()
+    {
+        _utilisateurs = await Api.GetUtilisateursTenantAsync();
+    }
+
+    private void AfficherDetails(UtilisateurDto user)
+    {
+        _utilisateurSelectionne = user;
+    }
+
+    private void FermerDetails()
+    {
+        _utilisateurSelectionne = null;
+    }
+
+    private async Task EnregistrerUtilisateur()
+    {
+        var succes = await Api.CreerCollaborateurAsync(_request);
+        if (succes)
+        {
+            _messageAlerte = $"L'accès pour {_request.Prenom} {_request.Nom} a été configuré avec succès.";
+            _request = new();
+            _afficherFormulaire = false;
+            await ChargerUtilisateurs();
+        }
+    }
+
+    private string ConvertirRoleAffichage(string roleBrut)
+    {
+        return roleBrut switch
+        {
+            "AdminTenant" => "Administrateur Entreprise",
+            "Comptable" => "Comptable",
+            "Lecture" => "Lecture seule",
+            "SuperAdmin" => "Super Admin Plateforme",
+            _ => roleBrut
+        };
+    }
+
+    private string ObtenirDescriptionRole(string roleBrut)
+    {
+        return roleBrut switch
+        {
+            "AdminTenant" => "A accès à la configuration totale du compte, à la balance, aux écritures et à la création des accès utilisateurs pour l'entreprise.",
+            "Comptable" => "Peut saisir de nouvelles écritures comptables, consulter les journaux et éditer les états financiers (Balance, Grand Livre).",
+            "Lecture" => "Accès restreint à la consultation des journaux et des rapports de synthèse. Toute modification est bloquée.",
+            _ => "Droits standards du profil."
+        };
+    }
+}

@@ -1,0 +1,114 @@
+﻿@page "/inscription"
+@using Finama.Web.Models
+@using Finama.Web.Services
+@layout EmptyLayout
+@inject FinamaApiService Api
+@inject NavigationManager Nav
+
+<div class="auth-container">
+    <div class="auth-bg-overlay"></div>
+
+    <div class="auth-card" style="max-width: 500px;">
+        @* Largeur optimisée *@
+        <div class="auth-header">
+            <div class="brand-logo">F</div>
+            <h1 class="auth-title">Créer un compte</h1>
+            <p class="page-subtitle">Rejoignez Finama en quelques clics</p>
+        </div>
+
+        <EditForm Model="_regModel" OnValidSubmit="GererInscription">
+            <DataAnnotationsValidator />
+
+            <div class="registration-grid">
+                <div class="form-group full-width">
+                    <label>Nom de l'entreprise</label>
+                    <InputText @bind-Value="_regModel.NomEntreprise" class="form-control" placeholder="Ex: Ma Société" />
+                </div>
+
+                <div class="form-group">
+                    <label>Prénom Admin</label>
+                    <InputText @bind-Value="_regModel.PrenomAdministrateur" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label>Nom Admin</label>
+                    <InputText @bind-Value="_regModel.NomAdministrateur" class="form-control" />
+                </div>
+
+                <div class="form-group full-width">
+                    <label>Pays de résidence</label>
+                    <InputSelect @bind-Value="_regModel.PaysId" class="form-control">
+                        <option value="@Guid.Empty">-- Sélectionner votre pays --</option>
+                        @foreach (var pays in _listePays)
+                        {
+                            <option value="@pays.Id">@pays.Nom</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="form-group full-width">
+                    <label>Email professionnel</label>
+                    <InputText @bind-Value="_regModel.Email" class="form-control" placeholder="nom@exemple.com" />
+                </div>
+
+                <div class="form-group full-width">
+                    <label>Mot de passe</label>
+                    <InputText @bind-Value="_regModel.MotDePasse" type="password" class="form-control" />
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <div class="alert-error" style="margin-top: 15px;">⚠️ @_errorMessage</div>
+            }
+
+            <button type="submit" class="btn-auth" disabled="@_isSubmitting" style="margin-top: 25px;">
+                @(_isSubmitting ? "Initialisation..." : "S'inscrire")
+            </button>
+        </EditForm>
+
+        <div class="auth-footer">
+            <p>Déjà un compte ? <a href="/connexion" class="auth-link">Retourner à la connexion</a></p>
+        </div>
+    </div>
+</div>
+
+@code {
+    private RegisterModel _regModel = new();
+    private List<PaysDto> _listePays = new();
+    private bool _isSubmitting = false;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Chargement des pays via l'API (api/Pays)
+        _listePays = await Api.GetPaysAsync();
+    }
+
+    private async Task GererInscription()
+    {
+        _isSubmitting = true;
+        _errorMessage = null;
+
+        try
+        {
+            var success = await Api.RegisterAsync(_regModel);
+            if (success)
+            {
+                Nav.NavigateTo("/connexion?status=success");
+            }
+            else
+            {
+                _errorMessage = "Erreur lors de l'inscription. Vérifiez vos informations.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Service indisponible.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}

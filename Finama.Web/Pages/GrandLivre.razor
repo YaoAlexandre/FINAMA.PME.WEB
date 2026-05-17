@@ -1,0 +1,207 @@
+@page "/grand-livre"
+@using Finama.Web.Models
+@layout MainLayout
+@inject FinamaApiService Api
+
+<PageTitle>Grand Livre — Finama</PageTitle>
+
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="page-title mb-1"><i class="bi bi-journal-text text-primary me-2"></i>Grand Livre</h1>
+        <p class="text-muted small mb-0">Mouvements chronologiques détaillés et soldes cumulés par compte comptable</p>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary shadow-sm" @onclick="ActualiserAsync" disabled="@_chargement">
+        <i class="bi bi-arrow-clockwise me-1"></i> Actualiser
+    </button>
+</div>
+
+<div class="card shadow-sm border-0 mb-4 bg-light">
+    <div class="card-body py-3">
+        <div class="row g-3 align-items-center">
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white text-muted"><i class="bi bi-search"></i></span>
+                    <input class="form-control"
+                           placeholder="Filtrer par compte (ex: 411, 521)..."
+                           value="@_compteNumero"
+                           @oninput="OnRechercheInputAsync" />
+                </div>
+            </div>
+            <div class="col-auto">
+                <span class="text-muted small font-monospace">@(_rechercheEnCours ? "Analyse..." : "")</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_chargement)
+{
+    <div class="d-flex justify-content-center align-items-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <span class="ms-2 text-muted">Génération des livres de comptes...</span>
+    </div>
+}
+else if (_grandLivre is null || !_grandLivre.Comptes.Any())
+{
+    <div class="text-center py-5 border rounded bg-white shadow-sm">
+        <div class="fs-1 text-muted mb-3"><i class="bi bi-journal-x"></i></div>
+        <h5 class="fw-bold text-dark">Aucun mouvement enregistré</h5>
+        <p class="text-muted small px-3">Il n'y a aucune écriture comptable validée pour ce numéro de compte ou cet exercice.</p>
+    </div>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center bg-white p-3 rounded border shadow-sm mb-3">
+        <span class="text-muted small">
+            Exercice comptable : <strong class="text-dark">@_grandLivre.Annee</strong> —
+            <strong>@_grandLivre.Comptes.Count</strong> compte(s) chargé(s)
+        </span>
+        <div class="btn-group btn-group-sm shadow-sm">
+            <button class="btn btn-white border" disabled="@(_page <= 1)" @onclick="PagePrecedente">
+                <i class="bi bi-chevron-left"></i> Précédent
+            </button>
+            <button class="btn btn-white border" disabled="@(!PeutPaginerSuivant())" @onclick="PageSuivante">
+                Suivant <i class="bi bi-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+
+    @foreach (var compte in _grandLivre.Comptes)
+    {
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-dark text-white d-flex flex-wrap justify-content-between align-items-center gap-3 py-3">
+                <div class="d-flex align-items-center">
+                    <span class="badge bg-primary text-white font-monospace px-3 py-2 fs-6">@compte.Numero</span>
+                    <h5 class="mb-0 fw-bold ms-3">@compte.Libelle</h5>
+                </div>
+                <div class="d-flex gap-4 font-monospace small">
+                    <div>Débit : <span class="text-success-subtle fw-bold">@FmtAmt(compte.TotalDebit)</span></div>
+                    <div>Crédit : <span class="text-warning-subtle fw-bold">@FmtAmt(compte.TotalCredit)</span></div>
+                    <div class="border-start border-secondary ps-3">
+                        Solde Final :
+                        <span class="fw-bold @(compte.SoldeFinal >= 0 ? "text-success-subtle" : "text-danger-subtle")">
+                            @FmtAmt(Math.Abs(compte.SoldeFinal)) @(compte.SoldeFinal >= 0 ? "D" : "C")
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm align-middle mb-0" style="font-size:0.9rem;">
+                        <thead class="table-light text-secondary uppercase small">
+                            <tr>
+                                <th class="ps-3" style="width:10%">Date</th>
+                                <th style="width:12%">Référence</th>
+                                <th style="width:8%">Journal</th>
+                                <th style="width:30%">Libellé du mouvement</th>
+                                <th style="width:15%">Tiers</th>
+                                <th class="text-end" style="width:12%">Débit</th>
+                                <th class="text-end" style="width:12%">Crédit</th>
+                                <th class="text-end pe-3" style="width:15%">Solde Cumulé</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var m in compte.Mouvements)
+                            {
+                                <tr>
+                                    <td class="ps-3 text-muted">@m.Date.ToString("dd/MM/yyyy")</td>
+                                    <td class="font-monospace text-primary fw-bold">@m.Reference</td>
+                                    <td>
+                                        <span class="badge bg-secondary-subtle text-secondary border px-2 text-uppercase font-xs">
+                                            @m.Journal
+                                        </span>
+                                    </td>
+                                    <td class="text-dark">@m.Libelle</td>
+                                    <td class="text-muted truncate-text">@(m.TiersNom ?? "—")</td>
+                                    <td class="text-end font-monospace text-success">
+                                        @(m.Debit > 0 ? FmtAmt(m.Debit) : "—")
+                                    </td>
+                                    <td class="text-end font-monospace text-warning">
+                                        @(m.Credit > 0 ? FmtAmt(m.Credit) : "—")
+                                    </td>
+                                    <td class="text-end font-monospace pe-3">
+                                        <span class="fw-bold @(m.SoldeCumule >= 0 ? "text-success" : "text-danger")">
+                                            @FmtAmt(Math.Abs(m.SoldeCumule)) @(m.SoldeCumule >= 0 ? "D" : "C")
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-light fw-bold font-monospace border-top">
+                            <tr>
+                                <td colspan="5" class="ps-3 text-dark">Totalisation des mouvements</td>
+                                <td class="text-end text-success">@FmtAmt(compte.TotalDebit)</td>
+                                <td class="text-end text-warning">@FmtAmt(compte.TotalCredit)</td>
+                                <td class="text-end pe-3 text-primary">
+                                    @FmtAmt(Math.Abs(compte.SoldeFinal)) @(compte.SoldeFinal >= 0 ? "D" : "C")
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private GrandLivreDto? _grandLivre;
+    private bool _chargement = true;
+    private bool _rechercheEnCours = false;
+    private string? _compteNumero = "";
+    private int _page = 1;
+    private ExerciceDto? _exerciceCourant;
+
+    // Système de Debounce pour temporiser l'input clavier
+    private System.Threading.Timer? _debounceTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _exerciceCourant = await Api.GetExerciceCourantAsync();
+        await ChargerAsync();
+    }
+
+    private async Task ChargerAsync()
+    {
+        if (_exerciceCourant is null) return;
+        _chargement = true;
+        _grandLivre = await Api.GetGrandLivreAsync(_exerciceCourant.Id, _compteNumero, _page);
+        _chargement = false;
+    }
+
+    private async Task OnRechercheInputAsync(ChangeEventArgs e)
+    {
+        _compteNumero = e.Value?.ToString();
+        _rechercheEnCours = true;
+
+        // On détruit le timer précédent s'il existe
+        _debounceTimer?.Dispose();
+
+        // On crée un délai d'attente de 450ms après la frappe avant de lancer l'API
+        _debounceTimer = new System.Threading.Timer(async _ =>
+        {
+            _page = 1; // Reset de la page
+            await InvokeAsync(async () =>
+            {
+                await ChargerAsync();
+                _rechercheEnCours = false;
+                StateHasChanged();
+            });
+        }, null, 450, System.Threading.Timeout.Infinite);
+    }
+
+    private async Task ActualiserAsync() => await ChargerAsync();
+    private async Task PageSuivante() { _page++; await ChargerAsync(); }
+    private async Task PagePrecedente() { _page--; await ChargerAsync(); }
+
+    // Empêche la pagination infinie s'il y a moins de comptes que la taille d'une page
+    private bool PeutPaginerSuivant()
+    {
+        if (_grandLivre?.Comptes is null) return false;
+        // Si ton API renvoie une taille fixe (ex: 10 ou 20 comptes par page) :
+        return _grandLivre.Comptes.Count >= 20;
+    }
+
+    private static string FmtAmt(decimal v) => v == 0 ? "—" : v.ToString("N0");
+}

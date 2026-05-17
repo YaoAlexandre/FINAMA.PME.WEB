@@ -1,0 +1,385 @@
+@page "/balance"
+@using Finama.Web.Models
+@using Finama.Web.Services
+@inject FinamaApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Balance des Comptes — Finama</PageTitle>
+
+<div class="page-header d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+    <div>
+        <h1 class="page-title mb-1"><i class="bi bi-journal-check me-2 text-primary"></i>Balance des Comptes</h1>
+        <p class="text-muted small mb-0">Exercice @_anneeSelectionnee — Vérification générale de la cohérence des livres.</p>
+    </div>
+    <div class="d-flex gap-2">
+        @if (_loading == false && _estEquilibree == true)
+        {
+            <button class="btn btn-danger shadow-sm px-4 fw-bold" @onclick="OuvrirConfirmationCloture">
+                <i class="bi bi-lock-fill me-2"></i>Clôturer l'exercice @_anneeSelectionnee
+            </button>
+        }
+        <button class="btn btn-light border shadow-sm px-3 py-2 d-flex align-items-center gap-2 text-secondary" @onclick="Rafraichir" disabled="@_loading">
+            <i class="bi bi-arrow-clockwise @(_loading ? "spin-animation" : "")"></i> Actualiser
+        </button>
+    </div>
+</div>
+
+@if (_estEquilibree == false)
+{
+    <div class="alert alert-danger border-0 shadow-sm rounded-3 mb-4 p-3 animate-fade-in" role="alert">
+        <div class="d-flex align-items-start">
+            <div class="bg-danger text-white p-2 rounded-3 d-inline-flex me-3 shadow-sm">
+                <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+            </div>
+            <div class="flex-grow-1">
+                <h6 class="fw-bold mb-1" style="color: #842029;">Attention : Écart détecté (Balance déséquilibrée) !</h6>
+                <p class="mb-0 small opacity-90">@_avertissement</p>
+            </div>
+        </div>
+    </div>
+}
+else if (_estEquilibree == true)
+{
+    <div class="alert alert-success border-0 shadow-sm rounded-3 mb-4 p-3 animate-fade-in" role="alert">
+        <div class="d-flex align-items-start">
+            <div class="bg-success text-white p-2 rounded-3 d-inline-flex me-3 shadow-sm">
+                <i class="bi bi-check-circle-fill fs-5"></i>
+            </div>
+            <div class="flex-grow-1">
+                <h6 class="fw-bold mb-1" style="color: #0f5132;">Balance perfectly équilibrée</h6>
+                <p class="mb-0 small opacity-90">Le total des mouvements et des soldes respecte le principe de la partie double.</p>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="card border-0 shadow-sm rounded-3 overflow-hidden mb-4">
+    <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
+        <table class="table table-hover align-middle mb-0 custom-balance-table">
+            <thead>
+                <tr class="table-light font-monospace text-uppercase align-middle text-center" style="font-size: 0.725rem; letter-spacing: 0.5px;">
+                    <th rowspan="2" class="text-start ps-4 py-3" style="min-width: 110px;">N° Compte</th>
+                    <th rowspan="2" class="text-start py-3" style="min-width: 250px;">Intitulé du compte</th>
+                    <th colspan="2" class="py-2 bg-primary-subtle text-primary border-start border-end">Mouvements de la période</th>
+                    <th colspan="2" class="py-2 bg-info-subtle text-info">Soldes de clôture</th>
+                </tr>
+                <tr class="table-light font-monospace text-uppercase text-end small border-bottom" style="font-size: 0.725rem;">
+                    <th class="border-start border-light-subtle py-2 pe-3" style="width: 15%; min-width: 120px;">Débit</th>
+                    <th class="py-2 pe-3" style="width: 15%; min-width: 120px;">Crédit</th>
+                    <th class="border-start border-light-subtle py-2 pe-3" style="width: 15%; min-width: 120px;">Débiteur</th>
+                    <th class="py-2 pe-3" style="width: 15%; min-width: 120px;">Créditeur</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_loading)
+                {
+                    <tr>
+                        <td colspan="6" class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <div class="mt-2 text-muted small font-monospace">Calcul mathématique des journaux en cours...</div>
+                        </td>
+                    </tr>
+                }
+                else if (_lignesBalance == null || !_lignesBalance.Any())
+                {
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            <i class="bi bi-clipboard-x fs-1 d-block mb-2 opacity-50"></i>
+                            <span class="small d-block">Aucune écriture comptable validée pour l'exercice @_anneeSelectionnee.</span>
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var ligne in _lignesBalance)
+                    {
+                        var estCompteClasse = ligne.Numero.Length <= 2;
+                        <tr class="@(estCompteClasse ? "row-classe-comptable fw-bold" : "")">
+                            <td class="ps-4 font-monospace">
+                                @if (estCompteClasse)
+                                {
+                                    <span class="badge-classe px-2 py-1 rounded">@ligne.Numero</span>
+                                }
+                                else
+                                {
+                                    <span class="text-secondary">@ligne.Numero</span>
+                                }
+                            </td>
+
+                            <td>
+                                <span class="@(estCompteClasse ? "text-main font-monospace text-uppercase small fs-7" : "text-main fw-medium")">@ligne.Libelle</span>
+                            </td>
+
+                            <td class="text-end font-monospace pe-3 text-muted">
+                                @(ligne.MouvementsDebit > 0 ? ligne.MouvementsDebit.ToString("N0") : "-")
+                            </td>
+                            <td class="text-end font-monospace pe-3 text-muted">
+                                @(ligne.MouvementsCredit > 0 ? ligne.MouvementsCredit.ToString("N0") : "-")
+                            </td>
+
+                            <td class="text-end font-monospace pe-3 fw-semibold @(estCompteClasse ? "" : "text-danger-subtle")">
+                                @(ligne.SoldeFinalDebit > 0 ? ligne.SoldeFinalDebit.ToString("N0") : "-")
+                            </td>
+                            <td class="text-end font-monospace pe-3 fw-semibold @(estCompteClasse ? "" : "text-success-subtle")">
+                                @(ligne.SoldeFinalCredit > 0 ? ligne.SoldeFinalCredit.ToString("N0") : "-")
+                            </td>
+                        </tr>
+                    }
+
+                    @if (_totaux != null)
+                    {
+                        <tr class="table-secondary fw-bold text-dark border-top border-dark border-2 text-end font-monospace align-middle" style="font-size: 0.9rem;">
+                            <td colspan="2" class="ps-4 text-start text-uppercase font-monospace small py-3">Total Général</td>
+                            <td class="pe-3 py-3">@_totaux.TotalMouvementsDebit.ToString("N0")</td>
+                            <td class="pe-3 py-3">@_totaux.TotalMouvementsCredit.ToString("N0")</td>
+                            <td class="pe-3 py-3 text-danger">@_totaux.TotalSoldeFinalDebit.ToString("N0")</td>
+                            <td class="pe-3 py-3 text-success">@_totaux.TotalSoldeFinalCredit.ToString("N0")</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (_showClotureModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-3 bg-card">
+                <div class="modal-header border-bottom border-light px-4 py-3">
+                    <div class="d-flex align-items-center gap-2.5">
+                        <div class="bg-danger-subtle text-danger p-2 rounded-3 d-inline-flex">
+                            <i class="bi bi-shield-lock-fill fs-5"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title fw-bold mb-0 text-danger">Clôture Annuelle de l'Exercice</h5>
+                            <span class="text-muted small">Action réglementée et irréversible</span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close shadow-none" @onclick="() => _showClotureModal = false" disabled="@_isSubmittingCloture"></button>
+                </div>
+
+                <div class="modal-body px-4 py-3 text-main">
+                    @if (!string.IsNullOrEmpty(_erreurCloture))
+                    {
+                        <div class="alert alert-danger d-flex align-items-center py-2.5 border-0 shadow-sm mb-3 rounded-2 small" role="alert">
+                            <i class="bi bi-exclamation-triangle-fill me-2 fs-6"></i>
+                            <div>@_erreurCloture</div>
+                        </div>
+                    }
+
+                    <p class="mb-3">Vous allez clôturer définitivement les livres comptables de l'année <strong>@_anneeSelectionnee</strong>.</p>
+
+                    <div class="bg-light p-3 rounded-3 border border-light-subtle mb-3 small text-muted">
+                        <h6 class="fw-bold text-dark small mb-2"><i class="bi bi-gear-fill me-1.5 text-secondary"></i>Traitements exécutés automatiquement :</h6>
+                        <ul class="mb-0 ps-3 d-flex flex-column gap-1">
+                            <li>Remise à zéro et solde complet des comptes de charges et produits (Classes 6 et 7).</li>
+                            <li>Calcul du résultat net d'exercice et affectation au compte d'attente (131 ou 139).</li>
+                            <li>Génération automatique de la nouvelle période fiscale <strong>@(_anneeSelectionnee + 1)</strong>.</li>
+                            <li>Génération du journal d'ouverture et des écritures de <strong>Report à Nouveau (RAN)</strong>.</li>
+                        </ul>
+                    </div>
+
+                    <span class="text-danger small fw-semibold d-block"><i class="bi bi-exclamation-circle me-1.5"></i>Attention : Ce traitement va verrouiller intégralement l'année @_anneeSelectionnee. Aucun ajustement futur ne sera possible.</span>
+                </div>
+
+                <div class="modal-footer border-top border-light px-4 py-3">
+                    <button class="btn btn-light px-3.5 border" @onclick="() => _showClotureModal = false" disabled="@_isSubmittingCloture">Annuler</button>
+                    <button class="btn btn-danger px-4 fw-bold" @onclick="ExecuterCloture" disabled="@_isSubmittingCloture">
+                        @if (_isSubmittingCloture)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <span>Traitement...</span>
+                        }
+                        else
+                        {
+                            <span><i class="bi bi-lock-fill me-1"></i>Verrouiller définitivement</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .custom-balance-table th {
+        font-weight: 600;
+        border-bottom-width: 1px;
+    }
+
+    .row-classe-comptable {
+        background-color: var(--btn-nav-bg, #f8f9fa) !important;
+    }
+
+    .badge-classe {
+        background-color: var(--border-color, #e2e8f0);
+        color: var(--text-main, #1e293b);
+        border: 1px solid rgba(0,0,0,0.05);
+        font-size: 0.8rem;
+    }
+
+    .animate-fade-in {
+        animation: fadeIn 0.4s ease-in-out;
+    }
+
+    .spin-animation {
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(-5px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@keyframes spin {
+        from {
+            transform: rotate(0deg);
+        }
+
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .text-danger-subtle {
+        color: #dc3545 !important;
+    }
+
+    .text-success-subtle {
+        color: #198754 !important;
+    }
+
+    .text-main {
+        color: var(--text-main, #1e293b);
+    }
+
+    .table-responsive thead {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+</style>
+
+@code {
+    private List<BalanceLigneDto>? _lignesBalance;
+    private BalanceTotauxDto? _totaux;
+
+    private bool _loading = true;
+    private int _anneeSelectionnee = DateTime.Today.Year;
+    private bool? _estEquilibree;
+    private string? _avertissement;
+
+    private bool _showClotureModal = false;
+    private bool _isSubmittingCloture = false;
+    private string _erreurCloture = "";
+    private Guid _exerciceIdActuel;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        try
+        {
+            // 1. 🌟 On commence par récupérer l'exercice système courant pour initialiser la session
+            var exerciceCourant = await Api.GetExerciceCourantAsync();
+            if (exerciceCourant != null)
+            {
+                _exerciceIdActuel = exerciceCourant.Id;
+                await ChargerBalance();
+            }
+            else
+            {
+                _estEquilibree = false;
+                _avertissement = "Impossible d'identifier l'exercice comptable actif.";
+                _loading = false;
+            }
+        }
+        catch (Exception)
+        {
+            _estEquilibree = false;
+            _avertissement = "Erreur de connexion au serveur d'authentification lors de l'initialisation.";
+            _loading = false;
+        }
+    }
+
+    private async Task ChargerBalance()
+    {
+        _loading = true;
+        try
+        {
+            // 2. 🌟 On appelle la vraie méthode d'interrogation liée au ReportingController
+            var wrapper = await Api.GetBalanceAsync(_exerciceIdActuel);
+
+            if (wrapper?.Rapport != null)
+            {
+                _lignesBalance = wrapper.Rapport.Lignes;
+                _totaux = wrapper.Rapport.Totaux;
+                _anneeSelectionnee = wrapper.Rapport.Annee;
+                _estEquilibree = wrapper.EstEquilibree;
+                _avertissement = wrapper.Avertissement;
+            }
+        }
+        catch (Exception)
+        {
+            _estEquilibree = false;
+            _avertissement = "Impossible de compiler la balance via le module de reporting.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task Rafraichir()
+    {
+        _lignesBalance = null;
+        _totaux = null;
+        _estEquilibree = null;
+        await ChargerBalance();
+    }
+
+    private void OuvrirConfirmationCloture()
+    {
+        _erreurCloture = "";
+        _isSubmittingCloture = false;
+        _showClotureModal = true;
+    }
+
+    private async Task ExecuterCloture()
+    {
+        _isSubmittingCloture = true;
+        _erreurCloture = "";
+
+        try
+        {
+            var success = await Api.CloturerExerciceAsync(_exerciceIdActuel);
+
+            if (success)
+            {
+                _showClotureModal = false;
+                Nav.NavigateTo("/balance", forceLoad: true);
+            }
+            else
+            {
+                _erreurCloture = "Une erreur inattendue est survenue durant le traitement SQL de clôture.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _erreurCloture = ex.Message;
+        }
+        finally
+        {
+            _isSubmittingCloture = false;
+        }
+    }
+}

@@ -1,0 +1,16 @@
+﻿@inject NavigationManager Nav
+@inject FinamaApiService Api
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        // 🌟 Double vérification locale et du Token
+        var connecte = await Api.EstConnecteAsync();
+
+        if (!connecte)
+        {
+            // Redirection immédiate vers l'écran d'authentification
+            Nav.NavigateTo("/connexion", forceLoad: false);
+        }
+    }
+}

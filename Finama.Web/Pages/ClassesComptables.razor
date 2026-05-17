@@ -1,0 +1,264 @@
+﻿@page "/configuration/classes-comptables"
+@using Finama.Web.Models
+@layout MainLayout
+@inject FinamaApiService Api
+
+<PageTitle>Configuration des Classes — Finama</PageTitle>
+
+<div class="page-wrapper">
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="page-title"><i class="bi bi-gear-fill me-2 text-primary"></i>Structure du Plan Comptable</h2>
+            <p class="page-subtitle text-muted">Personnalisez les grandes masses du référentiel SYSCOHADA de votre établissement</p>
+        </div>
+        <button class="btn btn-primary shadow-sm px-4" @onclick="OuvrirCreation">
+            <i class="bi bi-plus-circle-fill me-2"></i>Nouvelle Classe
+        </button>
+    </div>
+
+    @if (_erreurGlobale != null)
+    {
+        <div class="alert alert-danger border-0 shadow-sm mb-4 d-flex align-items-center" role="alert">
+            <i class="bi bi-exclamation-triangle-fill fs-5 me-2"></i>
+            <div>@_erreurGlobale</div>
+        </div>
+    }
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            @if (_chargement)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <div class="mt-2 text-muted">Chargement de la structure comptable...</div>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4" style="width: 20%"><i class="bi bi-tag-fill me-2"></i>Masse / Code</th>
+                                <th style="width: 65%"><i class="bi bi-bookmark-fill me-2"></i>Intitulé de la classe comptable</th>
+                                <th class="text-end pe-4" style="width: 15%">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (_classes == null || !_classes.Any())
+                            {
+                                <tr>
+                                    <td colspan="3" class="text-center py-5 text-muted">
+                                        <i class="bi bi-folder-x fs-2 d-block mb-2"></i>
+                                        Aucune masse comptable configurée.
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var c in _classes)
+                                {
+                                    <tr>
+                                        <td class="ps-4">
+                                            <span class="badge @ObtenirBadgeCouleur(c.Numero) font-monospace px-3 py-2 fs-7 shadow-sm">
+                                                Classe @c.Numero
+                                            </span>
+                                        </td>
+                                        <td class="fw-bold text-dark">
+                                            @c.Libelle
+                                        </td>
+                                        <td class="text-end pe-4">
+                                            <div class="btn-group shadow-sm">
+                                                <button class="btn btn-sm btn-outline-secondary px-3" title="Modifier l'intitulé" @onclick="() => OuvrirModification(c)">
+                                                    <i class="bi bi-pencil-fill me-1"></i> Modifier
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (_modalOuverte)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 1050;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-light border-bottom-0 p-4">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi @(_estModeEdition ? "bi-pencil-square text-warning" : "bi-plus-circle text-primary") me-2 fs-4"></i>
+                        @(_estModeEdition ? $"Modifier la Classe {_numeroInput}" : "Ajouter une classe comptable")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="FermerModal"></button>
+                </div>
+                <div class="modal-body p-4 pt-2">
+                    @if (!string.IsNullOrEmpty(_erreurModal))
+                    {
+                        <div class="alert alert-danger d-flex align-items-center py-2 small mb-3 border-0 shadow-sm" role="alert">
+                            <i class="bi bi-x-circle-fill me-2"></i>
+                            <div>@_erreurModal</div>
+                        </div>
+                    }
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Numéro de Masse *</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light font-monospace fw-bold"><i class="bi bi-hash"></i></span>
+                            <input type="number" class="form-control font-monospace fw-bold"
+                                   @bind="_numeroInput" disabled="@_estModeEdition" min="1" max="9" placeholder="Ex: 8" />
+                        </div>
+                        <div class="form-text text-muted small">Chiffre unique entre 1 et 9 définissant la classe de comptes.</div>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-secondary">Intitulé / Libellé officiel *</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-fonts"></i></span>
+                            <input type="text" class="form-control fw-semibold" @bind="_libelleInput" placeholder="Ex: Comptes de charges" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top-0 p-3 px-4">
+                    <button class="btn btn-light px-3 fw-semibold" @onclick="FermerModal">Annuler</button>
+                    <button class="btn btn-primary px-4 fw-bold shadow-sm" @onclick="SauvegarderAsync" disabled="@_isSubmitting">
+                        @if (_isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-circle-fill me-1"></i>
+                        }
+                        Enregistrer la classe
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ClasseComptableModel> _classes = new();
+    private bool _chargement = true;
+    private bool _modalOuverte = false;
+    private bool _estModeEdition = false;
+    private bool _isSubmitting = false;
+
+    private string? _erreurGlobale;
+    private string? _erreurModal;
+
+    private int _numeroInput;
+    private string _libelleInput = string.Empty;
+
+    protected override async Task OnInitializedAsync() => await ChargerClassesAsync();
+
+    private async Task ChargerClassesAsync()
+    {
+        _chargement = true;
+        _erreurGlobale = null;
+        try
+        {
+            _classes = await Api.GetClassesComptablesAsync();
+        }
+        catch (Exception ex)
+        {
+            _erreurGlobale = "Impossible de charger la structure du plan comptable. " + ex.Message;
+        }
+        finally
+        {
+            _chargement = false;
+        }
+    }
+
+    private void OuvrirCreation()
+    {
+        _estModeEdition = false;
+        _numeroInput = _classes.Any() ? _classes.Max(c => c.Numero) + 1 : 1;
+        _libelleInput = string.Empty;
+        _erreurModal = null;
+        _modalOuverte = true;
+    }
+
+    private void OuvrirModification(ClasseComptableModel c)
+    {
+        _estModeEdition = true;
+        _numeroInput = c.Numero;
+        _libelleInput = c.Libelle;
+        _erreurModal = null;
+        _modalOuverte = true;
+    }
+
+    private void FermerModal() => _modalOuverte = false;
+
+    // Harmonisation des couleurs de badge pour la lisibilité financière (SYSCOHADA)
+    private string ObtenirBadgeCouleur(int numeroClasse)
+    {
+        return numeroClasse switch
+        {
+            1 => "bg-primary text-white",       // Capitaux permanents
+            2 => "bg-info text-dark",           // Actif immobilisé
+            3 => "bg-success text-white",       // Stocks
+            4 => "bg-warning text-dark",        // Tiers (Créances/Dettes)
+            5 => "bg-danger text-white",        // Comptes de Trésorerie
+            6 => "bg-secondary text-white",     // Charges
+            7 => "bg-dark text-white",          // Produits
+            8 => "bg-light text-dark border",   // Comptes spéciaux
+            _ => "bg-primary text-white"
+        };
+    }
+
+    private async Task SauvegarderAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_libelleInput))
+        {
+            _erreurModal = "Le libellé de la classe comptable est obligatoire.";
+            return;
+        }
+
+        if (_numeroInput < 1 || _numeroInput > 9)
+        {
+            _erreurModal = "Le numéro de masse doit impérativement être compris entre 1 et 9.";
+            return;
+        }
+
+        _isSubmitting = true;
+        _erreurModal = null;
+
+        try
+        {
+            bool succes;
+            if (_estModeEdition)
+            {
+                succes = await Api.ModifierClasseComptableAsync(_numeroInput, _libelleInput);
+            }
+            else
+            {
+                succes = await Api.CreerClasseComptableAsync(new() { Numero = _numeroInput, Libelle = _libelleInput });
+            }
+
+            if (succes)
+            {
+                _modalOuverte = false;
+                await ChargerClassesAsync();
+            }
+            else
+            {
+                _erreurModal = "Une erreur est survenue lors de la communication avec l'API Finama.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _erreurModal = ex.Message;
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}

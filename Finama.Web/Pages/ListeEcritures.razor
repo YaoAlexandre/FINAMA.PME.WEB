@@ -1,0 +1,237 @@
+﻿@page "/comptabilite/ecritures"
+@using Finama.Web.Models
+@using Finama.Web.Services
+@inject FinamaApiService Api
+@inject NavigationManager Nav
+
+<div class="page-wrapper">
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="page-title"><i class="bi bi-book-half me-2"></i>Journal des Écritures</h2>
+            <p class="page-subtitle text-muted">Gestion et suivi des flux comptables</p>
+        </div>
+        <button class="btn btn-primary shadow-sm px-4" @onclick="OuvrirNouvelleSaisie">
+            <i class="bi bi-plus-circle-fill me-2"></i>Nouvelle Saisie
+        </button>
+    </div>
+
+    @if (_messageAlerte != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show shadow-sm border-0 mb-3" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>@_messageAlerte
+            <button type="button" class="btn-close" @onclick="() => _messageAlerte = null"></button>
+        </div>
+    }
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4"><i class="bi bi-calendar3 me-2"></i>Date</th>
+                            <th><i class="bi bi-hash me-2"></i>Référence</th>
+                            <th><i class="bi bi-journal-bookmark me-2"></i>Journal</th>
+                            <th><i class="bi bi-chat-left-text me-2"></i>Libellé</th>
+                            <th class="text-end"><i class="bi bi-dash-circle me-2"></i>Débit</th>
+                            <th class="text-end"><i class="bi bi-plus-circle me-2"></i>Crédit</th>
+                            <th class="text-center">Statut</th>
+                            <th class="text-end pe-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_ecritures == null)
+                        {
+                            <tr>
+                                <td colspan="8" class="text-center py-5">
+                                    <div class="spinner-border text-primary" role="status"></div>
+                                    <div class="mt-2 text-muted">Récupération des données...</div>
+                                </td>
+                            </tr>
+                        }
+                        else if (!_ecritures.Items.Any())
+                        {
+                            <tr>
+                                <td colspan="8" class="text-center py-5 text-muted">
+                                    <i class="bi bi-folder-x fs-2 d-block mb-2"></i>
+                                    Aucune écriture comptable trouvée pour cet exercice.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var ecriture in _ecritures.Items)
+                            {
+                                <tr>
+                                    <td class="ps-4">@ecriture.DateEcriture.ToString("dd/MM/yyyy")</td>
+                                    <td><span class="fw-bold text-primary">@ecriture.Reference</span></td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border">
+                                            <i class="bi bi-tag-fill me-1 text-secondary"></i>@ecriture.Journal
+                                        </span>
+                                    </td>
+                                    <td>@ecriture.Libelle</td>
+                                    <td class="text-end fw-bold text-danger">@ecriture.TotalDebit.ToString("N2")</td>
+                                    <td class="text-end fw-bold text-success">@ecriture.TotalCredit.ToString("N2")</td>
+                                    <td class="text-center">
+                                        @if (ecriture.Statut == "Brouillon")
+                                        {
+                                            <span class="badge rounded-pill bg-warning text-dark px-2 py-1">
+                                                <i class="bi bi-hourglass-split me-1"></i>Brouillon
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge rounded-pill bg-success px-2 py-1">
+                                                <i class="bi bi-check-all me-1"></i>Validée
+                                            </span>
+                                        }
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        <div class="btn-group d-inline-flex gap-1">
+                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => Consulter(ecriture.Id)" title="Consulter">
+                                                <i class="bi bi-eye-fill"></i>
+                                            </button>
+
+                                            @if (ecriture.Statut == "Brouillon")
+                                            {
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => Modifier(ecriture.Id)" title="Modifier le brouillon">
+                                                    <i class="bi bi-pencil-fill"></i>
+                                                </button>
+
+                                                <button class="btn btn-sm btn-outline-success" @onclick="() => DemanderValidation(ecriture)" title="Valider définitivement">
+                                                    <i class="bi bi-shield-check"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DemanderSuppression(ecriture)" title="Supprimer">
+                                                    <i class="bi bi-trash3"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_afficherModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-body p-4 text-center">
+                    <div class="mb-3">
+                        @if (_actionType == ActionModal.Validation)
+                        {
+                            <i class="bi bi-shield-check text-success display-4"></i>
+                        }
+                        else
+                        {
+                            <i class="bi bi-exclamation-triangle text-danger display-4"></i>
+                        }
+                    </div>
+
+                    <h5 class="fw-bold mb-2">@_modalTitre</h5>
+                    <p class="text-muted mb-4">@_modalMessage</p>
+
+                    <div class="d-flex justify-content-center gap-2">
+                        <button type="button" class="btn btn-light px-4 fw-semibold border" @onclick="FermerModal">Annuler</button>
+
+                        @if (_actionType == ActionModal.Validation)
+                        {
+                            <button type="button" class="btn btn-success px-4" @onclick="ExecuterValidation">
+                                <i class="bi bi-check2-circle me-1"></i> Confirmer la validation
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-danger px-4" @onclick="ExecuterSuppression">
+                                <i class="bi bi-trash3 me-1"></i> Confirmer la suppression
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private PagedResult<EcritureDto>? _ecritures;
+    private FiltreEcritureQuery _filtre = new() { Page = 1, PageSize = 20 };
+    private string? _messageAlerte;
+
+    private bool _afficherModal = false;
+    private string _modalTitre = "";
+    private string _modalMessage = "";
+    private EcritureDto? _ecritureCible;
+    private ActionModal _actionType;
+
+    private enum ActionModal { Validation, Suppression }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ChargerDonnees();
+    }
+
+    private async Task ChargerDonnees() => _ecritures = await Api.GetEcrituresAsync(_filtre);
+    private void OuvrirNouvelleSaisie() => Nav.NavigateTo("/comptabilite/saisie");
+    private void Consulter(Guid id) => Nav.NavigateTo($"/comptabilite/ecritures/details/{id}");
+
+    // 🌟 AJOUT : Redirection vers ton formulaire de saisie en mode édition
+    private void Modifier(Guid id) => Nav.NavigateTo($"/comptabilite/saisie/{id}");
+
+    private void DemanderValidation(EcritureDto ecriture)
+    {
+        _ecritureCible = ecriture;
+        _actionType = ActionModal.Validation;
+        _modalTitre = "Validation Définitive";
+        _modalMessage = $"Voulez-vous valider définitivement l'écriture {ecriture.Reference} ? Cette action va verrouiller les lignes comptables au Grand Livre.";
+        _afficherModal = true;
+    }
+
+    private void DemanderSuppression(EcritureDto ecriture)
+    {
+        _ecritureCible = ecriture;
+        _actionType = ActionModal.Suppression;
+        _modalTitre = "Suppression du Brouillon";
+        _modalMessage = $"Attention, cette action est irréversible. Êtes-vous sûr de vouloir supprimer définitivement le brouillon {ecriture.Reference} ?";
+        _afficherModal = true;
+    }
+
+    private void FermerModal()
+    {
+        _afficherModal = false;
+        _ecritureCible = null;
+    }
+
+    private async Task ExecuterValidation()
+    {
+        if (_ecritureCible == null) return;
+
+        var succes = await Api.ValiderEcritureAsync(_ecritureCible.Id);
+        if (succes)
+        {
+            _messageAlerte = $"L'écriture {_ecritureCible.Reference} a été validée avec succès.";
+            await ChargerDonnees();
+        }
+        FermerModal();
+    }
+
+    private async Task ExecuterSuppression()
+    {
+        if (_ecritureCible == null) return;
+
+        var succes = await Api.SupprimerEcritureAsync(_ecritureCible.Id);
+        if (succes)
+        {
+            _messageAlerte = $"L'écriture brouillon {_ecritureCible.Reference} a été supprimée.";
+            await ChargerDonnees();
+        }
+        FermerModal();
+    }
+}

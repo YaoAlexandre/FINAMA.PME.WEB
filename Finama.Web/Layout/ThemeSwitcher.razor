@@ -1,0 +1,31 @@
+﻿@inject IJSRuntime JS
+
+<div class="btn-group border rounded shadow-sm bg-card p-1" style="height: 32px; align-items: center;">
+    <button class="btn btn-sm border-0 rounded-1 px-2 py-0 d-flex align-items-center h-100 @(_themeActuel == "light" ? "bg-primary text-white" : "text-secondary")"
+            @onclick='() => BasculerTheme("light")' title="Mode Clair">
+        <i class="bi bi-sun-fill"></i>
+    </button>
+    <button class="btn btn-sm border-0 rounded-1 px-2 py-0 d-flex align-items-center h-100 @(_themeActuel == "dark" ? "bg-primary text-white" : "text-secondary")"
+            @onclick='() => BasculerTheme("dark")' title="Mode Sombre">
+        <i class="bi bi-moon-stars-fill"></i>
+    </button>
+</div>
+
+@code {
+    private string _themeActuel = "light";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _themeActuel = await JS.InvokeAsync<string>("themeManager.getPreferredTheme");
+            StateHasChanged();
+        }
+    }
+
+    private async Task BasculerTheme(string theme)
+    {
+        _themeActuel = theme;
+        await JS.InvokeVoidAsync("themeManager.setTheme", theme);
+    }
+}

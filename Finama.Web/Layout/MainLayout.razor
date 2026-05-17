@@ -1,0 +1,362 @@
+@using Finama.Web.Models
+@using Finama.Web.Services
+@inherits LayoutComponentBase
+@inject FinamaApiService Api
+@inject NavigationManager Nav
+
+<div class="finama-layout">
+    @if (_verificationEnCours)
+    {
+        <div class="d-flex flex-column justify-content-center align-items-center vh-100 bg-dark text-white w-100 position-fixed top-0 start-0" style="z-index: 9999;">
+            <div class="spinner-border text-primary mb-3" role="status"></div>
+            <div class="font-monospace small text-muted">Contrôle de sécurité de la session...</div>
+        </div>
+    }
+    else
+    {
+        <aside class="sidebar @(_sidebarOpen ? "open" : "")">
+            <div class="sidebar-brand d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="brand-logo"><i class="bi bi-wallet2 text-white"></i></div>
+                    <span class="brand-name">Finama</span>
+                </div>
+
+                <button class="btn text-white border-0 d-lg-none" @onclick="ToggleSidebar" style="font-size: 1.2rem; padding: 4px;">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <nav class="sidebar-nav" @onclick="GererClicNav">
+                <div class="nav-section">
+                    <span class="nav-section-label">Principal</span>
+                    <NavLink href="/" class="nav-item" Match="NavLinkMatch.All">
+                        <i class="bi bi-speedometer2 nav-icon"></i>
+                        <span>Tableau de bord</span>
+                    </NavLink>
+                    <NavLink href="/comptabilite/ecritures" class="nav-item">
+                        <i class="bi bi-pencil-square nav-icon"></i>
+                        <span>Écritures</span>
+                    </NavLink>
+                    <NavLink href="/factures" class="nav-item">
+                        <i class="bi bi-file-earmark-text nav-icon"></i>
+                        <span>Factures</span>
+                    </NavLink>
+                    <NavLink href="/referentiel/tiers" class="nav-item">
+                        <i class="bi bi-people-fill nav-icon"></i>
+                        <span>Tiers</span>
+                    </NavLink>
+                </div>
+
+                <div class="nav-section">
+                    <span class="nav-section-label">Reporting</span>
+                    <NavLink href="/balance" class="nav-item">
+                        <i class="bi bi-journal-check nav-icon"></i>
+                        <span>Balance</span>
+                    </NavLink>
+                    <NavLink href="/grand-livre" class="nav-item">
+                        <i class="bi bi-journal-text nav-icon"></i>
+                        <span>Grand Livre</span>
+                    </NavLink>
+                    <NavLink href="/plan-comptable" class="nav-item">
+                        <i class="bi bi-book-half nav-icon"></i>
+                        <span>Plan comptable</span>
+                    </NavLink>
+                </div>
+
+                <div class="nav-section">
+                    <span class="nav-section-label">Paramètres</span>
+                    <NavLink href="/configuration/classes-comptables" class="nav-item">
+                        <i class="bi bi-gear-wide-connected nav-icon"></i>
+                        <span>Classes OHADA</span>
+                    </NavLink>
+                    <NavLink href="/utilisateurs" class="nav-item">
+                        <i class="bi bi-shield-lock nav-icon"></i>
+                        <span>Utilisateurs</span>
+                    </NavLink>
+                    <NavLink href="/entreprise" class="nav-item">
+                        <i class="bi bi-building nav-icon"></i>
+                        <span>Mon entreprise</span>
+                    </NavLink>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-card">
+                    <div class="user-avatar">@(_userInitiales)</div>
+                    <div class="user-info">
+                        <span class="user-nom">@_userNom</span>
+                        <span class="user-entreprise text-muted">@_entrepriseNom</span>
+                    </div>
+                </div>
+                <button class="btn-logout" @onclick="Deconnecter" title="Déconnexion">
+                    <i class="bi bi-power"></i>
+                </button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="topbar px-4">
+                <button class="btn-menu" @onclick="ToggleSidebar">
+                    <i class="bi bi-list fs-4"></i>
+                </button>
+
+                <div class="topbar-right d-flex align-items-center gap-2">
+                    <ThemeSwitcher />
+
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-primary dropdown-toggle fw-bold px-3 py-2"
+                                type="button"
+                                @onclick="ToggleDropdown"
+                                @onclick:stopPropagation>
+                            <i class="bi bi-cash-coin me-1"></i> @_deviseActiveCode (@_deviseSymbole)
+                        </button>
+
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 @(_dropdownOpen ? "show" : "")"
+                            style="position: absolute; right: 0; left: auto;">
+                            <li><h6 class="dropdown-header font-monospace small text-uppercase">Devises de la plateforme</h6></li>
+                            <li><hr class="dropdown-divider"></li>
+
+                            @if (_listeDevises != null)
+                            {
+                                @foreach (var dev in _listeDevises)
+                                {
+                                    <li @key="dev.Code">
+                                        <button type="button"
+                                                class="dropdown-item small d-flex justify-content-between align-items-center @(_deviseActiveCode == dev.Code ? "active" : "")"
+                                                @onclick='() => ClicDevise(dev.Code, dev.Symbole)'>
+                                            <span>@dev.Code (@dev.Symbole)</span>
+                                            <span class="text-muted small ms-2" style="font-size: 0.75rem;">@dev.Libelle</span>
+                                        </button>
+                                    </li>
+                                }
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="page-wrapper p-4">
+                @Body
+            </div>
+        </main>
+    }
+</div>
+
+<style>
+    :root {
+        --sidebar-w: 260px;
+        --bleu: #0d6efd;
+    }
+
+    @@media (min-width: 992px) {
+        .sidebar {
+            position: fixed !important;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: var(--sidebar-w);
+            z-index: 1040;
+            transform: translateX(0) !important;
+            transition: transform .25s ease !important;
+        }
+
+            .sidebar:not(.open) {
+                transform: translateX(-100%) !important;
+            }
+
+        .main-content {
+            margin-left: var(--sidebar-w) !important;
+            width: calc(100% - var(--sidebar-w)) !important;
+            transition: margin-left .25s ease, width .25s ease;
+        }
+
+        .sidebar:not(.open) + .main-content {
+            margin-left: 0 !important;
+            width: 100% !important;
+        }
+    }
+
+    @@media (max-width: 991px) {
+        .sidebar {
+            position: fixed !important;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: var(--sidebar-w);
+            z-index: 1050;
+            transform: translateX(-100%) !important;
+            transition: transform .25s ease-in-out !important;
+        }
+
+            .sidebar.open {
+                transform: translateX(0) !important;
+            }
+
+        .main-content {
+            margin-left: 0 !important;
+            width: 100% !important;
+            min-width: 0;
+        }
+
+        .page-wrapper {
+            padding: 16px !important;
+        }
+
+        .topbar {
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+        }
+    }
+
+    .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
+        text-decoration: none;
+        color: #ced4da;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+    }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+        }
+
+        .nav-item.active {
+            background: var(--bleu) !important;
+            color: #fff !important;
+        }
+
+    .nav-icon {
+        font-size: 1.1rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-logout {
+        background: none;
+        border: none;
+        color: #dc3545;
+        transition: transform 0.2s;
+    }
+
+        .btn-logout:hover {
+            transform: scale(1.1);
+        }
+</style>
+
+@code {
+    private bool _verificationEnCours = true; // 🌟 AJOUT : Bloque l'interface par défaut
+    private bool _sidebarOpen = true;
+    private string _userNom = "";
+    private string _userInitiales = "?";
+    private string _entrepriseNom = "";
+    private string _deviseSymbole = "FCFA";
+    private List<DeviseDto>? _listeDevises;
+    private string _deviseActiveCode = "XOF";
+    private bool _dropdownOpen = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // 🌟 INTERCEPTION : S'exécute automatiquement à chaque changement de page/paramètre d'URL
+        await SecuriserAccesAsync();
+    }
+
+    private async Task SecuriserAccesAsync()
+    {
+        var uriRelative = Nav.ToBaseRelativePath(Nav.Uri).ToLower();
+
+        // Autoriser l'accès libre aux pages de connexion/inscription sans boucler sur le contrôle
+        if (uriRelative.StartsWith("connexion") || uriRelative.StartsWith("register") || uriRelative.StartsWith("connexion"))
+        {
+            _verificationEnCours = false;
+            return;
+        }
+
+        var estConnecte = await Api.EstConnecteAsync();
+
+        if (!estConnecte)
+        {
+            _verificationEnCours = false;
+            Nav.NavigateTo("/connexion", forceLoad: false); // Redirection sécurisée
+        }
+        else
+        {
+            // Si le chargement initial des données n'a pas encore été fait, on peuple l'état
+            if (string.IsNullOrEmpty(_userNom))
+            {
+                await ChargerDonneesSessionAsync();
+            }
+            _verificationEnCours = false;
+            StateHasChanged(); // Libère et affiche l'interface
+        }
+    }
+
+    private async Task ChargerDonneesSessionAsync()
+    {
+        _userNom = await Api.GetUserNomAsync() ?? "";
+        _entrepriseNom = await Api.GetEntrepriseNomAsync() ?? "";
+
+        var baseDevise = await Api.GetDeviseSymboleAsync() ?? "XOF";
+        _listeDevises = await Api.GetDevisesActivesAsync();
+
+        if (_listeDevises != null && _listeDevises.Any())
+        {
+            var deviseAssociee = _listeDevises.FirstOrDefault(d => d.Code == baseDevise || d.Symbole == baseDevise);
+            if (deviseAssociee != null)
+            {
+                _deviseActiveCode = deviseAssociee.Code;
+                _deviseSymbole = deviseAssociee.Symbole;
+            }
+            else
+            {
+                _deviseActiveCode = baseDevise;
+                _deviseSymbole = baseDevise;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(_userNom))
+        {
+            var parts = _userNom.Split(' ');
+            _userInitiales = parts.Length >= 2
+                ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
+                : _userNom[..1].ToUpper();
+        }
+    }
+
+    private void ToggleSidebar()
+    {
+        _sidebarOpen = !_sidebarOpen;
+        StateHasChanged();
+    }
+
+    private void GererClicNav()
+    {
+        // Logique de responsive mobile (fermeture automatique si écran étroit au clic)
+        if (Nav.ToBaseRelativePath(Nav.Uri) != "")
+        {
+            // Optionnel : fermer la sidebar en mode mobile ici
+        }
+    }
+
+    private async Task Deconnecter()
+    {
+        await Api.LogoutAsync();
+        Nav.NavigateTo("/connexion");
+    }
+
+    private void ToggleDropdown()
+    {
+        _dropdownOpen = !_dropdownOpen;
+    }
+
+    private void ClicDevise(string code, string symbole)
+    {
+        _deviseActiveCode = code;
+        _deviseSymbole = symbole;
+        _dropdownOpen = false;
+        StateHasChanged();
+    }
+}

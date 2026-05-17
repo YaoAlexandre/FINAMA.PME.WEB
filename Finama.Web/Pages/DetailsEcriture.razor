@@ -1,0 +1,194 @@
+﻿@page "/comptabilite/ecritures/details/{Id:guid}"
+@using Finama.Web.Models
+@using Finama.Web.Services
+@inject FinamaApiService Api
+@inject NavigationManager Nav
+
+<div class="page-wrapper">
+    <div class="d-flex align-items-center mb-4">
+        <button class="btn btn-light border btn-sm me-3 px-3 shadow-sm" @onclick="RetourAuJournal">
+            <i class="bi bi-arrow-left me-1"></i> Journal
+        </button>
+        <div>
+            <h2 class="page-title mb-0">
+                <i class="bi bi-file-earmark-text text-primary me-2"></i>Détails de l'Écriture
+            </h2>
+            <p class="text-muted small mb-0">Consultation des pièces et lignes comptables</p>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="card border-0 shadow-sm p-5 text-center">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2 text-muted">Chargement de la pièce comptable...</div>
+        </div>
+    }
+    else if (_ecriture == null)
+    {
+        <div class="alert alert-warning border-0 shadow-sm" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            Impossible de trouver ou de charger l'écriture comptable demandée.
+        </div>
+    }
+    else
+    {
+        <div class="row g-4 mb-4">
+            <div class="col-md-8">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <span class="text-muted small d-block">Référence de la pièce</span>
+                                <h3 class="fw-bold text-primary mb-0">@_ecriture.Reference</h3>
+                            </div>
+                            <div>
+                                @if (_ecriture.Statut == "Brouillon")
+                                {
+                                    <span class="badge rounded-pill bg-warning text-dark px-3 py-2 fs-7">
+                                        <i class="bi bi-hourglass-split me-1"></i>Brouillon
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge rounded-pill bg-success px-3 py-2 fs-7">
+                                        <i class="bi bi-check-all me-1"></i>Validée définitivement
+                                    </span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="row g-3 pt-2 border-top">
+                            <div class="col-6 col-sm-4">
+                                <span class="text-muted small d-block">Date d'opération</span>
+                                <span class="fw-semibold">@_ecriture.DateEcriture.ToString("dd MMMM yyyy")</span>
+                            </div>
+                            <div class="col-6 col-sm-4">
+                                <span class="text-muted small d-block">Code Journal</span>
+                                <span class="badge bg-light text-dark border">@_ecriture.Journal</span>
+                            </div>
+                            <div class="col-12 col-sm-4">
+                                <span class="text-muted small d-block">Libellé principal</span>
+                                <span class="text-truncate d-block fw-semibold" title="@_ecriture.Libelle">@_ecriture.Libelle</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm bg-primary text-white h-100">
+                    <div class="card-body p-4 d-flex flex-column justify-content-center text-center">
+                        <i class="bi bi-calculator fs-1 opacity-50 mb-2"></i>
+                        <h6 class="text-uppercase tracking-wider small opacity-75">Montant de la Pièce</h6>
+                        <h2 class="fw-extrabold mb-0">@_ecriture.TotalDebit.ToString("N0") <span class="fs-6 fw-normal">FCFA</span></h2>
+                        <div class="small opacity-75 mt-2 border-top border-white border-opacity-25 pt-2">
+                            <i class="bi bi-info-circle me-1"></i>Parties Débit/Crédit équilibrées.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent border-0 pt-4 px-4 pb-0">
+                <h5 class="fw-bold"><i class="bi bi-list-nested me-2 text-secondary"></i>Imputations Comptables</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0 mt-3">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4" style="width: 15%;">N° Compte</th>
+                                <th style="width: 45%;">Intitulé / Libellé de ligne</th>
+                                <th class="text-end" style="width: 20%;">Débit</th>
+                                <th class="text-end pe-4" style="width: 20%;">Crédit</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @* On boucle sur les lignes enfants de l'écriture DTO *@
+                            @if (_ecriture.Lignes != null && _ecriture.Lignes.Any())
+                            {
+                                @foreach (var ligne in _ecriture.Lignes)
+                                {
+                                    <tr>
+                                        <td class="ps-4 font-monospace fw-bold text-secondary">@ligne.CompteNumero</td>
+                                        <td>
+                                            <div class="fw-semibold">@ligne.CompteLibelle</div>
+                                            <div class="text-muted small">@ligne.Libelle</div>
+                                        </td>
+                                        <td class="text-end text-danger fw-bold">@(ligne.Debit > 0 ? ligne.Debit.ToString("N0") : "-")</td>
+                                        <td class="text-end text-success fw-bold pe-4">@(ligne.Credit > 0 ? ligne.Credit.ToString("N0") : "-")</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="4" class="text-center py-4 text-muted small">
+                                        Aucune imputation trouvée sur cette pièce.
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-light fw-bold border-top-2">
+                            <tr>
+                                <td colspan="2" class="ps-4 text-uppercase">Total Équilibre</td>
+                                <td class="text-end text-danger">@_ecriture.TotalDebit.ToString("N0")</td>
+                                <td class="text-end text-success pe-4">@_ecriture.TotalCredit.ToString("N0")</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private EcritureDetailDto? _ecriture;
+    private bool _loading = true;
+    private bool _verificationEnCours = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await SecuriserAccesAsync();
+        await ChargerDetails();
+    }
+
+    private async Task ChargerDetails()
+    {
+        _loading = true;
+        // On interroge l'API pour récupérer l'écriture et ses lignes
+        _ecriture = await Api.GetEcritureDetailsAsync(Id);
+        _loading = false;
+    }
+
+    private async Task SecuriserAccesAsync()
+    {
+        // 🌟 CORRECTION : Suppression de l'espace sur 'var uriRelative' et initialisation correcte
+        var uriRelative = Nav.ToBaseRelativePath(Nav.Uri).ToLower();
+
+        if (uriRelative.StartsWith("connexion") || uriRelative.StartsWith("inscription"))
+        {
+            _verificationEnCours = false;
+            return;
+        }
+
+        var estConnecte = await Api.EstConnecteAsync();
+
+        if (!estConnecte)
+        {
+            _verificationEnCours = false;
+            Nav.NavigateTo("/connexion");
+        }
+        else
+        {
+            _verificationEnCours = false;
+        }
+    }
+
+    private void RetourAuJournal() => Nav.NavigateTo("/comptabilite/ecritures");
+}

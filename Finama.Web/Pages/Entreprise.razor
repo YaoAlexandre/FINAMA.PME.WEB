@@ -1,0 +1,105 @@
+﻿@page "/entreprise"
+@using Finama.Web.Models
+@layout MainLayout
+@inject FinamaApiService Api
+
+<PageTitle>Mon Entreprise — Finama</PageTitle>
+
+<div class="page-header mb-4">
+    <div>
+        <h1 class="page-title mb-1"><i class="bi bi-building text-primary me-2"></i>Mon Entreprise</h1>
+        <p class="text-muted small mb-0">Paramètres légaux et référentiels de facturation de votre établissement</p>
+    </div>
+</div>
+
+@if (_chargement)
+{
+    <div class="d-flex justify-content-center align-items-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <span class="ms-2 text-muted">Chargement du profil de l'établissement...</span>
+    </div>
+}
+else if (_entreprise is not null)
+{
+    <div class="row g-4">
+        <div class="col-12 col-lg-7">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white py-3 border-bottom border-light">
+                    <h5 class="fw-bold text-dark mb-0"><i class="bi bi-card-text text-secondary me-2"></i>Informations Générales</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4 d-flex align-items-center p-3 bg-light rounded">
+                        <div class="bg-primary text-white rounded p-3 d-flex align-items-center justify-content-center fs-3 font-monospace" style="width:60px; height:60px;">
+                            @_entreprise.Nom[..1].ToUpper()
+                        </div>
+                        <div class="ms-3">
+                            <h4 class="fw-bold text-dark mb-0">@_entreprise.Nom</h4>
+                            <span class="badge bg-secondary-subtle text-secondary border font-monospace mt-1">Slug: @_entreprise.SlugUnique</span>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <span class="text-muted small d-block">Adresse de contact</span>
+                            <strong class="text-dark">@_entreprise.Email</strong>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <span class="text-muted small d-block">Pays de rattachement fiscal</span>
+                            <strong class="text-dark"><i class="bi bi-geo-alt-fill text-danger me-1"></i> @_entreprise.PaysNom</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-5">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white py-3 border-bottom border-light">
+                    <h5 class="fw-bold text-dark mb-0"><i class="bi bi-sliders text-secondary me-2"></i>Variables Comptables</h5>
+                </div>
+                <div class="card-body d-flex flex-column justify-content-between">
+                    <div class="p-3 bg-primary-subtle text-primary rounded border border-primary-subtle mb-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="small d-block fw-bold text-uppercase font-monospace text-xs">Devise de Tenue de Caisse</span>
+                            <span class="text-muted small">Standardisation ISO</span>
+                        </div>
+                        <div class="fs-3 font-monospace fw-bold">@_entreprise.DeviseBase</div>
+                    </div>
+
+                    <div class="p-3 bg-warning-subtle text-warning-dark rounded border border-warning-subtle mb-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="small d-block fw-bold text-uppercase font-monospace text-xs" style="color: #664d03;">Taux de TVA par Défaut</span>
+                            <span class="text-muted small">Régime fiscal national</span>
+                        </div>
+                        <div class="fs-3 font-monospace fw-bold" style="color: #664d03;">@_entreprise.TauxTVA %</div>
+                    </div>
+
+                    <div class="p-3 bg-dark text-white rounded d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="small d-block fw-bold text-uppercase font-monospace text-xs text-white-50">Plan Comptable Référent</span>
+                            <span class="text-white-50 small">Norme régionale</span>
+                        </div>
+                        <div class="fs-5 fw-bold font-monospace text-warning">@_entreprise.PlanComptableCode</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private EntrepriseModel? _entreprise;
+    private bool _chargement = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _chargement = true;
+        try
+        {
+            // Récupère les données d'identité de l'entreprise via ton service
+            _entreprise = await Api.GetEntrepriseDetailsAsync();
+        }
+        catch { /* ... fallback ... */ }
+        finally { _chargement = false; }
+    }
+}

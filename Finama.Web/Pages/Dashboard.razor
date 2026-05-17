@@ -1,0 +1,251 @@
+@page "/"
+@using Finama.Web.Models
+@using Finama.Web.Services
+@layout MainLayout
+@inject FinamaApiService Api
+@inject NavigationManager Nav
+@inject AppState State
+
+<PageTitle>Tableau de bord — Finama</PageTitle>
+
+@if (_chargement)
+{
+    <div class="loading-screen">
+        <div class="loading-spinner"></div>
+        <span>Chargement du tableau de bord...</span>
+    </div>
+}
+else if (_data is null)
+{
+    <div class="error-card">
+        <span>⚠️</span>
+        <p>Impossible de charger les données. Vérifiez votre connexion.</p>
+        <button class="btn-primary" @onclick="Charger">Réessayer</button>
+    </div>
+}
+else
+{
+    <!-- En-tête -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Tableau de bord</h1>
+            <p class="page-subtitle">Exercice @_data.Annee — données en temps réel</p>
+        </div>
+        @if (_data.NombreEcrituresNonValidees > 0)
+        {
+            <div class="alert-badge">
+                ⚠️ @_data.NombreEcrituresNonValidees écriture(s) en brouillon
+            </div>
+        }
+    </div>
+
+    <!-- KPIs principaux -->
+    <div class="kpi-grid">
+        <div class="kpi-card kpi-blue">
+            <div class="kpi-header">
+                <span class="kpi-label">Chiffre d'affaires</span>
+                <span class="kpi-evolution @(_data.EvolutionCA >= 0 ? "positive" : "negative")">
+                    @(_data.EvolutionCA >= 0 ? "▲" : "▼") @Math.Abs(_data.EvolutionCA)%
+                </span>
+            </div>
+            <div class="kpi-value">@FormatMontant(_data.ChiffreAffaires)</div>
+            <div class="kpi-sub">vs @FormatMontant(_data.ChiffreAffairesMoisPrecedent) mois dernier</div>
+        </div>
+
+        <div class="kpi-card kpi-red">
+            <div class="kpi-header">
+                <span class="kpi-label">Total charges</span>
+            </div>
+            <div class="kpi-value">@FormatMontant(_data.TotalCharges)</div>
+            <div class="kpi-sub">Sur l'exercice @_data.Annee</div>
+        </div>
+
+        <div class="kpi-card @(_data.ResultatNet >= 0 ? "kpi-green" : "kpi-red")">
+            <div class="kpi-header">
+                <span class="kpi-label">Résultat net</span>
+            </div>
+            <div class="kpi-value">@FormatMontant(_data.ResultatNet)</div>
+            <div class="kpi-sub">@(_data.ResultatNet >= 0 ? "Bénéfice" : "Déficit")</div>
+        </div>
+
+        <div class="kpi-card kpi-teal">
+            <div class="kpi-header">
+                <span class="kpi-label">Trésorerie</span>
+            </div>
+            <div class="kpi-value">@FormatMontant(_data.Tresorerie)</div>
+            <div class="kpi-sub">Solde disponible</div>
+        </div>
+    </div>
+
+    <!-- Ligne 2 : stats rapides -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon stat-icon-orange">◫</div>
+            <div class="stat-body">
+                <span class="stat-value">@_data.NombreFacturesEnAttente</span>
+                <span class="stat-label">Factures en attente</span>
+                <span class="stat-sub">@FormatMontant(_data.MontantFacturesEnAttente) à encaisser</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon stat-icon-blue">◉</div>
+            <div class="stat-body">
+                <span class="stat-value">@_data.NombreClients</span>
+                <span class="stat-label">Clients actifs</span>
+                <span class="stat-sub">@_data.NombreFournisseurs fournisseurs</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon stat-icon-green">◫</div>
+            <div class="stat-body">
+                <span class="stat-value">@_data.NombreFacturesEmises</span>
+                <span class="stat-label">Factures émises</span>
+                <span class="stat-sub">En @_data.Annee</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graphique CA mensuel -->
+    <div class="section-grid">
+        <div class="card card-large">
+            <div class="card-header">
+                <h2 class="card-title">Évolution mensuelle @_data.Annee</h2>
+            </div>
+            <div class="chart-container">
+                @{
+                    var maxVal = _data.CaMensuel.Max(m => Math.Max(m.ChiffreAffaires, m.Charges));
+                    maxVal = maxVal == 0 ? 1 : maxVal;
+                }
+                <div class="bar-chart">
+                    @foreach (var mois in _data.CaMensuel)
+                    {
+                        <div class="bar-group">
+                            <div class="bars">
+                                <div class="bar bar-ca"
+                                     style="height: @(Math.Round(mois.ChiffreAffaires / maxVal * 100))%"
+                                     title="CA @mois.LibelleMois : @FormatMontant(mois.ChiffreAffaires)">
+                                </div>
+                                <div class="bar bar-charges"
+                                     style="height: @(Math.Round(mois.Charges / maxVal * 100))%"
+                                     title="Charges @mois.LibelleMois : @FormatMontant(mois.Charges)">
+                                </div>
+                            </div>
+                            <span class="bar-label">@mois.LibelleMois</span>
+                        </div>
+                    }
+                </div>
+                <div class="chart-legend">
+                    <span class="legend-item"><span class="legend-dot dot-ca"></span> CA</span>
+                    <span class="legend-item"><span class="legend-dot dot-charges"></span> Charges</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top clients -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Top clients</h2>
+            </div>
+            @if (!_data.TopClients.Any())
+            {
+                <p class="empty-state">Aucune facture enregistrée</p>
+            }
+            else
+            {
+                var maxCA = _data.TopClients.Max(c => c.TotalFacture);
+                <div class="top-clients">
+                    @foreach (var (client, i) in _data.TopClients.Select((c, i) => (c, i)))
+                    {
+                        <div class="top-client-row">
+                            <span class="rank">#@(i + 1)</span>
+                            <div class="client-info">
+                                <span class="client-nom">@client.Nom</span>
+                                <div class="progress-bar">
+                                    <div class="progress-fill"
+                                         style="width: @(Math.Round(client.TotalFacture / maxCA * 100))%">
+                                    </div>
+                                </div>
+                            </div>
+                            <span class="client-montant">@FormatMontant(client.TotalFacture)</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Dernières factures -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Dernières factures</h2>
+            <a href="/factures" class="card-link">Voir tout →</a>
+        </div>
+        @if (!_data.DernieresFactures.Any())
+        {
+            <p class="empty-state">Aucune facture pour le moment</p>
+        }
+        else
+        {
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Numéro</th>
+                        <th>Client</th>
+                        <th>Date</th>
+                        <th>Échéance</th>
+                        <th>Montant TTC</th>
+                        <th>Statut</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var f in _data.DernieresFactures)
+                    {
+                        <tr class="@(f.EstEnRetard ? "row-retard" : "")">
+                            <td><span class="facture-num">@f.Numero</span></td>
+                            <td>@f.TiersNom</td>
+                            <td>@f.DateFacture.ToString("dd/MM/yyyy")</td>
+                            <td>
+                                @if (f.DateEcheance.HasValue)
+                                {
+                                    <span class="@(f.EstEnRetard ? "text-danger" : "")">
+                                        @f.DateEcheance.Value.ToString("dd/MM/yyyy")
+                                        @if (f.EstEnRetard) { <span> ⚠️</span> }
+                                    </span>
+                                }
+                                else { <span class="text-muted">—</span> }
+                            </td>
+                            <td class="text-right"><strong>@FormatMontant(f.TotalTTC)</strong></td>
+                            <td><span class="statut-badge statut-@f.Statut.ToLower()">@f.Statut</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+
+@code {
+    private TableauBordDto? _data;
+    private bool _chargement = true;
+    private string _devise = "FCFA";
+
+    protected override async Task OnInitializedAsync() => await Charger();
+
+    private async Task Charger()
+    {
+        _chargement = true;
+        try
+        {
+            _data    = await Api.GetTableauBordAsync();
+            State.DonneesTableauBord = _data; // Stockage
+            _devise  = _data?.DeviseSymbole ?? "FCFA";
+        }
+        finally
+        {
+            _chargement = false;
+        }
+    }
+
+    private string FormatMontant(decimal montant)
+        => $"{montant:N0} {_devise}";
+}
