@@ -17,7 +17,7 @@ WORKDIR /usr/share/nginx/html
 # Copier les fichiers compilés de Blazor dans le dossier par défaut de Nginx
 COPY --from=build-env /app/out/wwwroot .
 
-# Configuration de secours Nginx pour gérer le routage virtuel Blazor (évite la 404 au F5)
-RUN sed -i 'x;s/$/try_files $uri $uri\/ \/index.html;/;G' /etc/nginx/conf.d/default.conf
+# 🌟 On écrase la configuration par défaut de Nginx avec notre fichier propre
+COPY Finama.Web/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
