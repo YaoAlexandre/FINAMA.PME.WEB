@@ -20,6 +20,51 @@
         <div class="nav-divider my-2 border-top border-secondary opacity-25 mx-3"></div>
         <small class="text-muted px-4 text-uppercase fw-bold font-xs d-block mb-1">Comptabilité</small>
 
+        <AuthorizeView Policy="Saisie">
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="referentiel/tiers">
+                        <span class="bi bi-people-fill me-3" aria-hidden="true"></span> Référentiel Tiers
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="plan-comptable">
+                        <span class="bi bi-book-half me-3" aria-hidden="true"></span> Plan comptable
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="balance">
+                        <span class="bi bi-journal-check me-3" aria-hidden="true"></span> Balance des comptes
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+        <AuthorizeView Policy="AdminTenant">
+            <Authorized>
+                <div class="nav-divider my-2 border-top border-secondary opacity-25 mx-3"></div>
+                <small class="text-muted px-4 text-uppercase fw-bold font-xs d-block mb-1">Paramètres</small>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="configuration/classes-comptables">
+                        <span class="bi bi-gear-wide-connected me-3" aria-hidden="true"></span> Classes OHADA
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+    </nav>
+</div>
+@* 
+<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+    <nav class="nav flex-column py-2">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-speedometer2 me-3" aria-hidden="true"></span> Tableau de bord
+            </NavLink>
+        </div>
+
+        <div class="nav-divider my-2 border-top border-secondary opacity-25 mx-3"></div>
+        <small class="text-muted px-4 text-uppercase fw-bold font-xs d-block mb-1">Comptabilité</small>
+
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="referentiel/tiers">
                 <span class="bi bi-people-fill me-3" aria-hidden="true"></span> Référentiel Tiers
@@ -48,7 +93,7 @@
         </div>
     </nav>
 </div>
-
+ *@
 <style>
     .font-xs {
         font-size: 0.685rem;
