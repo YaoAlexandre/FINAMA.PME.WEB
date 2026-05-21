@@ -1,4 +1,5 @@
 ﻿@page "/utilisateurs"
+@attribute [Authorize(Policy = "AdminTenant")]
 @using Finama.Web.Models
 @using Finama.Web.Services
 @inject FinamaApiService Api
@@ -202,6 +203,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+
         await ChargerUtilisateurs();
     }
 
