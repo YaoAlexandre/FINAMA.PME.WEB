@@ -2,8 +2,10 @@
 @attribute [Authorize(Policy = "AdminTenant")]
 @using Finama.Web.Models
 @using Finama.Web.Services
+@using Radzen
 @inject FinamaApiService Api
 @inject NavigationManager Nav
+@inject NotificationService NotificationService
 
 <div class="page-wrapper position-relative">
     <div class="page-header d-flex justify-content-between align-items-center mb-4">
@@ -224,13 +226,21 @@
 
     private async Task EnregistrerUtilisateur()
     {
-        var succes = await Api.CreerCollaborateurAsync(_request);
-        if (succes)
+        var erreur = await Api.CreerCollaborateurAsync(_request);
+
+        if (erreur == null)
         {
-            _messageAlerte = $"L'accès pour {_request.Prenom} {_request.Nom} a été configuré avec succès.";
+            // Succès
+            _messageAlerte = $"L'accès pour {_request.Prenom} {_request.Nom} a été configuré.";
             _request = new();
             _afficherFormulaire = false;
             await ChargerUtilisateurs();
+            NotificationService.Notify(NotificationSeverity.Success, "Succès", "Collaborateur ajouté.");
+        }
+        else
+        {
+            // Erreur
+            NotificationService.Notify(NotificationSeverity.Error, "Erreur", erreur);
         }
     }
 

@@ -6,7 +6,7 @@
 <div class="page-header d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
     <div>
         <h1 class="page-title mb-1">Référentiel Tiers</h1>
-        <p class="text-muted small mb-0">Gérez l'ensemble de vos partenaires commerciaux (Clients et Fournisseurs).</p>
+        <p class="text-muted small mb-0">Gerez l'ensemble de vos partenaires commerciaux (Clients et Fournisseurs).</p>
     </div>
     <button @onclick="OuvrirCreation" class="btn btn-primary shadow-sm px-4 py-2">
         <i class="bi bi-plus-lg me-2"></i>Nouveau Tiers
@@ -26,8 +26,9 @@
             <div class="col-12 col-sm-5 col-md-5 col-lg-6">
                 <select class="form-select py-2 w-100" @bind="_filtre.Type" @bind:after="ChargerDonnees">
                     <option value="">Tous les types</option>
-                    <option value="Client">Clients</option>
-                    <option value="Fournisseur">Fournisseurs</option>
+                    <option value="0">Clients</option>
+                    <option value="1">Fournisseurs</option>
+                    <option value="2">Mixtes (Les deux)</option>
                 </select>
             </div>
         </div>
@@ -40,7 +41,9 @@
                     <th class="ps-4 py-3">Code</th>
                     <th class="py-3">Nom / Raison Sociale</th>
                     <th class="py-3">Type</th>
+                    <th class="py-3">Compte Collectif</th>
                     <th class="py-3">Contact</th>
+                    <th class="py-3">Devise</th>
                     <th class="py-3">Statut</th>
                     <th class="text-end pe-4 py-3">Actions</th>
                 </tr>
@@ -49,7 +52,7 @@
                 @if (_resultat.Items == null || !_resultat.Items.Any())
                 {
                     <tr>
-                        <td colspan="6" class="text-center py-5 text-muted">
+                        <td colspan="8" class="text-center py-5 text-muted">
                             <i class="bi bi-people fs-2 d-block mb-2 opacity-50"></i>
                             Aucun tiers trouvé correspondant aux critères.
                         </td>
@@ -62,11 +65,30 @@
                         <tr @key="tiers.Id">
                             <td class="ps-4"><span class="badge-code font-monospace fw-bold">@tiers.Code</span></td>
                             <td>
-                                <span class="text-main fw-semibold">@tiers.Nom</span>
+                                <div class="d-flex flex-column">
+                                    <span class="text-main fw-semibold">@tiers.Nom</span>
+                                    @if (!string.IsNullOrEmpty(tiers.NINEA))
+                                    {
+                                        <small class="text-muted font-monospace" style="font-size: 0.7rem;">NINEA: @tiers.NINEA</small>
+                                    }
+                                </div>
                             </td>
                             <td>
-                                <span class="badge @(tiers.Type == "Client" ? "bg-info-subtle text-info border border-info-subtle" : "bg-warning-subtle text-warning border border-warning-subtle") px-2.5 py-1 rounded-2 fw-medium small">
-                                    <i class="bi @(tiers.Type == "Client" ? "bi-wallet2" : "bi-truck") me-1.5"></i>@tiers.Type
+                                <span class="badge @ObtenirBadgeStyle(tiers.Type) px-2.5 py-1 rounded-2 fw-medium small">
+                                    <i class="bi @ObtenirBadgeIcon(tiers.Type) me-1.5"></i>@ObtenirLibelleType(tiers.Type)
+                                </span>
+                            </td>
+                            <td>
+                                <span class="font-monospace text-secondary small fw-bold">
+                                    @if (!string.IsNullOrEmpty(tiers.CompteNumero))
+                                    {
+                                        <i class="bi bi-journal-bookmark me-1 text-muted"></i>
+                                        @($"{tiers.CompteNumero} - {tiers.CompteLibelle}")
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted fst-italic small">Aucun lien</span>
+                                    }
                                 </span>
                             </td>
                             <td>
@@ -79,11 +101,10 @@
                                     {
                                         <span class="small text-muted"><i class="bi bi-telephone me-1.5 text-muted"></i>@tiers.Telephone</span>
                                     }
-                                    @if (string.IsNullOrEmpty(tiers.Email) && string.IsNullOrEmpty(tiers.Telephone))
-                                    {
-                                        <span class="small text-muted italic">Aucun contact</span>
-                                    }
                                 </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border font-monospace fw-bold">@tiers.Devise</span>
                             </td>
                             <td>
                                 <span class="badge-status @(tiers.EstActif ? "active" : "inactive") fw-medium">
@@ -111,7 +132,7 @@
         <small class="text-muted font-monospace">Page @_resultat.Page sur @_resultat.TotalPages (@_resultat.TotalItems au total)</small>
         <div class="pagination-controls d-flex gap-1.5">
             <button class="btn btn-sm btn-light border px-3" disabled="@(_resultat.Page <= 1)" @onclick="() => ChangerPage(-1)">
-                <i class="bi bi-chevron-left me-1"></i> Précédent
+                <i class="bi bi-chevron-left me-1"></i> Precedent
             </button>
             <button class="btn btn-sm btn-light border px-3" disabled="@(_resultat.Page >= _resultat.TotalPages)" @onclick="() => ChangerPage(1)">
                 Suivant <i class="bi bi-chevron-right ms-1"></i>
@@ -120,6 +141,7 @@
     </div>
 </div>
 
+@* MODAL DE MODIFICATION *@
 @if (_showEditModal)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px);">
@@ -138,43 +160,88 @@
                     <button type="button" class="btn-close shadow-none" @onclick="() => _showEditModal = false"></button>
                 </div>
                 <div class="modal-body px-4 py-3" style="color: var(--text-main);">
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Nom / Raison Sociale</label>
-                        <input type="text" class="form-control py-2" @bind="_editModel.Nom" placeholder="Nom de l'entité" />
-                    </div>
-                    <div class="row g-3 mb-3">
-                        <div class="col-12 col-sm-6">
-                            <label class="form-label small fw-bold">Email</label>
-                            <input type="email" class="form-control py-2" @bind="_editModel.Email" placeholder="contact@email.com" />
+                    <EditForm Model="_editModel" OnValidSubmit="SauvegarderModification">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Nom / Raison Sociale <span class="text-danger">*</span></label>
+                            <InputText class="form-control py-2" @bind-Value="_editModel.Nom" />
+                            <div class="text-danger small mt-1 font-monospace"><ValidationMessage For="@(() => _editModel.Nom)" /></div>
                         </div>
-                        <div class="col-12 col-sm-6">
-                            <label class="form-label small fw-bold">Téléphone</label>
-                            <input type="text" class="form-control py-2" @bind="_editModel.Telephone" placeholder="+228 90 00 00 00" />
+
+                        @* AJOUT DU COMPTE ET DE LA DEVISE EN ÉDITION *@
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small fw-bold">Compte Rattaché (SYSCOHADA) <span class="text-danger">*</span></label>
+                                <InputSelect class="form-select py-2 font-monospace" @bind-Value="_editModel.CompteComptableId">
+                                    <option value="">-- Sélectionner un compte --</option>
+                                    @foreach (var compte in _comptesCollectifsDisponibles)
+                                    {
+                                        <option value="@compte.Id">@compte.Numero - @compte.Libelle</option>
+                                    }
+                                </InputSelect>
+                                <div class="text-danger small mt-1 font-monospace"><ValidationMessage For="@(() => _editModel.CompteComptableId)" /></div>
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small fw-bold">Devise opérationnelle <span class="text-danger">*</span></label>
+                                <InputSelect class="form-select py-2 font-monospace" @bind-Value="_editModel.Devise">
+                                    @foreach (var dev in _devisesDisponibles)
+                                    {
+                                        <option value="@dev.Code">@dev.Code - @dev.Libelle</option>
+                                    }
+                                </InputSelect>
+                            </div>
                         </div>
-                    </div>
-                    <div class="form-check form-switch bg-light border rounded p-3 ps-5 m-0 d-flex align-items-center justify-content-between">
-                        <div>
-                            <label class="form-check-label fw-bold small d-block">Statut opérationnel du tiers</label>
-                            <span class="text-muted small">Désactiver ce tiers bloquera ses futures écritures comptables.</span>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small fw-bold">Email</label>
+                                <InputText type="email" class="form-control py-2" @bind-Value="_editModel.Email" />
+                                <div class="text-danger small mt-1 font-monospace"><ValidationMessage For="@(() => _editModel.Email)" /></div>
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small fw-bold">Telephone</label>
+                                <InputText class="form-control py-2" @bind-Value="_editModel.Telephone" />
+                            </div>
                         </div>
-                        <input class="form-check-input mt-0" type="checkbox" @bind="_editModel.EstActif" style="width: 2.5em; height: 1.25em; cursor: pointer;">
-                    </div>
-                </div>
-                <div class="modal-footer border-top border-light px-4 py-3">
-                    <button class="btn btn-light px-3.5 border" @onclick="() => _showEditModal = false">Annuler</button>
-                    <button class="btn btn-primary px-4" @onclick="SauvegarderModification" disabled="@_isSubmitting">
-                        @if (_isSubmitting)
-                        {
-                            <span class="spinner-border spinner-border-sm me-2"></span>
-                        }
-                        Sauvegarder
-                    </button>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small fw-bold">NINEA</label>
+                                <InputText class="form-control py-2 font-monospace" @bind-Value="_editModel.NINEA" />
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small fw-bold">Adresse</label>
+                                <InputText class="form-control py-2" @bind-Value="_editModel.Adresse" />
+                            </div>
+                        </div>
+
+                        <div class="form-check form-switch bg-light border rounded p-3 ps-5 mb-0 mt-4 d-flex align-items-center justify-content-between">
+                            <div>
+                                <label class="form-check-label fw-bold small d-block">Statut operationnel du tiers</label>
+                                <span class="text-muted small">Desactiver ce tiers bloquera ses futures ecritures comptables.</span>
+                            </div>
+                            <input class="form-check-input mt-0" type="checkbox" @bind="_editModel.EstActif" style="width: 2.5em; height: 1.25em; cursor: pointer;">
+                        </div>
+
+                        <div class="modal-footer px-0 pb-0 mt-4 border-top border-light pt-3">
+                            <button type="button" class="btn btn-light px-3.5 border" @onclick="() => _showEditModal = false">Annuler</button>
+                            <button type="submit" class="btn btn-primary px-4" disabled="@_isSubmitting">
+                                @if (_isSubmitting)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                Sauvegarder
+                            </button>
+                        </div>
+                    </EditForm>
                 </div>
             </div>
         </div>
     </div>
 }
 
+@* MODAL DE CRÉATION *@
 @if (_showCreateModal)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px);">
@@ -187,7 +254,7 @@
                         </div>
                         <div>
                             <h5 class="modal-title fw-bold mb-0" style="color: var(--text-main);">Nouveau Tiers</h5>
-                            <span class="text-muted small">Ajouter une entité à votre plan de tiers</span>
+                            <span class="text-muted small">Ajouter et lier un partenaire au plan SYSCOHADA</span>
                         </div>
                     </div>
                     <button type="button" class="btn-close shadow-none" @onclick="() => _showCreateModal = false"></button>
@@ -198,34 +265,64 @@
 
                         <div class="mb-3">
                             <label class="form-label small fw-bold">Nom / Raison Sociale <span class="text-danger">*</span></label>
-                            <InputText class="form-control py-2" @bind-Value="_createModel.Nom" placeholder="Ex: Établissements Koffi ou SARL" />
+                            <InputText class="form-control py-2" @bind-Value="_createModel.Nom" placeholder="Ex: Etablissements Koffi" />
                             <div class="text-danger small mt-1 font-monospace"><ValidationMessage For="@(() => _createModel.Nom)" /></div>
                         </div>
 
                         <div class="row g-3 mb-3">
                             <div class="col-12 col-sm-6">
-                                <label class="form-label small fw-bold">Classification</label>
-                                <InputSelect class="form-select py-2" @bind-Value="_createModel.Type">
+                                <label class="form-label small fw-bold">Classification Tiers</label>
+                                <InputSelect class="form-select py-2" @bind-Value="_createModel.Type" @bind-Value:after="AjusterCompteCollectifParDefaut">
                                     <option value="0">Client</option>
                                     <option value="1">Fournisseur</option>
                                     <option value="2">Les deux (Mixte)</option>
                                 </InputSelect>
                             </div>
                             <div class="col-12 col-sm-6">
-                                <label class="form-label small fw-bold">Devise de transaction</label>
-                                <InputText class="form-control py-2 font-monospace" @bind-Value="_createModel.Devise" placeholder="Ex: XOF, EUR..." />
+                                <label class="form-label small fw-bold">Compte Rattache (SYSCOHADA) <span class="text-danger">*</span></label>
+                                <InputSelect class="form-select py-2 font-monospace" @bind-Value="_createModel.CompteComptableId">
+                                    <option value="">-- Selectionner un compte --</option>
+                                    @foreach (var compte in _comptesCollectifsDisponibles)
+                                    {
+                                        <option value="@compte.Id">@compte.Numero - @compte.Libelle</option>
+                                    }
+                                </InputSelect>
+                                <div class="text-danger small mt-1 font-monospace"><ValidationMessage For="@(() => _createModel.CompteComptableId)" /></div>
                             </div>
                         </div>
 
-                        <div class="row g-3 mb-1">
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small fw-bold">NINEA</label>
+                                <InputText class="form-control py-2 font-monospace" @bind-Value="_createModel.NINEA" placeholder="Ex: 1234567M2" />
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small fw-bold">Devise <span class="text-danger">*</span></label>
+                                @* PASSAGE DU CHAMP DEVISE EN SELECT DYNAMIQUE *@
+                                <InputSelect class="form-select py-2 font-monospace" @bind-Value="_createModel.Devise">
+                                    @foreach (var dev in _devisesDisponibles)
+                                    {
+                                        <option value="@dev.Code">@dev.Code - @dev.Libelle</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
                             <div class="col-12 col-sm-6">
                                 <label class="form-label small fw-bold">Adresse Email</label>
                                 <InputText type="email" class="form-control py-2" @bind-Value="_createModel.Email" placeholder="adresse@domaine.com" />
+                                <div class="text-danger small mt-1 font-monospace"><ValidationMessage For="@(() => _createModel.Email)" /></div>
                             </div>
                             <div class="col-12 col-sm-6">
-                                <label class="form-label small fw-bold">Téléphone principal</label>
+                                <label class="form-label small fw-bold">Telephone principal</label>
                                 <InputText class="form-control py-2" @bind-Value="_createModel.Telephone" placeholder="+228 90 12 34 56" />
                             </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Adresse Geographique</label>
+                            <InputText class="form-control py-2" @bind-Value="_createModel.Adresse" placeholder="Ex: Rue de l'Ocam, Lome" />
                         </div>
 
                         <div class="modal-footer px-0 pb-0 mt-4 border-top border-light pt-3">
@@ -235,7 +332,7 @@
                                 {
                                     <span class="spinner-border spinner-border-sm me-2"></span>
                                 }
-                                Créer l'entité
+                                Creer l'entite
                             </button>
                         </div>
                     </EditForm>
@@ -245,6 +342,7 @@
     </div>
 }
 
+@* MODAL DE SUPPRESSION *@
 @if (_showDeleteModal)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px);">
@@ -268,6 +366,7 @@
 }
 
 <style>
+    /* Conserve tes styles CSS existants ici sans modification */
     .search-container {
         position: relative;
     }
@@ -286,7 +385,7 @@
         border: 1px solid var(--border-color, #e2e8f0);
         padding: 5px 10px;
         border-radius: 6px;
-        Tarification financière font size */ font-size: 0.75rem;
+        font-size: 0.75rem;
     }
 
     .badge-status {
@@ -322,7 +421,6 @@
         display: inline-block;
     }
 
-    /* Variables fallback au cas où le layout n'est pas hydraté */
     .text-main {
         color: var(--text-main, #1e293b);
     }
@@ -335,29 +433,115 @@
     private bool _isSubmitting = false;
     private bool _showDeleteModal = false;
     private bool _showCreateModal = false;
-    private CreerTiersRequest _createModel = new();
 
+    private CreerTiersRequest _createModel = new();
     private TiersDto _selectedTiers;
     private ModifierTiersRequest _editModel = new();
 
-    protected override async Task OnInitializedAsync() => await ChargerDonnees();
+    private List<CompteComptableDto> _comptesCollectifsDisponibles = new();
+
+    // LISTE POUR STOCKER LES DEVISES ISSUES DE L'API
+    private List<DeviseDto> _devisesDisponibles = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ChargerDevises();
+        await ChargerDonnees();
+    }
 
     private async Task ChargerDonnees() => _resultat = await Api.ListerTiersAsync(_filtre);
+
+    // CHARGEMENT DEPUIS TON ENDPOINT /api/Devises
+    private async Task ChargerDevises()
+    {
+        try
+        {
+            // Remplace par ton modèle de DTO réel (ex: DeviseDto ou semblable)
+            _devisesDisponibles = await Api.GetDevisesActivesAsync();
+        }
+        catch
+        {
+            // Sécurité au cas où l'API Devises renvoie une erreur
+            _devisesDisponibles = new List<DeviseDto>
+            {
+                new DeviseDto("FCFA", "CFA", "Franc CFA", 1.0m)
+            };
+        }
+    }
+
+    // CHARGEMENT GLOBAL DU RÉFÉRENTIEL COMPTABLE (Partagé entre création et édition)
+    private async Task ChargerComptesComptables()
+    {
+        if (!_comptesCollectifsDisponibles.Any())
+        {
+            try
+            {
+                var tousLesComptes = await Api.ListerComptesComptablesAsync();
+                _comptesCollectifsDisponibles = tousLesComptes
+                    .Where(c => c.Classe == 4)
+                    .OrderBy(c => c.Numero)
+                    .ToList();
+            }
+            catch
+            {
+                _comptesCollectifsDisponibles = new();
+            }
+        }
+    }
 
     private async Task OnRechercheKeyUp(KeyboardEventArgs e) => await ChargerDonnees();
 
     private async Task ChangerPage(int delta) { _filtre.Page += delta; await ChargerDonnees(); }
 
-    private void OuvrirEdition(TiersDto tiers)
+    private async Task OuvrirCreation()
+    {
+        await ChargerComptesComptables();
+
+        _createModel = new CreerTiersRequest
+        {
+            Type = 0,
+            // Sélectionne la première devise de la liste par défaut ou FCFA
+            Devise = _devisesDisponibles.FirstOrDefault()?.Code ?? "FCFA"
+        };
+
+        AjusterCompteCollectifParDefaut();
+        _showCreateModal = true;
+    }
+
+    private void AjusterCompteCollectifParDefaut()
+    {
+        if (_createModel.Type == 0)
+        {
+            _createModel.CompteComptableId = _comptesCollectifsDisponibles.FirstOrDefault(c => c.Numero.StartsWith("411"))?.Id;
+        }
+        else if (_createModel.Type == 1)
+        {
+            _createModel.CompteComptableId = _comptesCollectifsDisponibles.FirstOrDefault(c => c.Numero.StartsWith("401"))?.Id;
+        }
+        else
+        {
+            _createModel.CompteComptableId = _comptesCollectifsDisponibles.FirstOrDefault(c => c.Numero.StartsWith("47"))?.Id ??
+                                             _comptesCollectifsDisponibles.FirstOrDefault()?.Id;
+        }
+    }
+
+    private async Task OuvrirEdition(TiersDto tiers)
     {
         _selectedTiers = tiers;
+        await ChargerComptesComptables();
+
         _editModel = new ModifierTiersRequest
         {
             Nom = tiers.Nom,
             Email = tiers.Email,
             Telephone = tiers.Telephone,
             EstActif = tiers.EstActif,
-            Code = tiers.Code
+            Code = tiers.Code,
+            Adresse = tiers.Adresse,
+            Devise = tiers.Devise ?? "FCFA",
+            NINEA = tiers.NINEA,
+            // Récupération de l'ID existant du compte associé au tiers pour l'édition
+            CompteComptableId = tiers.CompteComptableId
         };
         _showEditModal = true;
     }
@@ -398,12 +582,6 @@
         }
     }
 
-    private void OuvrirCreation()
-    {
-        _createModel = new CreerTiersRequest { Devise = "XOF" }; // Aligné avec ton implémentation pivot
-        _showCreateModal = true;
-    }
-
     private async Task ExecuterEnregistrement()
     {
         _isSubmitting = true;
@@ -422,4 +600,25 @@
             _isSubmitting = false;
         }
     }
+
+    private string ObtenirBadgeStyle(string type) => type switch
+    {
+        "Client" or "0" => "bg-info-subtle text-info border border-info-subtle",
+        "Fournisseur" or "1" => "bg-warning-subtle text-warning border border-warning-subtle",
+        _ => "bg-secondary-subtle text-secondary border border-secondary-subtle"
+    };
+
+    private string ObtenirBadgeIcon(string type) => type switch
+    {
+        "Client" or "0" => "bi-wallet2",
+        "Fournisseur" or "1" => "bi-truck",
+        _ => "bi-arrow-left-right"
+    };
+
+    private string ObtenirLibelleType(string type) => type switch
+    {
+        "Client" or "0" => "Client",
+        "Fournisseur" or "1" => "Fournisseur",
+        _ => "Mixte"
+    };
 }

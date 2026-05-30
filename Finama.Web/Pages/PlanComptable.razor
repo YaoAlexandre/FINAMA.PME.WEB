@@ -11,23 +11,28 @@
         <p class="text-muted small mb-0">Référentiel OHADA — @(_comptes?.TotalItems ?? 0) comptes paramétrés</p>
     </div>
     <button class="btn btn-primary shadow-sm px-4 py-2" @onclick="OuvrirCreation">
-        <i class="bi bi-plus-lg me-2"></i>Nouveau compte
+        <i class="bi bi-plus-lg me-2"></i>Nouveau compte racine
     </button>
 </div>
 
 <div class="card shadow-sm border-0 rounded-3 mb-4">
     <div class="card-header bg-white py-3 border-bottom border-light">
-        <div class="row g-2 align-items-center">
-            <div class="col-12 col-sm-7 col-md-6 col-lg-4">
-                <div class="search-container">
-                    <i class="bi bi-search search-icon text-muted"></i>
-                    <input type="text" class="form-control ps-5 py-2 w-100" placeholder="Rechercher numéro ou libellé..."
+        <div class="d-flex flex-wrap gap-3 align-items-center">
+
+            <div class="flex-grow-1" style="min-width: 250px;">
+                <div class="position-relative">
+                    <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+                    <input type="text" class="form-control ps-5 py-2"
+                           placeholder="Rechercher..."
                            value="@_recherche" @oninput="OnRechercheInput" />
                 </div>
             </div>
-            <div class="col-12 col-sm-5 col-md-5 col-lg-4">
-                <select class="form-select py-2 w-100" @bind="_filtreClasse" @bind:after="ChargerAsync">
-                    <option value="">Toutes les classes comptables</option>
+
+            <div style="min-width: 200px;">
+                <select class="form-select py-2"
+                        value="@_filtreClasse"
+                        @onchange="@(e => OnClasseChanged(e.Value?.ToString() ?? ""))">
+                    <option value="">Toutes les classes</option>
                     <option value="1">Classe 1 — Capitaux</option>
                     <option value="2">Classe 2 — Immobilisations</option>
                     <option value="3">Classe 3 — Stocks</option>
@@ -35,6 +40,8 @@
                     <option value="5">Classe 5 — Trésorerie</option>
                     <option value="6">Classe 6 — Charges</option>
                     <option value="7">Classe 7 — Produits</option>
+                    <option value="8">Classe 8 — Spéciaux (H.A.O.)</option>
+                    <option value="9">Classe 9 — Analytique</option>
                 </select>
             </div>
         </div>
@@ -59,7 +66,7 @@
                         <th class="py-3">Type</th>
                         <th class="text-center py-3">Norme</th>
                         <th class="text-center py-3">Statut</th>
-                        <th class="text-end pe-4 py-3" style="width: 12%">Actions</th>
+                        <th class="text-end pe-4 py-3" style="width: 15%">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -112,6 +119,12 @@
                                 </td>
                                 <td class="text-end pe-4">
                                     <div class="btn-group">
+                                        @if (c.Numero.Length <= 4) @* 🌟 Ajouter un sous-compte uniquement si c'est un compte collectif racine *@
+                                        {
+                                            <button class="btn btn-sm btn-light border p-2 me-1.5 rounded-2 text-primary" title="Ajouter un sous-compte" @onclick="() => OuvrirCreationSousCompte(c)">
+                                                <i class="bi bi-node-plus"></i>
+                                            </button>
+                                        }
                                         <button class="btn btn-sm btn-light border p-2 me-1.5 rounded-2 text-secondary" title="Modifier" @onclick="() => OuvrirModification(c)">
                                             <i class="bi bi-pencil"></i>
                                         </button>
@@ -150,13 +163,29 @@
                 <div class="modal-header border-bottom border-light px-4 py-3">
                     <div class="d-flex align-items-center gap-2.5">
                         <div class="bg-primary-subtle text-primary p-2 rounded-3 d-inline-flex">
-                            <i class="bi @(_compteEdite is null ? "bi-plus-circle-fill" : "bi-pencil-square") fs-5"></i>
+                            <i class="bi @(_compteEdite is null ? (_parentSelectionne is null ? "bi-plus-circle-fill" : "bi-node-plus-fill") : "bi-pencil-square") fs-5"></i>
                         </div>
                         <div>
                             <h5 class="modal-title fw-bold mb-0" style="color: var(--text-main);">
-                                @(_compteEdite is null ? "Nouveau compte" : "Modifier le compte")
+                                @if (_compteEdite is null)
+                                {
+                                    @(_parentSelectionne is null ? "Nouveau compte racine" : $"Nouveau sous-compte de {_parentSelectionne.Numero}")
+                                }
+                                else
+                                {
+                                    @("Modifier le compte")
+                                }
                             </h5>
-                            <span class="text-muted small">@(_compteEdite is null ? "Ajouter un élément au plan comptable" : $"Édition du compte principal {_compteEdite.Numero}")</span>
+                            <span class="text-muted small">
+                                @if (_compteEdite is null)
+                                {
+                                    @(_parentSelectionne is null ? "Ajouter un élément de niveau principal" : $"Hérite de la classe {_parentSelectionne.LibelleClasse}")
+                                }
+                                else
+                                {
+                                    @($"Édition du compte principal {_compteEdite.Numero}")
+                                }
+                            </span>
                         </div>
                     </div>
                     <button type="button" class="btn-close shadow-none" @onclick="FermerModal"></button>
@@ -176,10 +205,16 @@
                             <div class="col-12 col-sm-6">
                                 <label class="form-label small fw-bold">Numéro de compte <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control py-2 font-monospace" @bind="_numero" placeholder="Ex: 411100" />
+                                @if (_parentSelectionne is not null)
+                                {
+                                    <span class="text-primary text-xs d-block mt-1">
+                                        <i class="bi bi-magic me-1"></i> Numéro suggéré automatiquement.
+                                    </span>
+                                }
                             </div>
                             <div class="col-12 col-sm-6">
                                 <label class="form-label small fw-bold">Classe OHADA <span class="text-danger">*</span></label>
-                                <select class="form-select py-2" @bind="_classe">
+                                <select class="form-select py-2" @bind="_classe" disabled="@(_parentSelectionne is not null)">
                                     @for (int i = 1; i <= 7; i++)
                                     {
                                         <option value="@i">Classe @i</option>
@@ -188,7 +223,7 @@
                             </div>
                             <div class="col-12">
                                 <label class="form-label small fw-bold">Type de structure <span class="text-danger">*</span></label>
-                                <select class="form-select py-2" @bind="_type">
+                                <select class="form-select py-2" @bind="_type" disabled="@(_parentSelectionne is not null)">
                                     <option value="Bilan">Comptes de Bilan</option>
                                     <option value="ResultatCharge">Comptes de Résultat (Charges)</option>
                                     <option value="ResultatProduit">Comptes de Résultat (Produits)</option>
@@ -229,74 +264,6 @@
     </div>
 }
 
-<style>
-    .search-container {
-        position: relative;
-    }
-
-    .search-icon {
-        position: absolute;
-        left: 16px;
-        top: 50%;
-        transform: translateY(-50%);
-        font-size: 0.95rem;
-    }
-
-    .badge-code {
-        background: var(--btn-nav-bg, #f8f9fa);
-        color: var(--btn-nav-text, #212529);
-        border: 1px solid var(--border-color, #e2e8f0);
-        padding: 5px 10px;
-        border-radius: 6px;
-        font-size: 0.8rem;
-    }
-
-    .badge-status {
-        padding: 5px 12px;
-        border-radius: 6px;
-        font-size: 0.8rem;
-        display: inline-flex;
-        align-items: center;
-    }
-
-        .badge-status.active {
-            background: #d1e7dd;
-            color: #0f5132;
-        }
-
-            .badge-status.active .badge-dot {
-                background-color: #198754;
-            }
-
-        .badge-status.inactive {
-            background: #f8d7da;
-            color: #842029;
-        }
-
-            .badge-status.inactive .badge-dot {
-                background-color: #dc3545;
-            }
-
-    .badge-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        display: inline-block;
-    }
-
-    .text-xs {
-        font-size: 0.785rem;
-    }
-
-    .opacity-60 {
-        opacity: 0.60;
-    }
-
-    .text-main {
-        color: var(--text-main, #1e293b);
-    }
-</style>
-
 @code {
     private PagedResultDto<CompteComptableDto>? _comptes;
     private bool _chargement = true;
@@ -307,6 +274,7 @@
     private string? _recherche;
     private int _page = 1;
     private CompteComptableDto? _compteEdite;
+    private CompteComptableDto? _parentSelectionne;
 
     private string _numero = "", _libelle = "", _type = "Bilan", _actif = "true";
     private int _classe = 4;
@@ -316,32 +284,95 @@
     private async Task ChargerAsync()
     {
         _chargement = true;
+
+        // Sécurité : On s'assure que la page demandée n'est pas aberrante
+        if (_page < 1) _page = 1;
+
         _comptes = await Api.GetPlanComptableAsync(
             classe: string.IsNullOrEmpty(_filtreClasse) ? null : _filtreClasse,
-            recherche: _recherche, page: _page, pageSize: 50);
+            recherche: _recherche,
+            page: _page,
+            pageSize: 50
+        );
+
+        // Ajustement de sécurité : Si après chargement la page courante dépasse le max de pages réelles
+        if (_comptes is not null && _page > _comptes.TotalPages && _comptes.TotalPages > 0)
+        {
+            _page = _comptes.TotalPages;
+            await ChargerAsync(); // Recharge la dernière page valide
+        }
+
         _chargement = false;
     }
 
-    private async Task OnRechercheInput(ChangeEventArgs e)
+    // 🌟 Correction 1 : Gérer proprement le changement de classe
+    private async Task OnClasseChanged(string nouvelleClasse)
     {
-        _recherche = e.Value?.ToString();
-        _page = 1;
+        _filtreClasse = nouvelleClasse;
+        _page = 1; // Toujours revenir à la première page lors d'un changement de filtre
         await ChargerAsync();
     }
 
-    private async Task PageSuivante() { _page++; await ChargerAsync(); }
-    private async Task PagePrecedente() { _page--; await ChargerAsync(); }
+    // 🌟 Correction 2 : Sécurisation de l'input de recherche
+    private async Task OnRechercheInput(ChangeEventArgs e)
+    {
+        _recherche = e.Value?.ToString();
+        _page = 1; // Toujours revenir à la première page
+        await ChargerAsync();
+    }
+
+    // 🌟 Correction 3 : Sécurisation des limites de pages
+    private async Task PageSuivante()
+    {
+        if (_comptes is not null && _page < _comptes.TotalPages)
+        {
+            _page++;
+            await ChargerAsync();
+        }
+    }
+
+    private async Task PagePrecedente()
+    {
+        if (_page > 1)
+        {
+            _page--;
+            await ChargerAsync();
+        }
+    }
 
     private void OuvrirCreation()
     {
         _compteEdite = null;
+        _parentSelectionne = null;
         _numero = _libelle = ""; _type = "Bilan"; _classe = 4; _actif = "true";
         _erreur = ""; _modalOuverte = true;
+    }
+
+    private async Task OuvrirCreationSousCompte(CompteComptableDto parent)
+    {
+        _compteEdite = null;
+        _parentSelectionne = parent;
+        _libelle = "";
+        _classe = parent.Classe;
+        _type = parent.Type;
+        _actif = "true";
+        _erreur = "";
+        _modalOuverte = true;
+
+        try
+        {
+            _numero = await Api.GetProchainNumeroSousCompteAsync(parent.Id);
+        }
+        catch
+        {
+            _numero = $"{parent.Numero}01";
+        }
     }
 
     private void OuvrirModification(CompteComptableDto c)
     {
         _compteEdite = c;
+        _parentSelectionne = null;
         _libelle = c.Libelle; _actif = c.EstActif.ToString().ToLower();
         _erreur = ""; _modalOuverte = true;
     }
@@ -361,20 +392,26 @@
     private async Task Sauvegarder()
     {
         if (string.IsNullOrWhiteSpace(_libelle)) { _erreur = "Le libellé est obligatoire."; return; }
+        if (_compteEdite is null && string.IsNullOrWhiteSpace(_numero)) { _erreur = "Le numéro est obligatoire."; return; }
+
         _sauvegarde = true; _erreur = "";
         try
         {
             if (_compteEdite is null)
             {
-                if (string.IsNullOrWhiteSpace(_numero)) { _erreur = "Le numéro est obligatoire."; return; }
                 await Api.CreerCompteAsync(new CreerCompteRequest(
-                    Numero: _numero, Libelle: _libelle,
-                    Classe: _classe, Type: _type, CompteParentId: null));
+                    Numero: _numero,
+                    Libelle: _libelle,
+                    Classe: _classe,
+                    Type: _type,
+                    CompteParentId: _parentSelectionne?.Id));
             }
             else
             {
                 await Api.ModifierCompteAsync(_compteEdite.Id, new ModifierCompteRequest(
-                    Libelle: _libelle, EstActif: bool.Parse(_actif), CompteParentId: null));
+                    Libelle: _libelle,
+                    EstActif: bool.Parse(_actif),
+                    CompteParentId: _compteEdite.CompteParentId));
             }
             FermerModal();
             await ChargerAsync();

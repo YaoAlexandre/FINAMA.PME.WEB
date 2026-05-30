@@ -100,3 +100,12 @@ public record BalanceTotauxDto(
     decimal TotalSoldeFinalDebit, decimal TotalSoldeFinalCredit);
 
 public record DeviseDto(string Code, string Symbole, string Libelle, decimal TauxBaseDollar);
+
+public record EntrepriseUpdateRequest(
+    string Nom,
+    string? Adresse,
+    string? Telephone,
+    string? NumeroFiscal,
+    string? BanqueNom,
+    string? BanqueBIC
+);

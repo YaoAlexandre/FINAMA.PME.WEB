@@ -14,6 +14,7 @@ public record TiersDto(
     string? Devise,
     string? CompteNumero,
     string? CompteLibelle,
+    Guid? CompteComptableId,
     bool EstActif,
     DateTime CreatedAt
 );
@@ -61,6 +62,7 @@ public class ModifierTiersRequest
     public string? Adresse { get; set; }
     public string Devise { get; set; } = "FCFA";
     public string? NINEA { get; set; }
+    public Guid? CompteComptableId { get; set; }
 }
 
 //public class CreerTiersRequest

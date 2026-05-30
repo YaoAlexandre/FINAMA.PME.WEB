@@ -1,6 +1,7 @@
 using Finama.Web.Models;
 using Microsoft.AspNetCore.Components; // 🌟 AJOUT : Requis pour NavigationManager
 using Microsoft.JSInterop;
+using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
@@ -10,14 +11,16 @@ public class FinamaApiService
 {
     private readonly HttpClient _http;
     private readonly IJSRuntime _js;
+    private readonly CustomAuthStateProvider _authProvider;
     private readonly NavigationManager _nav; // 🌟 CORRECTION : Déclaration du champ de navigation
 
     // 🌟 CORRECTION : Injection de NavigationManager dans le constructeur
-    public FinamaApiService(HttpClient http, IJSRuntime js, NavigationManager nav)
+    public FinamaApiService(HttpClient http, IJSRuntime js, NavigationManager nav, CustomAuthStateProvider authProvider)
     {
         _http = http;
         _js = js;
         _nav = nav;
+        _authProvider = authProvider;
     }
 
     // ─── Auth ─────────────────────────────────────────────────────────────────
@@ -97,6 +100,7 @@ public class FinamaApiService
         await _js.InvokeVoidAsync("localStorage.removeItem", "finama_user");
         await _js.InvokeVoidAsync("localStorage.removeItem", "finama_entreprise");
         await _js.InvokeVoidAsync("localStorage.removeItem", "finama_devise");
+        _authProvider.NotifyUserLogout();
     }
 
     // ─── Tableau de bord ──────────────────────────────────────────────────────
@@ -133,6 +137,8 @@ public class FinamaApiService
             return null;
         }
     }
+
+
 
     // ─── Exercices ────────────────────────────────────────────────────────────
     public async Task<List<ExerciceDto>> GetExercicesAsync()
@@ -222,7 +228,34 @@ public class FinamaApiService
 
         return await _http.GetFromJsonAsync<List<CompteSelectDto>>(url) ?? new();
     }
+    public async Task<string> GetProchainNumeroSousCompteAsync(Guid parentId)
+    {
+        // Appelle le endpoint du controlleur lié à la méthode backend qu'on a implémenté
+        return await _http.GetStringAsync($"api/plan-comptable/parent/{parentId}/prochain-numero");
+    }
+    /// <summary>
+    /// Récupère la liste des comptes comptables (filtrable par classe, ex: classe 4 pour les tiers)
+    /// </summary>
+    public async Task<List<CompteComptableDto>> ListerComptesComptablesAsync(string? classe = null)
+    {
+        try
+        {
+            // 🌟 AJOUT INDISPENSABLE : Attacher le token JWT et le Device-Id
+            await SetAuthHeaderAsync();
 
+            // Construit l'URL avec le paramètre de requête si fourni
+            var url = string.IsNullOrEmpty(classe)
+                ? "api/PlanComptable/select"
+                : $"api/PlanComptable/select?classe={classe}";
+
+            var comptes = await _http.GetFromJsonAsync<List<CompteComptableDto>>(url);
+            return comptes ?? new List<CompteComptableDto>();
+        }
+        catch (Exception)
+        {
+            return new List<CompteComptableDto>();
+        }
+    }
     // ─── Reporting ────────────────────────────────────────────────────────────
     public async Task<BalanceWrapper?> GetBalanceAsync(Guid exerciceId, string? classe = null)
     {
@@ -418,18 +451,18 @@ public class FinamaApiService
         }
     }
 
-    public async Task<bool> CreerCollaborateurAsync(CreerCollaborateurRequest model)
+    public async Task<string?> CreerCollaborateurAsync(CreerCollaborateurRequest model)
     {
-        try
-        {
-            await SetAuthHeaderAsync();
-            var response = await _http.PostAsJsonAsync("api/Utilisateurs", model);
-            return response.IsSuccessStatusCode;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
+        await SetAuthHeaderAsync();
+        var response = await _http.PostAsJsonAsync("api/Utilisateurs", model);
+
+        if (response.IsSuccessStatusCode) return null; // Pas d'erreur
+
+        // Si on arrive ici, il y a une erreur : on lit le message renvoyé par l'API
+        var errorData = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+        return errorData != null && errorData.ContainsKey("message")
+            ? errorData["message"]
+            : "Une erreur est survenue.";
     }
 
     public async Task ModifierStatutUtilisateurAsync(Guid id, bool actif)
@@ -444,12 +477,27 @@ public class FinamaApiService
         try
         {
             await SetAuthHeaderAsync();
-            return await _http.GetFromJsonAsync<EntrepriseModel>("api/Entreprise/profil");
+            var entreprise = await _http.GetFromJsonAsync<EntrepriseModel>("api/Entreprise/profil");
+            return entreprise;
         }
         catch (Exception)
         {
             return null;
         }
+    }
+
+    public async Task UpdateEntrepriseAsync(EntrepriseModel entreprise)
+    {
+        await _http.PutAsJsonAsync("api/entreprise/profil", new
+        {
+            Nom = entreprise.Nom,
+            Adresse = entreprise.Adresse,
+            Telephone = entreprise.Telephone,
+            NumeroFiscal = entreprise.NumeroFiscal,
+            BanqueNom = entreprise.BanqueNom,
+            BanqueBIC = entreprise.BanqueBIC,
+            TauxTVA = entreprise.TauxTVA,
+        });
     }
 
     // ─── Devises ───────────────────────────────────────────────────────────────
@@ -503,6 +551,7 @@ public class FinamaApiService
         await _js.InvokeVoidAsync("localStorage.setItem", "finama_user", nom);
         await _js.InvokeVoidAsync("localStorage.setItem", "finama_entreprise", entreprise);
         await _js.InvokeVoidAsync("localStorage.setItem", "finama_devise", devise);
+        _authProvider.NotifyUserAuthentication(token);
     }
 
     public async Task<bool> RegisterAsync(RegisterModel model)

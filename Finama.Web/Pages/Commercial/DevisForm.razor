@@ -1,0 +1,224 @@
+﻿@page "/commercial/devis/nouveau"
+@page "/commercial/devis/{Id:guid}/modifier"
+@using Finama.Web.Models
+@using Finama.Web.Services
+@inject DevisApiService Api
+@inject NavigationManager Nav
+
+<div class="container py-4">
+    @if (!string.IsNullOrEmpty(_messageErreur))
+    {
+        <div class="alert-error-container">
+            <span>⚠️</span>
+            <p>@_messageErreur</p>
+            <button @onclick="() => _messageErreur = null">×</button>
+        </div>
+    }
+
+    <EditForm Model="_request" OnValidSubmit="Soumettre">
+        <div class="card shadow border-0 mb-4">
+            <div class="card-header bg-primary text-white py-3">
+                <h5 class="mb-0">
+                    <i class="bi @(Id.HasValue ? "bi-pencil-square" : "bi-file-earmark-plus") me-2"></i>
+                    @(Id.HasValue ? "Modifier le devis" : "Nouveau devis")
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold">Client</label>
+                        <select class="form-select" @bind="_request.TiersId">
+                            <option value="">-- Sélectionner un client --</option>
+                            @foreach (var t in _tiers)
+                            {
+                                <option value="@t.Id">@t.Nom</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold">Libellé</label>
+                        <InputText @bind-Value="_request.Libelle" class="form-control"
+                                   placeholder="Ex: Prestation de service informatique..." />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold">Date d'expiration</label>
+                        <InputDate @bind-Value="_request.DateExpiration" class="form-control" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold">Notes (optionnel)</label>
+                        <textarea class="form-control" rows="2" @bind="_request.Notes"
+                                  placeholder="Conditions particulières, délais de paiement..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive bg-white rounded shadow-sm">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Désignation</th>
+                        <th class="text-end" style="width: 120px">Quantité</th>
+                        <th class="text-end" style="width: 150px">Prix unitaire HT</th>
+                        <th class="text-end" style="width: 100px">TVA %</th>
+                        <th class="text-end" style="width: 150px">Total TTC</th>
+                        <th style="width: 50px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var ligne in _request.Lignes)
+                    {
+                        <tr>
+                            <td>
+                                <input type="text" class="form-control form-control-sm"
+                                       @bind="ligne.Designation" placeholder="Description du produit/service" />
+                            </td>
+                            <td>
+                                <input type="number" class="form-control form-control-sm text-end"
+                                       @bind="ligne.Quantite" @bind:event="oninput" min="0" />
+                            </td>
+                            <td>
+                                <input type="number" class="form-control form-control-sm text-end"
+                                       @bind="ligne.PrixUnitaireHT" @bind:event="oninput" min="0" />
+                            </td>
+                            <td>
+                                <input type="number" class="form-control form-control-sm text-end"
+                                       @bind="ligne.TauxTVA" @bind:event="oninput" min="0" max="100" />
+                            </td>
+                            <td class="text-end fw-bold">
+                                @((ligne.Quantite * ligne.PrixUnitaireHT * (1 + ligne.TauxTVA / 100)).ToString("N0"))
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-sm text-danger border-0"
+                                        @onclick="() => SupprimerLigne(ligne)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <div class="p-3 border-top">
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        @onclick="() => _request.Lignes.Add(new())">
+                    <i class="bi bi-plus-lg me-1"></i> Ajouter une ligne
+                </button>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-4">
+            <div class="alert alert-info mb-0 py-2 shadow-sm">
+                <strong>Total HT :</strong> @TotalHT.ToString("N0") &nbsp;|&nbsp;
+                <strong>TVA :</strong> @TotalTVA.ToString("N0") &nbsp;|&nbsp;
+                <strong>Total TTC :</strong> @TotalTTC.ToString("N0")
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-light border px-4" @onclick="Annuler">Annuler</button>
+                <button type="submit" class="btn btn-success px-5 fw-bold"
+                        disabled="@(_isSubmitting || !FormValide)">
+                    @if (_isSubmitting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    <i class="bi bi-cloud-arrow-up me-2"></i> Enregistrer
+                </button>
+            </div>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private CreerDevisRequest _request = new()
+    {
+        Lignes = new List<LigneDevisRequest> { new(), new() }
+    };
+    private List<TiersDto> _tiers = new();
+    private bool _isSubmitting = false;
+    private string? _messageErreur;
+
+    private decimal TotalHT => _request.Lignes.Sum(l => l.Quantite * l.PrixUnitaireHT);
+    private decimal TotalTVA => _request.Lignes.Sum(l => l.Quantite * l.PrixUnitaireHT * l.TauxTVA / 100);
+    private decimal TotalTTC => TotalHT + TotalTVA;
+    private bool FormValide => _request.TiersId != Guid.Empty
+                              && !string.IsNullOrEmpty(_request.Libelle)
+                              && _request.Lignes.Any(l => l.PrixUnitaireHT > 0);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _tiers = await Api.GetTiersSelectAsync() ?? new();
+
+            if (Id.HasValue)
+                await ChargerPourModification();
+        }
+        catch (Exception)
+        {
+            _messageErreur = "Erreur lors du chargement des données.";
+        }
+    }
+
+    private async Task ChargerPourModification()
+    {
+        var devis = await Api.GetDevisAsync(Id!.Value);
+        if (devis == null) { _messageErreur = "Devis introuvable."; return; }
+        if (devis.Statut != StatutDevis.Brouillon)
+        {
+            _messageErreur = "Seul un brouillon peut être modifié.";
+            _isSubmitting = true;
+            return;
+        }
+
+        _request = new CreerDevisRequest
+        {
+            Libelle = devis.Libelle,
+            TiersId = devis.TiersId,
+            DateExpiration = devis.DateExpiration,
+            Notes = devis.Notes,
+            Lignes = devis.Lignes.Select(l => new LigneDevisRequest
+            {
+                Designation = l.Designation,
+                Quantite = l.Quantite,
+                PrixUnitaireHT = l.PrixUnitaireHT,
+                TauxTVA = l.TauxTVA
+            }).ToList()
+        };
+    }
+
+    private void SupprimerLigne(LigneDevisRequest ligne)
+    {
+        if (_request.Lignes.Count > 1) _request.Lignes.Remove(ligne);
+    }
+
+    private void Annuler() => Nav.NavigateTo("/commercial/devis");
+
+    private async Task Soumettre()
+    {
+        if (_isSubmitting) return;
+        _messageErreur = null;
+        _isSubmitting = true;
+
+        try
+        {
+            DevisDto? res = Id.HasValue
+                ? await Api.ModifierDevisAsync(Id.Value, _request)
+                : await Api.CreerDevisAsync(_request);
+
+            if (res != null)
+                Nav.NavigateTo($"/commercial/devis/{res.Id}");
+            else
+                _messageErreur = "Le serveur n'a pas pu sauvegarder le devis.";
+        }
+        catch (Exception)
+        {
+            _messageErreur = "Une erreur technique est survenue.";
+        }
+        finally
+        {
+            _isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+}

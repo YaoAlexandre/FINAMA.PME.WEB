@@ -4,6 +4,7 @@
 @inject FinamaApiService Api
 @inject NavigationManager Nav
 
+<RadzenNotification />
 <div class="finama-layout">
     @if (_verificationEnCours)
     {
@@ -76,7 +77,7 @@
                     <span class="nav-section-label">Commercial</span>
                     <AuthorizeView Policy="Commercial">
                         <Authorized>
-                            <NavLink href="/commercial/devis" class="nav-item">
+                            <NavLink href="/devis" class="nav-item">
                                 <i class="bi bi-file-earmark-check nav-icon"></i>
                                 <span>Mes devis</span>
                             </NavLink>
@@ -292,9 +293,15 @@
     private string _deviseActiveCode = "XOF";
     private bool _dropdownOpen = false;
 
-    protected override async Task OnParametersSetAsync()
+    // protected override async Task OnParametersSetAsync()
+    // {
+    //     // 🌟 INTERCEPTION : S'exécute automatiquement à chaque changement de page/paramètre d'URL
+    //     await SecuriserAccesAsync();
+    // }
+
+    protected override async Task OnInitializedAsync()
     {
-        // 🌟 INTERCEPTION : S'exécute automatiquement à chaque changement de page/paramètre d'URL
+        // 🟢 S'exécute une seule fois au démarrage
         await SecuriserAccesAsync();
     }
 
