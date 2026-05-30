@@ -10,4 +10,10 @@ public class EntrepriseModel
     public string DeviseBase { get; set; } = string.Empty;
     public decimal TauxTVA { get; set; }
     public string PlanComptableCode { get; set; } = "OHADA";
+    public string? Adresse { get; set; }
+    public string? Telephone { get; set; }
+    public string? NumeroFiscal { get; set; }
+    public string? BanqueNom { get; set; }
+    public string? BanqueBIC { get; set; }
+
 }

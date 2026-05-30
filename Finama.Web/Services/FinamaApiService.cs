@@ -1,8 +1,9 @@
-using System.Net.Http.Json;
-using System.Net.Http.Headers;
 using Finama.Web.Models;
-using Microsoft.JSInterop;
 using Microsoft.AspNetCore.Components; // 🌟 AJOUT : Requis pour NavigationManager
+using Microsoft.JSInterop;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 
 namespace Finama.Web.Services;
 
@@ -10,34 +11,86 @@ public class FinamaApiService
 {
     private readonly HttpClient _http;
     private readonly IJSRuntime _js;
+    private readonly CustomAuthStateProvider _authProvider;
     private readonly NavigationManager _nav; // 🌟 CORRECTION : Déclaration du champ de navigation
 
     // 🌟 CORRECTION : Injection de NavigationManager dans le constructeur
-    public FinamaApiService(HttpClient http, IJSRuntime js, NavigationManager nav)
+    public FinamaApiService(HttpClient http, IJSRuntime js, NavigationManager nav, CustomAuthStateProvider authProvider)
     {
         _http = http;
         _js = js;
         _nav = nav;
+        _authProvider = authProvider;
     }
 
     // ─── Auth ─────────────────────────────────────────────────────────────────
+
+    // ─── Gestion du DeviceId pour l'OTP silencieux ──────────────────────────
+    private async Task<string> GetDeviceIdAsync()
+    {
+        var id = await _js.InvokeAsync<string?>("localStorage.getItem", "finama_device_id");
+        if (string.IsNullOrEmpty(id))
+        {
+            id = Guid.NewGuid().ToString();
+            await _js.InvokeVoidAsync("localStorage.setItem", "finama_device_id", id);
+        }
+        return id;
+    }
     public async Task<AuthResponse?> LoginAsync(string email, string motDePasse)
     {
-        try
+        // On récupère le deviceId depuis le navigateur
+        var deviceId = await GetDeviceIdAsync();
+
+        // On crée une requête personnalisée
+        var request = new HttpRequestMessage(HttpMethod.Post, "api/auth/login");
+        request.Headers.Add("X-Device-Id", deviceId);
+        request.Content = JsonContent.Create(new { email, motDePasse });
+
+        var response = await _http.SendAsync(request);
+
+        if (!response.IsSuccessStatusCode) return null;
+
+        var result = await response.Content.ReadFromJsonAsync<AuthResponse>();
+
+        // Si RequiresOtp est faux, on est reconnu et connecté immédiatement
+        if (result is not null && !string.IsNullOrEmpty(result.AccessToken))
         {
-            var response = await _http.PostAsJsonAsync("api/auth/login", new { email, motDePasse });
-            if (!response.IsSuccessStatusCode) return null;
-            var result = await response.Content.ReadFromJsonAsync<AuthResponse>();
-            if (result is not null)
-                await SauvegarderTokenAsync(result.AccessToken, result.NomUtilisateur,
-                    result.NomEntreprise, result.DeviseSymbole);
-            return result;
+            await SauvegarderTokenAsync(result.AccessToken, result.NomUtilisateur,
+                                        result.NomEntreprise, result.DeviseSymbole);
         }
-        catch (Exception)
-        {
-            throw;
-        }
+
+        return result;
     }
+
+    public async Task<AuthResponse?> VerifyOtpAsync(string email, string codeOtp)
+    {
+        var deviceId = await GetDeviceIdAsync();
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "api/auth/verify-otp");
+        request.Headers.Add("X-Device-Id", deviceId);
+        request.Content = JsonContent.Create(new { email, codeOtp });
+
+        var response = await _http.SendAsync(request);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                throw new UnauthorizedAccessException("Code OTP invalide ou expiré.");
+            return null;
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<AuthResponse>();
+
+        if (result is not null)
+        {
+            await SauvegarderTokenAsync(result.AccessToken, result.NomUtilisateur,
+                                        result.NomEntreprise, result.DeviseSymbole);
+        }
+
+        return result;
+    }
+
+
 
     public async Task LogoutAsync()
     {
@@ -47,6 +100,7 @@ public class FinamaApiService
         await _js.InvokeVoidAsync("localStorage.removeItem", "finama_user");
         await _js.InvokeVoidAsync("localStorage.removeItem", "finama_entreprise");
         await _js.InvokeVoidAsync("localStorage.removeItem", "finama_devise");
+        _authProvider.NotifyUserLogout();
     }
 
     // ─── Tableau de bord ──────────────────────────────────────────────────────
@@ -83,6 +137,8 @@ public class FinamaApiService
             return null;
         }
     }
+
+
 
     // ─── Exercices ────────────────────────────────────────────────────────────
     public async Task<List<ExerciceDto>> GetExercicesAsync()
@@ -172,7 +228,34 @@ public class FinamaApiService
 
         return await _http.GetFromJsonAsync<List<CompteSelectDto>>(url) ?? new();
     }
+    public async Task<string> GetProchainNumeroSousCompteAsync(Guid parentId)
+    {
+        // Appelle le endpoint du controlleur lié à la méthode backend qu'on a implémenté
+        return await _http.GetStringAsync($"api/plan-comptable/parent/{parentId}/prochain-numero");
+    }
+    /// <summary>
+    /// Récupère la liste des comptes comptables (filtrable par classe, ex: classe 4 pour les tiers)
+    /// </summary>
+    public async Task<List<CompteComptableDto>> ListerComptesComptablesAsync(string? classe = null)
+    {
+        try
+        {
+            // 🌟 AJOUT INDISPENSABLE : Attacher le token JWT et le Device-Id
+            await SetAuthHeaderAsync();
 
+            // Construit l'URL avec le paramètre de requête si fourni
+            var url = string.IsNullOrEmpty(classe)
+                ? "api/PlanComptable/select"
+                : $"api/PlanComptable/select?classe={classe}";
+
+            var comptes = await _http.GetFromJsonAsync<List<CompteComptableDto>>(url);
+            return comptes ?? new List<CompteComptableDto>();
+        }
+        catch (Exception)
+        {
+            return new List<CompteComptableDto>();
+        }
+    }
     // ─── Reporting ────────────────────────────────────────────────────────────
     public async Task<BalanceWrapper?> GetBalanceAsync(Guid exerciceId, string? classe = null)
     {
@@ -368,18 +451,18 @@ public class FinamaApiService
         }
     }
 
-    public async Task<bool> CreerCollaborateurAsync(CreerCollaborateurRequest model)
+    public async Task<string?> CreerCollaborateurAsync(CreerCollaborateurRequest model)
     {
-        try
-        {
-            await SetAuthHeaderAsync();
-            var response = await _http.PostAsJsonAsync("api/Utilisateurs", model);
-            return response.IsSuccessStatusCode;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
+        await SetAuthHeaderAsync();
+        var response = await _http.PostAsJsonAsync("api/Utilisateurs", model);
+
+        if (response.IsSuccessStatusCode) return null; // Pas d'erreur
+
+        // Si on arrive ici, il y a une erreur : on lit le message renvoyé par l'API
+        var errorData = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+        return errorData != null && errorData.ContainsKey("message")
+            ? errorData["message"]
+            : "Une erreur est survenue.";
     }
 
     public async Task ModifierStatutUtilisateurAsync(Guid id, bool actif)
@@ -394,12 +477,27 @@ public class FinamaApiService
         try
         {
             await SetAuthHeaderAsync();
-            return await _http.GetFromJsonAsync<EntrepriseModel>("api/Entreprise/profil");
+            var entreprise = await _http.GetFromJsonAsync<EntrepriseModel>("api/Entreprise/profil");
+            return entreprise;
         }
         catch (Exception)
         {
             return null;
         }
+    }
+
+    public async Task UpdateEntrepriseAsync(EntrepriseModel entreprise)
+    {
+        await _http.PutAsJsonAsync("api/entreprise/profil", new
+        {
+            Nom = entreprise.Nom,
+            Adresse = entreprise.Adresse,
+            Telephone = entreprise.Telephone,
+            NumeroFiscal = entreprise.NumeroFiscal,
+            BanqueNom = entreprise.BanqueNom,
+            BanqueBIC = entreprise.BanqueBIC,
+            TauxTVA = entreprise.TauxTVA,
+        });
     }
 
     // ─── Devises ───────────────────────────────────────────────────────────────
@@ -428,12 +526,17 @@ public class FinamaApiService
         return !string.IsNullOrEmpty(token);
     }
 
+    // ─── Helpers de configuration ──────────────────────────────────────────
     private async Task SetAuthHeaderAsync()
     {
+        // Ajout du header de confiance (pour le backend) à chaque appel
+        var deviceId = await GetDeviceIdAsync();
+
+        if (!_http.DefaultRequestHeaders.Contains("X-Device-Id"))
+            _http.DefaultRequestHeaders.Add("X-Device-Id", deviceId);
+
         if (!_http.DefaultRequestHeaders.Contains("ngrok-skip-browser-warning"))
-        {
             _http.DefaultRequestHeaders.Add("ngrok-skip-browser-warning", "true");
-        }
 
         var token = await GetTokenAsync();
         if (!string.IsNullOrEmpty(token))
@@ -448,6 +551,7 @@ public class FinamaApiService
         await _js.InvokeVoidAsync("localStorage.setItem", "finama_user", nom);
         await _js.InvokeVoidAsync("localStorage.setItem", "finama_entreprise", entreprise);
         await _js.InvokeVoidAsync("localStorage.setItem", "finama_devise", devise);
+        _authProvider.NotifyUserAuthentication(token);
     }
 
     public async Task<bool> RegisterAsync(RegisterModel model)

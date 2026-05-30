@@ -4,6 +4,7 @@
 @inject FinamaApiService Api
 @inject NavigationManager Nav
 
+<RadzenNotification />
 <div class="finama-layout">
     @if (_verificationEnCours)
     {
@@ -33,50 +34,84 @@
                         <i class="bi bi-speedometer2 nav-icon"></i>
                         <span>Tableau de bord</span>
                     </NavLink>
-                    <NavLink href="/comptabilite/ecritures" class="nav-item">
-                        <i class="bi bi-pencil-square nav-icon"></i>
-                        <span>Écritures</span>
-                    </NavLink>
-                    <NavLink href="/factures" class="nav-item">
-                        <i class="bi bi-file-earmark-text nav-icon"></i>
-                        <span>Factures</span>
-                    </NavLink>
-                    <NavLink href="/referentiel/tiers" class="nav-item">
-                        <i class="bi bi-people-fill nav-icon"></i>
-                        <span>Tiers</span>
-                    </NavLink>
+
+                    <AuthorizeView Policy="Saisie">
+                        <Authorized>
+                            <NavLink href="/comptabilite/ecritures" class="nav-item">
+                                <i class="bi bi-pencil-square nav-icon"></i>
+                                <span>Écritures</span>
+                            </NavLink>
+                            <NavLink href="/factures" class="nav-item">
+                                <i class="bi bi-file-earmark-text nav-icon"></i>
+                                <span>Factures</span>
+                            </NavLink>
+                            <NavLink href="/referentiel/tiers" class="nav-item">
+                                <i class="bi bi-people-fill nav-icon"></i>
+                                <span>Tiers</span>
+                            </NavLink>
+                        </Authorized>
+                    </AuthorizeView>
                 </div>
 
                 <div class="nav-section">
                     <span class="nav-section-label">Reporting</span>
-                    <NavLink href="/balance" class="nav-item">
-                        <i class="bi bi-journal-check nav-icon"></i>
-                        <span>Balance</span>
-                    </NavLink>
-                    <NavLink href="/grand-livre" class="nav-item">
-                        <i class="bi bi-journal-text nav-icon"></i>
-                        <span>Grand Livre</span>
-                    </NavLink>
-                    <NavLink href="/plan-comptable" class="nav-item">
-                        <i class="bi bi-book-half nav-icon"></i>
-                        <span>Plan comptable</span>
-                    </NavLink>
+                    <AuthorizeView Policy="Saisie">
+                        <Authorized>
+                            <NavLink href="/balance" class="nav-item">
+                                <i class="bi bi-journal-check nav-icon"></i>
+                                <span>Balance</span>
+                            </NavLink>
+                            <NavLink href="/grand-livre" class="nav-item">
+                                <i class="bi bi-journal-text nav-icon"></i>
+                                <span>Grand Livre</span>
+                            </NavLink>
+                            <NavLink href="/plan-comptable" class="nav-item">
+                                <i class="bi bi-book-half nav-icon"></i>
+                                <span>Plan comptable</span>
+                            </NavLink>
+                        </Authorized>
+                    </AuthorizeView>
+                </div>
+
+                <div class="nav-section">
+                    <span class="nav-section-label">Commercial</span>
+                    <AuthorizeView Policy="Commercial">
+                        <Authorized>
+                            <NavLink href="/devis" class="nav-item">
+                                <i class="bi bi-file-earmark-check nav-icon"></i>
+                                <span>Mes devis</span>
+                            </NavLink>
+                            <NavLink href="/commercial/clients" class="nav-item">
+                                <i class="bi bi-person-lines-fill nav-icon"></i>
+                                <span>Mes clients</span>
+                            </NavLink>
+                            <NavLink href="/commercial/pipeline" class="nav-item">
+                                <i class="bi bi-funnel nav-icon"></i>
+                                <span>Pipeline</span>
+                            </NavLink>
+                        </Authorized>
+                    </AuthorizeView>
                 </div>
 
                 <div class="nav-section">
                     <span class="nav-section-label">Paramètres</span>
-                    <NavLink href="/configuration/classes-comptables" class="nav-item">
-                        <i class="bi bi-gear-wide-connected nav-icon"></i>
-                        <span>Classes OHADA</span>
-                    </NavLink>
-                    <NavLink href="/utilisateurs" class="nav-item">
-                        <i class="bi bi-shield-lock nav-icon"></i>
-                        <span>Utilisateurs</span>
-                    </NavLink>
-                    <NavLink href="/entreprise" class="nav-item">
-                        <i class="bi bi-building nav-icon"></i>
-                        <span>Mon entreprise</span>
-                    </NavLink>
+
+                    <AuthorizeView Policy="AdminTenant">
+                        <Authorized>
+                            <NavLink href="/configuration/classes-comptables" class="nav-item">
+                                <i class="bi bi-gear-wide-connected nav-icon"></i>
+                                <span>Classes OHADA</span>
+                            </NavLink>
+                            <NavLink href="/utilisateurs" class="nav-item">
+                                <i class="bi bi-shield-lock nav-icon"></i>
+                                <span>Utilisateurs</span>
+                            </NavLink>
+                            <NavLink href="/entreprise" class="nav-item">
+                                <i class="bi bi-building nav-icon"></i>
+                                <span>Mon entreprise</span>
+                            </NavLink>
+                        </Authorized>
+                    </AuthorizeView>
                 </div>
             </nav>
 
@@ -258,9 +293,15 @@
     private string _deviseActiveCode = "XOF";
     private bool _dropdownOpen = false;
 
-    protected override async Task OnParametersSetAsync()
+    // protected override async Task OnParametersSetAsync()
+    // {
+    //     // 🌟 INTERCEPTION : S'exécute automatiquement à chaque changement de page/paramètre d'URL
+    //     await SecuriserAccesAsync();
+    // }
+
+    protected override async Task OnInitializedAsync()
     {
-        // 🌟 INTERCEPTION : S'exécute automatiquement à chaque changement de page/paramètre d'URL
+        // 🟢 S'exécute une seule fois au démarrage
         await SecuriserAccesAsync();
     }
 

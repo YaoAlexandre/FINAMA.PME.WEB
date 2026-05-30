@@ -1,0 +1,217 @@
+﻿@page "/commercial/devis/{Id:guid}"
+@using Finama.Web.Models
+@using Finama.Web.Services
+@inject DevisApiService Api
+@inject NavigationManager Nav
+
+<div class="container py-4">
+    @if (!string.IsNullOrEmpty(_messageErreur))
+    {
+        <div class="alert-error-container">
+            <span>⚠️</span>
+            <p>@_messageErreur</p>
+            <button @onclick="() => _messageErreur = null">×</button>
+        </div>
+    }
+
+    @if (_isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+        </div>
+    }
+    else if (_devis != null)
+    {
+        <div class="card shadow border-0 mb-4">
+            <div class="card-header bg-primary text-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-file-earmark-text me-2"></i>
+                    Devis @_devis.Numero
+                </h5>
+                <div class="d-flex gap-2">
+                    @if (_devis.Statut == StatutDevis.Brouillon)
+                    {
+                        <button class="btn btn-light btn-sm"
+                                @onclick="() => AllerModifier() ">
+                            <i class="bi bi-pencil me-1"></i> Modifier
+                        </button>
+                        <button class="btn btn-warning btn-sm" @onclick="() => ChangerStatut(StatutDevis.Envoye)">
+                            <i class="bi bi-send me-1"></i> Marquer Envoyé
+                        </button>
+                    }
+                    @if (_devis.Statut == StatutDevis.Envoye)
+                    {
+                        <button class="btn btn-success btn-sm" @onclick="() => ChangerStatut(StatutDevis.Accepte)">
+                            <i class="bi bi-check-circle me-1"></i> Accepté
+                        </button>
+                        <button class="btn btn-danger btn-sm" @onclick="() => ChangerStatut(StatutDevis.Refuse)">
+                            <i class="bi bi-x-circle me-1"></i> Refusé
+                        </button>
+                    }
+                    @if (_devis.Statut == StatutDevis.Accepte)
+                    {
+                        <button class="btn btn-primary btn-sm fw-bold" @onclick="ConvertirEnFacture" disabled="@_isSubmitting">
+                            @if (_isSubmitting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            <i class="bi bi-arrow-right-circle me-1"></i> Convertir en facture
+                        </button>
+                    }
+                    <button class="btn btn-outline-light btn-sm" @onclick="() => AllerRetour()">
+                        <i class="bi bi-arrow-left me-1"></i> Retour
+                    </button>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label class="form-label text-muted small">Client</label>
+                        <div class="fw-bold">@_devis.TiersNom</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label text-muted small">Date de création</label>
+                        <div>@_devis.DateCreation.ToString("dd/MM/yyyy")</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label text-muted small">Date d'expiration</label>
+                        <div>@(_devis.DateExpiration.HasValue ? _devis.DateExpiration.Value.ToString("dd/MM/yyyy") : "—")</div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label text-muted small">Statut</label>
+                        <div>@BadgeStatut(_devis.StatutLibelle)</div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_devis.Notes))
+                    {
+                        <div class="col-12">
+                            <label class="form-label text-muted small">Notes</label>
+                            <div class="text-muted fst-italic">@_devis.Notes</div>
+                        </div>
+                    }
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Désignation</th>
+                                <th class="text-end" style="width:120px">Quantité</th>
+                                <th class="text-end" style="width:150px">Prix unitaire HT</th>
+                                <th class="text-end" style="width:100px">TVA %</th>
+                                <th class="text-end" style="width:150px">Total TTC</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var l in _devis.Lignes)
+                            {
+                                <tr>
+                                    <td>@l.Designation</td>
+                                    <td class="text-end">@l.Quantite.ToString("N2")</td>
+                                    <td class="text-end">@l.PrixUnitaireHT.ToString("N0")</td>
+                                    <td class="text-end">@l.TauxTVA %</td>
+                                    <td class="text-end fw-bold">@l.MontantTTC.ToString("N0")</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <td colspan="4" class="text-end fw-bold">Total HT</td>
+                                <td class="text-end">@_devis.TotalHT.ToString("N0")</td>
+                            </tr>
+                            <tr>
+                                <td colspan="4" class="text-end fw-bold">TVA</td>
+                                <td class="text-end">@_devis.TotalTVA.ToString("N0")</td>
+                            </tr>
+                            <tr>
+                                <td colspan="4" class="text-end fw-bold text-primary fs-5">Total TTC</td>
+                                <td class="text-end fw-bold text-primary fs-5">@_devis.TotalTTC.ToString("N0")</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private DevisDto? _devis;
+    private bool _isLoading = true;
+    private bool _isSubmitting = false;
+    private string? _messageErreur;
+
+    private void AllerRetour() => Nav.NavigateTo("/commercial/devis");
+    private void AllerModifier() => Nav.NavigateTo($"/commercial/devis/{Id}/modifier");
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ChargerDevis();
+    }
+
+    private async Task ChargerDevis()
+    {
+        try
+        {
+            _devis = await Api.GetDevisAsync(Id);
+        }
+        catch (Exception)
+        {
+            _messageErreur = "Erreur lors du chargement du devis.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ChangerStatut(StatutDevis statut)
+    {
+        try
+        {
+            await Api.MettreAJourStatutDevisAsync(Id, statut);
+            await ChargerDevis();
+        }
+        catch (Exception)
+        {
+            _messageErreur = "Erreur lors de la mise à jour du statut.";
+        }
+    }
+
+    private async Task ConvertirEnFacture()
+    {
+        if (_isSubmitting) return;
+        _isSubmitting = true;
+        try
+        {
+            var factureId = await Api.ConvertirDevisEnFactureAsync(Id);
+            if (factureId.HasValue)
+                Nav.NavigateTo($"/factures/{factureId.Value}");
+            else
+                _messageErreur = "La conversion a échoué, aucun ID retourné.";
+        }
+        catch (Exception ex)
+        {
+            _messageErreur = ex.Message;
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+
+
+    private RenderFragment BadgeStatut(string statut) => statut switch
+    {
+        "Brouillon" => @<span class="badge bg-secondary">Brouillon</span>,
+        "Envoyé"    => @<span class="badge bg-info text-dark">Envoyé</span>,
+        "Accepté"   => @<span class="badge bg-success">Accepté</span>,
+        "Refusé"    => @<span class="badge bg-danger">Refusé</span>,
+        "Expiré"    => @<span class="badge bg-warning text-dark">Expiré</span>,
+        "Converti"  => @<span class="badge bg-primary">Converti</span>,
+        _           => @<span class="badge bg-light text-dark">@statut</span>
+    };
+}

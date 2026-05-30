@@ -1,7 +1,9 @@
 ﻿@page "/entreprise"
 @using Finama.Web.Models
+@using Radzen
 @layout MainLayout
 @inject FinamaApiService Api
+@inject NotificationService NotificationService
 
 <PageTitle>Mon Entreprise — Finama</PageTitle>
 
@@ -9,6 +11,11 @@
     <div>
         <h1 class="page-title mb-1"><i class="bi bi-building text-primary me-2"></i>Mon Entreprise</h1>
         <p class="text-muted small mb-0">Paramètres légaux et référentiels de facturation de votre établissement</p>
+    </div>
+    <div class="mt-4">
+        <button class="btn btn-primary" @onclick="OuvrirModal">
+            <i class="bi bi-pencil-square me-2"></i>Configurer les informations de facturation
+        </button>
     </div>
 </div>
 
@@ -85,21 +92,241 @@ else if (_entreprise is not null)
             </div>
         </div>
     </div>
+
+    <!-- NOUVELLE SECTION : Coordonnées de Facturation -->
+    <div class="row g-4 mt-2">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3 border-bottom border-light d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold text-dark mb-0"><i class="bi bi-file-earmark-text text-secondary me-2"></i>Coordonnées de Facturation</h5>
+                    <button class="btn btn-sm btn-outline-primary" @onclick="OuvrirModal">
+                        <i class="bi bi-pencil me-1"></i>Modifier
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <!-- Adresse complète -->
+                        <div class="col-12 col-md-6">
+                            <span class="text-muted small d-block mb-1">
+                                <i class="bi bi-geo-alt text-danger me-1"></i>Adresse complète
+                            </span>
+                            <strong class="text-dark">
+                                @if (!string.IsNullOrWhiteSpace(_entreprise.Adresse))
+                                {
+                                    @_entreprise.Adresse
+                                }
+                                else
+                                {
+                                    <span class="text-muted fst-italic">Non renseignée</span>
+                                }
+                            </strong>
+                        </div>
+
+                        <!-- Téléphone -->
+                        <div class="col-12 col-md-6">
+                            <span class="text-muted small d-block mb-1">
+                                <i class="bi bi-telephone text-info me-1"></i>Téléphone
+                            </span>
+                            <strong class="text-dark">
+                                @if (!string.IsNullOrWhiteSpace(_entreprise.Telephone))
+                                {
+                                    @_entreprise.Telephone
+                                }
+                                else
+                                {
+                                    <span class="text-muted fst-italic">Non renseigné</span>
+                                }
+                            </strong>
+                        </div>
+
+                        <!-- N° Identifiant Fiscal -->
+                        <div class="col-12 col-md-6">
+                            <span class="text-muted small d-block mb-1">
+                                <i class="bi bi-card-text text-success me-1"></i>N° Identifiant Fiscal
+                            </span>
+                            <strong class="text-dark font-monospace">
+                                @if (!string.IsNullOrWhiteSpace(_entreprise.NumeroFiscal))
+                                {
+                                    @_entreprise.NumeroFiscal
+                                }
+                                else
+                                {
+                                    <span class="text-muted fst-italic">Non renseigné</span>
+                                }
+                            </strong>
+                        </div>
+
+                        <!-- Banque / Moyen de paiement -->
+                        <div class="col-12 col-md-6">
+                            <span class="text-muted small d-block mb-1">
+                                <i class="bi bi-bank text-warning me-1"></i>Banque / Moyen de paiement
+                            </span>
+                            <strong class="text-dark">
+                                @if (!string.IsNullOrWhiteSpace(_entreprise.BanqueNom))
+                                {
+                                    @_entreprise.BanqueNom
+                                }
+                                else
+                                {
+                                    <span class="text-muted fst-italic">Non renseigné</span>
+                                }
+                            </strong>
+                        </div>
+
+                        <!-- RIB / Numéro de compte -->
+                        <div class="col-12">
+                            <span class="text-muted small d-block mb-1">
+                                <i class="bi bi-credit-card text-primary me-1"></i>RIB / Numéro de compte
+                            </span>
+                            <strong class="text-dark font-monospace">
+                                @if (!string.IsNullOrWhiteSpace(_entreprise.BanqueBIC))
+                                {
+                                    @_entreprise.BanqueBIC
+                                }
+                                else
+                                {
+                                    <span class="text-muted fst-italic">Non renseigné</span>
+                                }
+                            </strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL CORRIGÉE : même template que utilisateurs -->
+@if (_estVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 1060;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-light border-0">
+                    <h5 class="fw-bold modal-title"><i class="bi bi-pencil-square me-2"></i>Coordonnées de Facturation</h5>
+                    <button type="button" class="btn-close" @onclick="FermerModal"></button>
+                </div>
+
+                @if (_entreprise is not null)
+                {
+                    <EditForm Model="_entreprise" OnValidSubmit="Sauvegarder">
+                        <DataAnnotationsValidator />
+                        <div class="modal-body p-4">
+                            <h6 class="text-primary fw-bold mb-3"><i class="bi bi-building me-2"></i>Informations générales</h6>
+                            <div class="row g-3 mb-4">
+                                <div class="col-12">
+                                    <label class="form-label small fw-bold">Adresse complète</label>
+                                    <input class="form-control" @bind="_entreprise.Adresse" required />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold">Téléphone</label>
+                                    <input class="form-control" @bind="_entreprise.Telephone" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold">N° Identifiant Fiscal</label>
+                                    <input class="form-control" @bind="_entreprise.NumeroFiscal" />
+                                </div>
+                            </div>
+
+                            <h6 class="text-primary fw-bold mb-3"><i class="bi bi-calculator me-2"></i>Paramètres Comptables</h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold">Taux de TVA par défaut (%)</label>
+                                    <input type="number" step="0.1" class="form-control" @bind="_entreprise.TauxTVA" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold">Devise de tenue de caisse</label>
+                                    <input class="form-control" @bind="_entreprise.DeviseBase" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold">Banque / Moyen de paiement</label>
+                                    <input class="form-control" @bind="_entreprise.BanqueNom" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold">RIB / Numéro de compte</label>
+                                    <input class="form-control" @bind="_entreprise.BanqueBIC" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer border-0">
+                            <button type="button" class="btn btn-light" @onclick="FermerModal">Annuler</button>
+                            <button type="submit" class="btn btn-primary px-4">Enregistrer les modifications</button>
+                        </div>
+                    </EditForm>
+                }
+                else
+                {
+                    <div class="modal-body text-center p-5">
+                        <div class="spinner-border text-primary" role="status"></div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
 }
 
 @code {
     private EntrepriseModel? _entreprise;
     private bool _chargement = true;
+    private bool _estVisible = false;
 
     protected override async Task OnInitializedAsync()
+    {
+        await ChargerDonnees();
+    }
+
+    private async Task ChargerDonnees()
     {
         _chargement = true;
         try
         {
-            // Récupère les données d'identité de l'entreprise via ton service
             _entreprise = await Api.GetEntrepriseDetailsAsync();
         }
-        catch { /* ... fallback ... */ }
-        finally { _chargement = false; }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erreur lors du chargement : {ex.Message}");
+            NotificationService.Notify(NotificationSeverity.Error, "Erreur", "Impossible de charger les données.");
+        }
+        finally
+        {
+            _chargement = false;
+        }
+    }
+
+    private void OuvrirModal() => _estVisible = true;
+
+    private void FermerModal() => _estVisible = false;
+
+    private async Task Sauvegarder()
+    {
+        if (_entreprise == null) return;
+
+        try
+        {
+            // 1. Appel de l'API
+            await Api.UpdateEntrepriseAsync(_entreprise);
+
+            // 2. Notification de succès
+            NotificationService.Notify(
+                NotificationSeverity.Success,
+                "Succès",
+                "Les informations de facturation ont été mises à jour."
+            );
+
+            // 3. Fermeture de la modale
+            FermerModal();
+
+            // 4. Rafraîchissement des données
+            await ChargerDonnees();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erreur lors de la sauvegarde : {ex.Message}");
+            NotificationService.Notify(
+                NotificationSeverity.Error,
+                "Erreur",
+                "Une erreur s'est produite lors de la sauvegarde."
+            );
+        }
     }
 }
