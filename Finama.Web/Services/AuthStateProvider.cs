@@ -21,7 +21,7 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        var token = await _localStorage.GetItemAsync<string>("accessToken");
+        var token = await _localStorage.GetItemAsync<string>("finama_token");
 
         if (string.IsNullOrEmpty(token))
         {

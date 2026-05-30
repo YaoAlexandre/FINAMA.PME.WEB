@@ -1,0 +1,154 @@
+﻿@page "/devis"
+@using Finama.Web.Models
+@using Finama.Web.Services
+@inject DevisApiService DevisApi
+@inject NavigationManager Nav
+
+<div class="container py-4">
+    @if (!string.IsNullOrEmpty(_messageErreur))
+    {
+        <div class="alert-error-container">
+            <span>⚠️</span>
+            <p>@_messageErreur</p>
+            <button @onclick="() => _messageErreur = null">×</button>
+        </div>
+    }
+
+    <div class="card shadow border-0 mb-4">
+        <div class="card-header bg-primary text-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-file-earmark-check me-2"></i> Mes devis
+            </h5>
+            <button class="btn btn-light btn-sm fw-bold" @onclick="AllerNouveauDevis">
+                <i class="bi bi-plus-lg me-1"></i> Nouveau devis
+            </button>
+        </div>
+
+        <div class="card-body">
+            <div class="row g-2 mb-3">
+                <div class="col-md-4">
+                    <input type="text" class="form-control" placeholder="Rechercher un client, un numéro..."
+                           @bind="_recherche" @bind:event="oninput" />
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select" @bind="_filtreStatut">
+                        <option value="">Tous les statuts</option>
+                        <option value="0">Brouillon</option>
+                        <option value="1">Envoyé</option>
+                        <option value="2">Accepté</option>
+                        <option value="3">Refusé</option>
+                        <option value="4">Expiré</option>
+                        <option value="5">Converti</option>
+                    </select>
+                </div>
+            </div>
+
+            @if (_isLoading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary"></div>
+                </div>
+            }
+            else if (!DevisFiltres.Any())
+            {
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                    Aucun devis trouvé.
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Numéro</th>
+                                <th>Client</th>
+                                <th>Libellé</th>
+                                <th>Date</th>
+                                <th>Expiration</th>
+                                <th class="text-end">Total TTC</th>
+                                <th>Statut</th>
+                                <th style="width: 80px"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var d in DevisFiltres)
+                            {
+                                <tr>
+                                    <td class="font-monospace fw-bold">@d.Numero</td>
+                                    <td>@d.TiersNom</td>
+                                    <td>@d.Libelle</td>
+                                    <td>@d.DateCreation.ToString("dd/MM/yyyy")</td>
+                                    <td>@(d.DateExpiration.HasValue ? d.DateExpiration.Value.ToString("dd/MM/yyyy") : "—")</td>
+                                    <td class="text-end fw-bold">@d.TotalTTC.ToString("N0")</td>
+                                    <td>@BadgeStatut(d.StatutLibelle)</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary border-0"
+                                                @onclick="() => OuvrirDevis(d.Id)">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                        @if (d.Statut == StatutDevis.Brouillon)
+                                        {
+                                            <button class="btn btn-sm btn-outline-secondary border-0"
+                                                    @onclick="() => ModifierDevis(d.Id)">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<DevisDto> _devis = new();
+    private string _recherche = "";
+    private string _filtreStatut = "";
+    private bool _isLoading = true;
+    private string? _messageErreur;
+    private void AllerNouveauDevis() => Nav.NavigateTo("/commercial/devis/nouveau");
+    private void OuvrirDevis(Guid id) => Nav.NavigateTo($"/commercial/devis/{id}");
+    private void ModifierDevis(Guid id) => Nav.NavigateTo($"/commercial/devis/{id}/modifier");
+
+    private IEnumerable<DevisDto> DevisFiltres => _devis
+        .Where(d =>
+            (string.IsNullOrEmpty(_recherche) ||
+             d.Numero.Contains(_recherche, StringComparison.OrdinalIgnoreCase) ||
+             d.TiersNom.Contains(_recherche, StringComparison.OrdinalIgnoreCase) ||
+             d.Libelle.Contains(_recherche, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrEmpty(_filtreStatut) ||
+             ((int)d.Statut).ToString() == _filtreStatut));
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _devis = await DevisApi.GetMesDevisAsync() ?? new();
+        }
+        catch (Exception)
+        {
+            _messageErreur = "Erreur lors du chargement des devis.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private RenderFragment BadgeStatut(string statut) => statut switch
+    {
+        "Brouillon" => @<span class="badge bg-secondary">Brouillon</span>,
+        "Envoyé"    => @<span class="badge bg-info text-dark">Envoyé</span>,
+        "Accepté"   => @<span class="badge bg-success">Accepté</span>,
+        "Refusé"    => @<span class="badge bg-danger">Refusé</span>,
+        "Expiré"    => @<span class="badge bg-warning text-dark">Expiré</span>,
+        "Converti"  => @<span class="badge bg-primary">Converti</span>,
+        _           => @<span class="badge bg-light text-dark">@statut</span>
+    };
+}
