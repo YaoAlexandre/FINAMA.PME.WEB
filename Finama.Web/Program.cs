@@ -11,25 +11,38 @@ builder.RootComponents.Add<App>("#app");
 var apiSettings = builder.Configuration.GetSection("FinamaApi");
 var baseUrl = apiSettings["BaseUrl"] ?? "https://localhost:4432/";
 
-builder.Services.AddScoped<AppState>(); // Scoped est parfait pour Blazor WASM
-
-builder.Services.AddScoped(sp => new HttpClient
-{
-    BaseAddress = new Uri(baseUrl)
-});
-builder.Services.AddScoped<FinamaApiService>();
-builder.Services.AddScoped<DevisApiService>();
+// 1. Enregistrement des services de base
+builder.Services.AddScoped<AppState>();
 builder.Services.AddBlazoredLocalStorage();
 
-// Juste après ton builder
+// 2. Enregistrement du Handler d'authentification JWT
+builder.Services.AddTransient<JwtAuthorizationHandler>();
 
+// 3. Configuration du HttpClient global muni du Handler JWT
+builder.Services.AddScoped(sp =>
+{
+    var handler = sp.GetRequiredService<JwtAuthorizationHandler>();
+    handler.InnerHandler = new HttpClientHandler();
+
+    return new HttpClient(handler)
+    {
+        BaseAddress = new Uri(baseUrl)
+    };
+});
+
+// 4. Enregistrement des services API (ils utiliseront automatiquement le HttpClient authentifié)
+builder.Services.AddScoped<FinamaApiService>();
+builder.Services.AddScoped<DevisApiService>();
+builder.Services.AddScoped<ITenantAdminService, TenantAdminService>();
+
+// 5. Authentification, Radzen et Autorisations
 builder.Services.AddCascadingAuthenticationState();
-//builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddScoped<CustomAuthStateProvider>();
-builder.Services.AddScoped<NotificationService>();
-builder.Services.AddRadzenComponents();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp =>
     sp.GetRequiredService<CustomAuthStateProvider>());
+
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddRadzenComponents();
 
 builder.Services.AddAuthorizationCore(options =>
 {
@@ -46,9 +59,7 @@ builder.Services.AddAuthorizationCore(options =>
         policy.RequireRole("AdminTenant", "Comptable", "Collaborateur", "Lecture", "Commercial", "SuperAdmin"));
 
     options.AddPolicy("Commercial", policy =>
-        policy.RequireRole("AdminTenant", "Commercial", "SuperAdmin")); // ? nouveau
+        policy.RequireRole("AdminTenant", "Commercial", "SuperAdmin"));
 });
-
-
 
 await builder.Build().RunAsync();

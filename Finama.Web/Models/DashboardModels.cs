@@ -63,5 +63,6 @@ public record AuthResponse(
     string Pays,
     string Devise,
     string DeviseSymbole,
-    decimal TauxTVA
+    decimal TauxTVA,
+    bool DoitChangerMotDePasse
 );

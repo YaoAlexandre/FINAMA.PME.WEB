@@ -1,0 +1,289 @@
+/* ==========================================================================
+   Finama : identité visuelle (à charger EN DERNIER dans index.html)
+   Source : maquette des publications (fond bleu nuit, vert émeraude, Poppins)
+   ========================================================================== */
+
+:root {
+    /* Marque */
+    --fn-navy:      #0A1628;   /* fond principal */
+    --fn-navy-2:    #131E30;   /* surfaces sombres */
+    --fn-line:      #1B2637;   /* grille et bordures sombres */
+    --fn-green-700: #086B4F;
+    --fn-green-600: #0B8A66;   /* boutons, liens (texte blanc lisible) */
+    --fn-green-500: #14B07E;   /* couleur du logo */
+    --fn-green-400: #34D399;   /* titres sur fond sombre */
+    --fn-green-100: #D1FAE5;
+    --fn-green-50:  #ECFDF5;
+    --fn-blue-glow: #193265;
+    --fn-muted:     #94A3B8;
+
+    /* Variables historiques de finama.css : « bleu » devient vert sans toucher aux pages */
+    --bleu:        var(--fn-green-600);
+    --bleu-dark:   var(--fn-green-700);
+    --bleu-clair:  var(--fn-green-100);
+    --teal:        var(--fn-green-500);
+    --teal-clair:  #CCFBF1;
+    --gris-800:    var(--fn-navy);
+
+    /* Bootstrap 5.3 */
+    --bs-primary: #0B8A66;
+    --bs-primary-rgb: 11, 138, 102;
+    --bs-primary-bg-subtle: #D1FAE5;
+    --bs-primary-border-subtle: #A7F3D0;
+    --bs-primary-text-emphasis: #065F46;
+    --bs-link-color: #0B8A66;
+    --bs-link-color-rgb: 11, 138, 102;
+    --bs-link-hover-color: #086B4F;
+    --bs-link-hover-color-rgb: 8, 107, 79;
+    --bs-info: #14B07E;
+    --bs-info-rgb: 20, 176, 126;
+    --bs-body-font-family: 'Poppins', 'Segoe UI', system-ui, sans-serif;
+}
+
+:root[data-theme="dark"] {
+    --bg-app: var(--fn-navy);
+    --bg-card: var(--fn-navy-2);
+    --border-color: var(--fn-line);
+    --text-muted: var(--fn-muted);
+    --sidebar-bg: var(--fn-navy);
+    --bs-primary-bg-subtle: rgba(52, 211, 153, .14);
+    --bs-primary-border-subtle: rgba(52, 211, 153, .35);
+    --bs-primary-text-emphasis: var(--fn-green-400);
+    --bs-link-color: var(--fn-green-400);
+    --bs-link-hover-color: #6EE7B7;
+}
+
+/* Typographie unique */
+html, body, .sidebar, .auth-card, .splash-container,
+.form-control, .form-select, .btn, .table {
+    font-family: 'Poppins', 'Segoe UI', system-ui, sans-serif;
+}
+h1, h2, h3, h4, h5, .auth-title, .fw-bold { letter-spacing: -.01em; }
+
+/* Liens et boutons (remplace le bleu codé en dur dans app.css) */
+a, .btn-link { color: var(--bs-link-color); }
+
+.btn-primary {
+    --bs-btn-bg: #0B8A66;
+    --bs-btn-border-color: #0B8A66;
+    --bs-btn-hover-bg: #086B4F;
+    --bs-btn-hover-border-color: #086B4F;
+    --bs-btn-active-bg: #065F46;
+    --bs-btn-active-border-color: #065F46;
+    --bs-btn-disabled-bg: #0B8A66;
+    --bs-btn-disabled-border-color: #0B8A66;
+    color: #fff;
+    background-color: var(--bs-btn-bg);
+    border-color: var(--bs-btn-border-color);
+}
+.btn-outline-primary {
+    --bs-btn-color: #0B8A66;
+    --bs-btn-border-color: #0B8A66;
+    --bs-btn-hover-bg: #0B8A66;
+    --bs-btn-hover-border-color: #0B8A66;
+    --bs-btn-active-bg: #086B4F;
+    --bs-btn-active-border-color: #086B4F;
+}
+:root[data-theme="dark"] .btn-outline-primary { --bs-btn-color: var(--fn-green-400); --bs-btn-border-color: var(--fn-green-400); }
+.text-primary { color: var(--bs-primary) !important; }
+:root[data-theme="dark"] .text-primary { color: var(--fn-green-400) !important; }
+.nav-pills .nav-link.active { background-color: #0B8A66; }
+.form-check-input:checked { background-color: #0B8A66; border-color: #0B8A66; }
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus,
+.form-control:focus, .form-select:focus, .form-check-input:focus {
+    border-color: var(--fn-green-500);
+    box-shadow: 0 0 0 .2rem rgba(20, 176, 126, .28);
+}
+
+/* Barre latérale */
+.sidebar { background: var(--fn-navy); border-right: 1px solid var(--fn-line); }
+.nav-item.active { background: rgba(20, 176, 126, .16); color: var(--fn-green-400); box-shadow: inset 3px 0 0 var(--fn-green-500); }
+.brand-logo { background: none; width: 34px; height: 34px; padding: 0; }
+.brand-logo img { width: 100%; height: 100%; display: block; }
+.brand-name { font-weight: 700; }
+
+/* Connexion / inscription : même ambiance que les publications */
+.auth-container {
+    background-color: var(--fn-navy);
+    background-image:
+        linear-gradient(rgba(27, 38, 55, .75) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(27, 38, 55, .75) 1px, transparent 1px);
+    background-size: 60px 60px;
+}
+.auth-container::before { background: radial-gradient(circle, #10B981 0%, #0B403F 55%, transparent 72%); opacity: .35; }
+.auth-container::after  { background: radial-gradient(circle, var(--fn-blue-glow) 0%, transparent 70%); opacity: .8; }
+.auth-card { background: #fff; border-radius: 16px; }
+.auth-brand { display: block; height: 44px; margin: 0 auto 14px; }
+.auth-title { color: var(--fn-navy); font-weight: 700; }
+
+/* Écran de chargement */
+.splash-container {
+    background-color: var(--fn-navy);
+    background-image:
+        linear-gradient(rgba(27, 38, 55, .75) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(27, 38, 55, .75) 1px, transparent 1px);
+    background-size: 60px 60px;
+    font-family: 'Poppins', 'Segoe UI', system-ui, sans-serif;
+}
+.glow-blue   { background: #10B981; top: -60px; right: -60px; left: auto; bottom: auto; opacity: .22; }
+.glow-purple { background: #1D4ED8; bottom: -60px; left: -60px; right: auto; top: auto; opacity: .28; }
+.splash-logo-wrapper { background: none; box-shadow: 0 8px 32px rgba(20, 176, 126, .3); width: 88px; height: 88px; border-radius: 22px; padding: 0; }
+.splash-logo-wrapper img { width: 100%; height: 100%; display: block; border-radius: 22px; }
+.splash-title {
+    font-weight: 700; letter-spacing: 3px;
+    background: linear-gradient(90deg, #fff, var(--fn-green-400));
+    -webkit-background-clip: text; background-clip: text;
+}
+.badge-gradient-neon {
+    background: rgba(20, 176, 126, .14);
+    border: 1px solid rgba(52, 211, 153, .35);
+    color: var(--fn-green-400);
+}
+.splash-progress-line { background: linear-gradient(90deg, var(--fn-green-600), var(--fn-green-400)); }
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-container::before, .auth-container::after, .glow-sphere,
+    .splash-logo-wrapper, .splash-progress-line { animation: none; }
+}
+
+/* ==========================================================================
+   Thème sombre cohérent sur toute l'application
+   Cause du problème : finama.css fixe des fonds clairs (body, .main-content,
+   .topbar, .card, .form-control) qui écrasent les variables du thème, et
+   Bootstrap ne passait pas en mode sombre (il lit data-bs-theme, pas data-theme).
+   ========================================================================== */
+
+:root[data-bs-theme="dark"] {
+    --bs-body-bg: var(--fn-navy);
+    --bs-body-color: #E2E8F0;
+    --bs-emphasis-color: #fff;
+    --bs-secondary-color: var(--fn-muted);
+    --bs-secondary-bg: var(--fn-navy-2);
+    --bs-tertiary-bg: #172236;
+    --bs-border-color: var(--fn-line);
+    --bs-modal-bg: var(--fn-navy-2);
+    --bs-offcanvas-bg: var(--fn-navy-2);
+}
+
+/* Surfaces pilotées par les variables du thème (clair et sombre) */
+body { background: var(--bg-app); color: var(--text-main); }
+.main-content { background-color: var(--bg-app); }
+.topbar { background: var(--bg-card); border-bottom-color: var(--border-color); }
+.card, .modal-content, .offcanvas { background-color: var(--bg-card); color: var(--text-main); }
+.page-title, .card-title { color: var(--text-main); }
+.page-subtitle { color: var(--text-muted); }
+.form-control, .form-select { background-color: var(--bg-card); color: var(--text-main); border-color: var(--border-color); }
+.form-control::placeholder { color: var(--text-muted); opacity: .8; }
+.badge-code { background: rgba(20, 176, 126, .12); color: var(--fn-green-700); }
+
+/* Classes Bootstrap « claires » qui restent blanches en mode sombre */
+:root[data-theme="dark"] .bg-light,
+:root[data-theme="dark"] .bg-white { background-color: var(--bs-tertiary-bg) !important; }
+:root[data-theme="dark"] .text-dark:not(.bg-warning):not(.bg-info) { color: var(--text-main) !important; }
+:root[data-theme="dark"] .table-light {
+    --bs-table-bg: #172236;
+    --bs-table-color: #CBD5E1;
+    --bs-table-border-color: var(--fn-line);
+    --bs-table-striped-bg: #172236;
+    --bs-table-hover-bg: #1B2A42;
+}
+:root[data-theme="dark"] .table { --bs-table-color: var(--text-main); --bs-table-border-color: var(--fn-line); --bs-table-hover-bg: rgba(255,255,255,.04); }
+:root[data-theme="dark"] .btn-light {
+    --bs-btn-color: #E2E8F0; --bs-btn-bg: #1B2637; --bs-btn-border-color: #243247;
+    --bs-btn-hover-color: #fff; --bs-btn-hover-bg: #243247; --bs-btn-hover-border-color: #2E3E58;
+    --bs-btn-active-bg: #2E3E58; --bs-btn-active-border-color: #2E3E58;
+}
+:root[data-theme="dark"] .btn-outline-secondary { --bs-btn-color: #CBD5E1; --bs-btn-border-color: #3B4A63; --bs-btn-hover-bg: #243247; --bs-btn-hover-color: #fff; }
+:root[data-theme="dark"] .border,
+:root[data-theme="dark"] .border-top,
+:root[data-theme="dark"] .border-bottom { border-color: var(--border-color) !important; }
+:root[data-theme="dark"] .text-secondary { color: var(--fn-muted) !important; }
+:root[data-theme="dark"] .text-muted { color: var(--fn-muted) !important; }
+:root[data-theme="dark"] .btn-close { filter: invert(1) grayscale(1) brightness(1.6); }
+
+/* Débit / crédit lisibles sur fond sombre */
+:root[data-theme="dark"] .text-danger { color: #F87171 !important; }
+:root[data-theme="dark"] .text-success { color: var(--fn-green-400) !important; }
+:root[data-theme="dark"] .bg-success-subtle { background-color: rgba(52, 211, 153, .14) !important; }
+:root[data-theme="dark"] .bg-danger-subtle { background-color: rgba(248, 113, 113, .14) !important; }
+:root[data-theme="dark"] .bg-secondary-subtle { background-color: rgba(148, 163, 184, .14) !important; }
+:root[data-theme="dark"] .alert { border-color: var(--border-color); }
+
+/* ==========================================================================
+   Sélecteur de compte comptable (CompteSelector)
+   Couleur par classe SYSCOHADA : on reconnaît le type de compte d'un coup d'œil
+   ========================================================================== */
+.cpt-sel { position: relative; min-width: 0; }
+.cpt-chip {
+    display: flex; align-items: center; gap: .5rem; width: 100%;
+    padding: .3rem .55rem; border: 1px solid var(--border-color, #dee2e6); border-radius: .375rem;
+    background: var(--bg-card, #fff); color: var(--text-main, inherit); text-align: left; font-size: .875rem;
+}
+.cpt-chip:hover { border-color: var(--fn-green-500); }
+.cpt-code, .cpt-item .cpt-code { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-weight: 600; flex: none; }
+.cpt-lib { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cpt-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: #94A3B8; }
+.cpt-c1 { background: #8B5CF6; } .cpt-c2 { background: #B45309; } .cpt-c3 { background: #F59E0B; }
+.cpt-c4 { background: #3B82F6; } .cpt-c5 { background: #10B981; } .cpt-c6 { background: #EF4444; }
+.cpt-c7 { background: #14B8A6; } .cpt-c8 { background: #64748B; }
+
+.cpt-liste {
+    position: absolute; z-index: 1056; top: calc(100% + 4px); left: 0; min-width: min(460px, 92vw);
+    max-height: 320px; overflow-y: auto; margin: 0; padding: .25rem; list-style: none;
+    background: var(--bg-card, #fff); border: 1px solid var(--border-color, #dee2e6); border-radius: .5rem;
+}
+.cpt-item { display: flex; align-items: center; gap: .6rem; padding: .4rem .6rem; border-radius: .375rem; cursor: pointer; font-size: .875rem; }
+.cpt-item.actif, .cpt-item:hover { background: rgba(20, 176, 126, .14); }
+.cpt-item .cpt-lib { flex: 1; }
+.cpt-classe { flex: none; font-size: .7rem; color: var(--text-muted, #6c757d); }
+.cpt-vide { padding: .6rem .75rem; font-size: .8rem; color: var(--text-muted, #6c757d); }
+.cpt-liste mark { background: rgba(250, 204, 21, .45); color: inherit; padding: 0; border-radius: 2px; }
+
+/* Lignes de saisie (grille : le menu de comptes n'est plus coupé par un conteneur à défilement) */
+.fn-ligne { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 3fr) minmax(0, 1.4fr) minmax(0, 1.4fr) 76px; gap: .6rem; align-items: center; padding: .55rem 1rem; border-bottom: 1px solid var(--border-color, #eee); }
+.fn-ligne-entete { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted, #6c757d); background: var(--bs-tertiary-bg, #f8f9fa); border-radius: .5rem .5rem 0 0; }
+.fn-ligne-actions { display: flex; justify-content: flex-end; }
+.fn-debit:not(:placeholder-shown) { border-color: rgba(239, 68, 68, .55); }
+.fn-credit:not(:placeholder-shown) { border-color: rgba(16, 185, 129, .6); }
+.fn-debit-txt { color: #DC2626; } .fn-credit-txt { color: #059669; }
+:root[data-theme="dark"] .fn-debit-txt { color: #F87171; } :root[data-theme="dark"] .fn-credit-txt { color: var(--fn-green-400); }
+
+@media (max-width: 767.98px) {
+    .fn-ligne-entete { display: none; }
+    .fn-ligne { grid-template-columns: 1fr 1fr; padding: .9rem 1rem; }
+    .fn-ligne > div:nth-child(1), .fn-ligne > div:nth-child(2) { grid-column: 1 / -1; }
+    .fn-ligne > div[data-label]::before { content: attr(data-label); display: block; font-size: .7rem; color: var(--text-muted, #6c757d); margin-bottom: 2px; }
+    .fn-ligne-actions { grid-column: 1 / -1; }
+}
+
+/* Barre d'équilibre toujours visible en bas de la saisie */
+.fn-barre-equilibre { position: sticky; bottom: 0; z-index: 1020; padding: .75rem 0; background: var(--bg-card, #fff); border-top: 2px solid var(--border-color, #dee2e6); box-shadow: 0 -6px 18px rgba(0, 0, 0, .06); }
+.fn-barre-equilibre.ok { border-top-color: var(--fn-green-500); }
+.fn-barre-equilibre.ko { border-top-color: #F59E0B; }
+
+/* Pagination */
+.pagination {
+    --bs-pagination-color: #0B8A66; --bs-pagination-hover-color: #086B4F; --bs-pagination-focus-color: #086B4F;
+    --bs-pagination-active-bg: #0B8A66; --bs-pagination-active-border-color: #0B8A66; --bs-pagination-active-color: #fff;
+    --bs-pagination-focus-box-shadow: 0 0 0 .2rem rgba(20, 176, 126, .25);
+}
+:root[data-theme="dark"] .pagination {
+    --bs-pagination-bg: var(--fn-navy-2); --bs-pagination-border-color: var(--fn-line); --bs-pagination-color: var(--fn-green-400);
+    --bs-pagination-hover-bg: #1B2A42; --bs-pagination-hover-border-color: var(--fn-line); --bs-pagination-disabled-bg: var(--fn-navy);
+    --bs-pagination-disabled-color: #64748B; --bs-pagination-disabled-border-color: var(--fn-line);
+}
+.fn-chargement { position: absolute; inset: 0; z-index: 5; display: flex; align-items: flex-start; justify-content: center; padding-top: 1.25rem; background: rgba(255, 255, 255, .55); }
+:root[data-theme="dark"] .fn-chargement { background: rgba(10, 22, 40, .6); }
+
+/* Notifications (Radzen) : même rendu partout, aux couleurs Finama */
+.rz-notification .rz-notification-item, .rz-growl .rz-growl-item, .rz-notification-item {
+    border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, .18); font-family: 'Poppins', 'Segoe UI', system-ui, sans-serif; max-width: 420px;
+}
+.rz-notification-title, .rz-growl-title { font-weight: 600; }
+.rz-notification-item.rz-notification-success, .rz-notification-success { background: #0B8A66 !important; color: #fff !important; }
+.rz-notification-item.rz-notification-error, .rz-notification-error { background: #B91C1C !important; color: #fff !important; }
+.rz-notification-item.rz-notification-warning, .rz-notification-warning { background: #B45309 !important; color: #fff !important; }
+.rz-notification-item.rz-notification-info, .rz-notification-info { background: #1D4ED8 !important; color: #fff !important; }
+
+/* Les notifications doivent rester visibles au-dessus des fenêtres modales (Bootstrap : 1055 à 1070) */
+.rz-notification, .rz-growl { z-index: 2000 !important; }

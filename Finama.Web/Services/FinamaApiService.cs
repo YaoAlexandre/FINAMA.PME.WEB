@@ -62,6 +62,30 @@ public class FinamaApiService
         return result;
     }
 
+    public async Task<AuthResult?> ChangerMotDePasseAsync(ChangerMotDePasseModel model)
+    {
+        // Récupérer le token depuis le stockage local si nécessaire
+        await SetAuthHeaderAsync();
+        var request = new HttpRequestMessage(HttpMethod.Post, "api/auth/changer-mot-de-passe");
+
+        
+
+        request.Content = JsonContent.Create(new
+        {
+            AncienMotDePasseOuCode = model.AncienMotDePasseOuCode,
+            NouveauMotDePasse = model.NouveauMotDePasse
+        });
+
+        var response = await _http.SendAsync(request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadFromJsonAsync<AuthResult>();
+        }
+
+        var error = await response.Content.ReadFromJsonAsync<AuthResult>();
+        return error ?? AuthResult.Failure("Une erreur est survenue lors du changement de mot de passe.");
+    }
     public async Task<AuthResponse?> VerifyOtpAsync(string email, string codeOtp)
     {
         var deviceId = await GetDeviceIdAsync();
@@ -465,10 +489,26 @@ public class FinamaApiService
             : "Une erreur est survenue.";
     }
 
-    public async Task ModifierStatutUtilisateurAsync(Guid id, bool actif)
+
+    public async Task<ResultatApi> ModifierStatutUtilisateurAsync(Guid id, bool actif)
     {
         await SetAuthHeaderAsync();
-        await _http.PutAsJsonAsync($"api/Utilisateurs/{id}/statut", actif);
+        var r = await _http.PutAsJsonAsync($"api/Utilisateurs/{id}/statut", actif);
+        string? message = null;
+        try { message = (await r.Content.ReadFromJsonAsync<ReponseMessage>())?.Message; } catch { }
+        return new ResultatApi(r.IsSuccessStatusCode,
+            message ?? (r.IsSuccessStatusCode ? (actif ? "Accès réactivé." : "Accès suspendu.") : "L'opération a échoué."));
+    }
+
+    public async Task<ReinitialisationResultat> ReinitialiserMotDePasseUtilisateurAsync(Guid id)
+    {
+        await SetAuthHeaderAsync();
+        var r = await _http.PostAsync($"api/Utilisateurs/{id}/reinitialiser-mot-de-passe", null);
+        ReponseReset? d = null;
+        try { d = await r.Content.ReadFromJsonAsync<ReponseReset>(); } catch { }
+        return new ReinitialisationResultat(r.IsSuccessStatusCode,
+            d?.Message ?? (r.IsSuccessStatusCode ? "Mot de passe réinitialisé." : "L'opération a échoué."),
+            d?.MotDePasseTemporaire);
     }
 
     // ─── Entreprise Profil ─────────────────────────────────────────────────────
@@ -535,8 +575,8 @@ public class FinamaApiService
         if (!_http.DefaultRequestHeaders.Contains("X-Device-Id"))
             _http.DefaultRequestHeaders.Add("X-Device-Id", deviceId);
 
-        if (!_http.DefaultRequestHeaders.Contains("ngrok-skip-browser-warning"))
-            _http.DefaultRequestHeaders.Add("ngrok-skip-browser-warning", "true");
+        //if (!_http.DefaultRequestHeaders.Contains("ngrok-skip-browser-warning"))
+        //    _http.DefaultRequestHeaders.Add("ngrok-skip-browser-warning", "true");
 
         var token = await GetTokenAsync();
         if (!string.IsNullOrEmpty(token))
@@ -611,4 +651,8 @@ public class FinamaApiService
         }
         catch { return new(); }
     }
+
+
+    private record ReponseMessage(string? Message);
+    private record ReponseReset(string? Message, string? MotDePasseTemporaire);
 }

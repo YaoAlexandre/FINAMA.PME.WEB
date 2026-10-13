@@ -20,4 +20,6 @@
         public string Role { get; set; } = string.Empty;
         public bool EstActif { get; set; }
     }
+    public record ReinitialisationResultat(bool Succes, string Message, string? MotDePasseTemporaire);
+
 }

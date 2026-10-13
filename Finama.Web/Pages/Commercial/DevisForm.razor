@@ -5,122 +5,183 @@
 @inject DevisApiService Api
 @inject NavigationManager Nav
 
-<div class="container py-4">
+<div class="page-wrapper position-relative mb-5">
+
+    <!-- En-tête standardisé Finama -->
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="page-title">
+                <i class="bi @(Id.HasValue ? "bi-pencil-square" : "bi-file-earmark-plus") me-2 text-primary"></i>
+                @(Id.HasValue ? "Modifier le Devis" : "Nouveau Devis")
+            </h2>
+            <p class="page-subtitle text-muted">
+                @(Id.HasValue ? "Modifiez les informations et les lignes de votre brouillon" : "Saisissez les informations pour générer une nouvelle proposition commerciale")
+            </p>
+        </div>
+        <button type="button" class="btn btn-light border shadow-sm px-3" @onclick="Annuler">
+            <i class="bi bi-arrow-left me-2"></i>Retour
+        </button>
+    </div>
+
+    <!-- Alertes d'erreur harmonisées -->
     @if (!string.IsNullOrEmpty(_messageErreur))
     {
-        <div class="alert-error-container">
-            <span>⚠️</span>
-            <p>@_messageErreur</p>
-            <button @onclick="() => _messageErreur = null">×</button>
+        <div class="alert alert-danger alert-dismissible fade show shadow-sm border-0 mb-4" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>@_messageErreur
+            <button type="button" class="btn-close" @onclick="() => _messageErreur = null"></button>
         </div>
     }
 
     <EditForm Model="_request" OnValidSubmit="Soumettre">
-        <div class="card shadow border-0 mb-4">
-            <div class="card-header bg-primary text-white py-3">
-                <h5 class="mb-0">
-                    <i class="bi @(Id.HasValue ? "bi-pencil-square" : "bi-file-earmark-plus") me-2"></i>
-                    @(Id.HasValue ? "Modifier le devis" : "Nouveau devis")
+
+        <!-- Section 1 : Informations Générales -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h5 class="fw-bold mb-3 text-dark" style="font-size: 1rem;">
+                    <i class="bi bi-info-circle me-2 text-secondary"></i>Informations générales
                 </h5>
-            </div>
-            <div class="card-body">
                 <div class="row g-3">
                     <div class="col-md-5">
-                        <label class="form-label fw-bold">Client</label>
-                        <select class="form-select" @bind="_request.TiersId">
-                            <option value="">-- Sélectionner un client --</option>
+                        <label class="form-label small text-muted fw-bold">Client</label>
+                        <select class="form-select border-light-subtle" @bind="_request.TiersId">
+                            <option value="@Guid.Empty">-- Sélectionner un client --</option>
                             @foreach (var t in _tiers)
                             {
                                 <option value="@t.Id">@t.Nom</option>
                             }
                         </select>
                     </div>
+
                     <div class="col-md-5">
-                        <label class="form-label fw-bold">Libellé</label>
-                        <InputText @bind-Value="_request.Libelle" class="form-control"
+                        <label class="form-label small text-muted fw-bold">Libellé du projet</label>
+                        <InputText @bind-Value="_request.Libelle" class="form-control border-light-subtle"
                                    placeholder="Ex: Prestation de service informatique..." />
                     </div>
+
                     <div class="col-md-2">
-                        <label class="form-label fw-bold">Date d'expiration</label>
-                        <InputDate @bind-Value="_request.DateExpiration" class="form-control" />
+                        <label class="form-label small text-muted fw-bold">Validité jusqu'au</label>
+                        <InputDate @bind-Value="_request.DateExpiration" class="form-control border-light-subtle" />
                     </div>
+
                     <div class="col-12">
-                        <label class="form-label fw-bold">Notes (optionnel)</label>
-                        <textarea class="form-control" rows="2" @bind="_request.Notes"
-                                  placeholder="Conditions particulières, délais de paiement..."></textarea>
+                        <label class="form-label small text-muted fw-bold">Notes & Conditions particulières (optionnel)</label>
+                        <textarea class="form-control border-light-subtle" rows="2" @bind="_request.Notes"
+                                  placeholder="Délais de livraison, modalités de paiement (ex: 30% à la commande)..."></textarea>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="table-responsive bg-white rounded shadow-sm">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Désignation</th>
-                        <th class="text-end" style="width: 120px">Quantité</th>
-                        <th class="text-end" style="width: 150px">Prix unitaire HT</th>
-                        <th class="text-end" style="width: 100px">TVA %</th>
-                        <th class="text-end" style="width: 150px">Total TTC</th>
-                        <th style="width: 50px"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var ligne in _request.Lignes)
-                    {
-                        <tr>
-                            <td>
-                                <input type="text" class="form-control form-control-sm"
-                                       @bind="ligne.Designation" placeholder="Description du produit/service" />
-                            </td>
-                            <td>
-                                <input type="number" class="form-control form-control-sm text-end"
-                                       @bind="ligne.Quantite" @bind:event="oninput" min="0" />
-                            </td>
-                            <td>
-                                <input type="number" class="form-control form-control-sm text-end"
-                                       @bind="ligne.PrixUnitaireHT" @bind:event="oninput" min="0" />
-                            </td>
-                            <td>
-                                <input type="number" class="form-control form-control-sm text-end"
-                                       @bind="ligne.TauxTVA" @bind:event="oninput" min="0" max="100" />
-                            </td>
-                            <td class="text-end fw-bold">
-                                @((ligne.Quantite * ligne.PrixUnitaireHT * (1 + ligne.TauxTVA / 100)).ToString("N0"))
-                            </td>
-                            <td>
-                                <button type="button" class="btn btn-sm text-danger border-0"
-                                        @onclick="() => SupprimerLigne(ligne)">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-            <div class="p-3 border-top">
-                <button type="button" class="btn btn-sm btn-outline-primary"
-                        @onclick="() => _request.Lignes.Add(new())">
-                    <i class="bi bi-plus-lg me-1"></i> Ajouter une ligne
-                </button>
+        <!-- Section 2 : Lignes du Devis -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-0">
+                <div class="p-4 pb-2">
+                    <h5 class="fw-bold mb-0 text-dark" style="font-size: 1rem;">
+                        <i class="bi bi-list-ul me-2 text-secondary"></i>Articles & Prestations
+                    </h5>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead class="table-light text-secondary small text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">
+                            <tr>
+                                <th class="ps-4">Désignation / Description</th>
+                                <th class="text-end" style="width: 120px">Quantité</th>
+                                <th class="text-end" style="width: 160px">Prix unitaire HT</th>
+                                <th class="text-center" style="width: 110px">TVA</th>
+                                <th class="text-end pe-4" style="width: 180px">Total TTC</th>
+                                <th style="width: 60px"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var ligne in _request.Lignes)
+                            {
+                                <tr class="border-bottom border-light">
+                                    <td class="ps-4">
+                                        <input type="text" class="form-control form-control-sm border-0 bg-light-subtle"
+                                               @bind="ligne.Designation" placeholder="Description de l'article ou service..." />
+                                    </td>
+                                    <td>
+                                        <input type="number" class="form-control form-control-sm border-0 bg-light-subtle text-end fw-semibold"
+                                               @bind="ligne.Quantite" @bind:event="oninput" min="0" />
+                                    </td>
+                                    <td>
+                                        <div class="input-group input-group-sm bg-light-subtle rounded">
+                                            <input type="number" class="form-control form-control-sm border-0 bg-transparent text-end fw-semibold"
+                                                   @bind="ligne.PrixUnitaireHT" @bind:event="oninput" min="0" />
+                                            <span class="input-group-text border-0 bg-transparent small text-muted" style="font-size: 0.7rem;">XOF</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm border-0 bg-light-subtle text-center" @bind="ligne.TauxTVA">
+                                            <option value="18">18 %</option>
+                                            <option value="0">0 %</option>
+                                        </select>
+                                    </td>
+                                    <td class="text-end fw-bold text-dark pe-4" style="font-size: 0.95rem;">
+                                        @((ligne.Quantite * ligne.PrixUnitaireHT * (1 + ligne.TauxTVA / 100)).ToString("N0")) <span class="small fw-normal text-muted" style="font-size: 0.75rem;">XOF</span>
+                                    </td>
+                                    <td class="pe-3">
+                                        <button type="button" class="btn btn-sm btn-link text-danger p-0 border-0 text-decoration-none"
+                                                disabled="@(_request.Lignes.Count <= 1)"
+                                                @onclick="() => SupprimerLigne(ligne)">
+                                            <i class="bi bi-trash-fill fs-6"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Ajout de ligne -->
+                <div class="p-3 bg-light-subtle rounded-bottom border-top border-light">
+                    <button type="button" class="btn btn-sm btn-outline-primary px-3 rounded-pill"
+                            @onclick="() => _request.Lignes.Add(new())">
+                        <i class="bi bi-plus-lg me-1"></i> Ajouter une ligne
+                    </button>
+                </div>
             </div>
         </div>
 
-        <div class="d-flex justify-content-between align-items-center mt-4">
-            <div class="alert alert-info mb-0 py-2 shadow-sm">
-                <strong>Total HT :</strong> @TotalHT.ToString("N0") &nbsp;|&nbsp;
-                <strong>TVA :</strong> @TotalTVA.ToString("N0") &nbsp;|&nbsp;
-                <strong>Total TTC :</strong> @TotalTTC.ToString("N0")
+        <!-- Bloc de validation et totaux financiers -->
+        <div class="row align-items-center g-3">
+            <!-- Résumé Financier à gauche/milieu -->
+            <div class="col-lg-7">
+                <div class="card border-0 shadow-sm bg-dark text-white p-3">
+                    <div class="d-flex flex-wrap justify-content-around text-center">
+                        <div class="px-2">
+                            <span class="text-muted small d-block text-uppercase" style="font-size: 0.65rem;">Total HT</span>
+                            <span class="fw-semibold">@TotalHT.ToString("N0") XOF</span>
+                        </div>
+                        <div class="border-start border-secondary opacity-25 d-none d-sm-block"></div>
+                        <div class="px-2">
+                            <span class="text-muted small d-block text-uppercase" style="font-size: 0.65rem;">Montant TVA</span>
+                            <span class="text-warning">@TotalTVA.ToString("N0") XOF</span>
+                        </div>
+                        <div class="border-start border-secondary opacity-25 d-none d-sm-block"></div>
+                        <div class="px-2">
+                            <span class="text-muted small d-block text-uppercase" style="font-size: 0.65rem; color: #a8b2ff !important;">Net à Payer (TTC)</span>
+                            <span class="fw-bold fs-5 text-info">@TotalTTC.ToString("N0") XOF</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="d-flex gap-2">
+
+            <!-- Actions à droite -->
+            <div class="col-lg-5 d-flex justify-content-end gap-2">
                 <button type="button" class="btn btn-light border px-4" @onclick="Annuler">Annuler</button>
-                <button type="submit" class="btn btn-success px-5 fw-bold"
+                <button type="submit" class="btn btn-primary px-5 fw-bold shadow-sm"
                         disabled="@(_isSubmitting || !FormValide)">
                     @if (_isSubmitting)
                     {
                         <span class="spinner-border spinner-border-sm me-2"></span>
                     }
-                    <i class="bi bi-cloud-arrow-up me-2"></i> Enregistrer
+                    else
+                    {
+                        <i class="bi bi-cloud-check-fill me-2"></i>
+                    }
+                    Enregistrer le Devis
                 </button>
             </div>
         </div>
@@ -143,7 +204,7 @@
     private decimal TotalTTC => TotalHT + TotalTVA;
     private bool FormValide => _request.TiersId != Guid.Empty
                               && !string.IsNullOrEmpty(_request.Libelle)
-                              && _request.Lignes.Any(l => l.PrixUnitaireHT > 0);
+                              && _request.Lignes.Any(l => l.PrixUnitaireHT > 0 && !string.IsNullOrWhiteSpace(l.Designation));
 
     protected override async Task OnInitializedAsync()
     {
@@ -156,7 +217,7 @@
         }
         catch (Exception)
         {
-            _messageErreur = "Erreur lors du chargement des données.";
+            _messageErreur = "Erreur lors du chargement des données initiales.";
         }
     }
 
@@ -166,8 +227,8 @@
         if (devis == null) { _messageErreur = "Devis introuvable."; return; }
         if (devis.Statut != StatutDevis.Brouillon)
         {
-            _messageErreur = "Seul un brouillon peut être modifié.";
-            _isSubmitting = true;
+            _messageErreur = "Seul un document au statut Brouillon peut être modifié.";
+            _isSubmitting = true; // Désactive le bouton au cas où
             return;
         }
 
@@ -192,7 +253,7 @@
         if (_request.Lignes.Count > 1) _request.Lignes.Remove(ligne);
     }
 
-    private void Annuler() => Nav.NavigateTo("/commercial/devis");
+    private void Annuler() => Nav.NavigateTo("/commercial/pipeline");
 
     private async Task Soumettre()
     {
@@ -207,13 +268,13 @@
                 : await Api.CreerDevisAsync(_request);
 
             if (res != null)
-                Nav.NavigateTo($"/commercial/devis/{res.Id}");
+                Nav.NavigateTo($"/commercial/pipeline"); // Redirection logique vers le pipeline mis à jour
             else
-                _messageErreur = "Le serveur n'a pas pu sauvegarder le devis.";
+                _messageErreur = "L'API distante n'a pas pu sauvegarder les modifications.";
         }
         catch (Exception)
         {
-            _messageErreur = "Une erreur technique est survenue.";
+            _messageErreur = "Une erreur technique est survenue lors de la communication avec l'API.";
         }
         finally
         {

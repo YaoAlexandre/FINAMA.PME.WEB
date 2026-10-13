@@ -1,0 +1,40 @@
+@if (Visible)
+{
+    <div class="modal-backdrop fade show" style="z-index:1065"></div>
+    <div class="modal fade show d-block" style="z-index:1070" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold">@Titre</h5>
+                    <button type="button" class="btn-close" aria-label="Fermer" @onclick="OnCancel" disabled="@Busy"></button>
+                </div>
+                <div class="modal-body text-secondary">
+                    @Message
+                    @ChildContent
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button class="btn btn-light" @onclick="OnCancel" disabled="@Busy">Annuler</button>
+                    <button class="btn btn-@Style" @onclick="OnConfirm" disabled="@Busy">
+                        @if (Busy)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                        }
+                        @LibelleConfirmer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string Titre { get; set; } = "Confirmer";
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string LibelleConfirmer { get; set; } = "Confirmer";
+    [Parameter] public string Style { get; set; } = "primary";
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

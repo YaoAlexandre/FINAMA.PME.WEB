@@ -35,6 +35,7 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
         return new AuthenticationState(user);
     }
 
+    // Dans votre CustomAuthenticationStateProvider.cs Côté Blazor
     private IEnumerable<Claim> ParseClaimsFromJwt(string jwt)
     {
         var payload = jwt.Split('.')[1];
@@ -43,28 +44,22 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
 
         var claims = new List<Claim>();
 
-        foreach (var kvp in keyValuePairs)
+        if (keyValuePairs != null)
         {
-            var value = kvp.Value.ToString();
-
-            // Gérer le cas où le rôle est un tableau JSON (fréquent avec les JWT)
-            if (value.StartsWith("[") && value.EndsWith("]"))
+            foreach (var kvp in keyValuePairs)
             {
-                var roles = JsonSerializer.Deserialize<List<string>>(value);
-                foreach (var role in roles)
+                // Mapper la claim "role" brute vers ClaimTypes.Role pour IsInRole("SuperAdmin")
+                if (kvp.Key == "role")
                 {
-                    claims.Add(new Claim(ClaimTypes.Role, role));
+                    claims.Add(new Claim(ClaimTypes.Role, kvp.Value.ToString()!));
+                }
+                else
+                {
+                    claims.Add(new Claim(kvp.Key, kvp.Value.ToString()!));
                 }
             }
-            else if (kvp.Key == "role")
-            {
-                claims.Add(new Claim(ClaimTypes.Role, value));
-            }
-            else
-            {
-                claims.Add(new Claim(kvp.Key, value));
-            }
         }
+
         return claims;
     }
 

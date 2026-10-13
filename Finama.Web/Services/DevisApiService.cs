@@ -208,4 +208,49 @@ public class DevisApiService
             return new();
         }
     }
+
+    // ─── Commercial : Clients ───────────────────────────────────────────────────
+
+    public async Task<List<ClientCommercialDto>> GetClientsCommercialAsync()
+    {
+        try
+        {
+            await SetAuthHeaderAsync();
+            return await _http.GetFromJsonAsync<List<ClientCommercialDto>>("api/commercial/clients") ?? new();
+        }
+        catch (Exception)
+        {
+            return new();
+        }
+    }
+
+    // ─── Commercial : Pipeline Kanban ───────────────────────────────────────────
+
+    public async Task<List<OpportuniteDto>> GetPipelineOpportunitesAsync()
+    {
+        try
+        {
+            await SetAuthHeaderAsync();
+            return await _http.GetFromJsonAsync<List<OpportuniteDto>>("api/commercial/pipeline") ?? new();
+        }
+        catch (Exception)
+        {
+            return new();
+        }
+    }
+
+    public async Task<bool> DeplacerOpportuniteAsync(Guid id, EtapePipeline nouvelleEtape)
+    {
+        try
+        {
+            await SetAuthHeaderAsync();
+            var request = new ChangerEtapeRequest { NouvelleEtape = nouvelleEtape };
+            var response = await _http.PostAsJsonAsync($"api/commercial/pipeline/{id}/changer-etape", request);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
 }

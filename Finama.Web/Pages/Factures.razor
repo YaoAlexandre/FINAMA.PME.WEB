@@ -1,7 +1,9 @@
 @page "/factures"
 @using Finama.Web.Models
 @layout MainLayout
+@using Finama.Web.Shared
 @inject FinamaApiService Api
+@inject NotificationService Notif
 @inject IJSRuntime JS
 
 <PageTitle>Factures — Finama</PageTitle>
@@ -109,14 +111,9 @@
                     </table>
                 </div>
             </div>
-            <div class="card-footer bg-light d-flex justify-content-between align-items-center py-3 border-top-0">
-                <span class="text-muted small">
-                    <strong>@_factures!.TotalItems</strong> facture(s) au total — Page @_factures.Page / @_factures.TotalPages
-                </span>
-                <div class="btn-group btn-group-sm shadow-sm">
-                    <button class="btn btn-white border" disabled="@(_page <= 1)" @onclick="PagePrecedente"><i class="bi bi-chevron-left"></i> Précédent</button>
-                    <button class="btn btn-white border" disabled="@(_page >= _factures.TotalPages)" @onclick="PageSuivante">Suivant <i class="bi bi-chevron-right"></i></button>
-                </div>
+            <div class="card-footer bg-transparent border-top py-3 px-3">
+                <Pagination Page="_factures!.Page" PageSize="_factures.PageSize" TotalItems="_factures.TotalItems"
+                            Unite="factures" OnPageChange="AllerPage" OnPageSizeChange="ChangerTaille" />
             </div>
         </div>
     }
@@ -347,6 +344,7 @@
     private bool _sauvegarde = false;
     private string _erreur = "";
     private int _page = 1;
+    private int _taille = 20;
     private string _devise = "XOF";
 
     private string _cType = "0";
@@ -374,8 +372,27 @@
     private async Task ChargerAsync()
     {
         _chargement = true;
-        _factures = await Api.GetFacturesAsync(_page, 20);
-        _chargement = false;
+        try
+        {
+            var resultat = await Api.GetFacturesAsync(_page, _taille);
+
+            // Page devenue vide : retour à la dernière page valide
+            if (resultat is { TotalPages: > 0 } && _page > resultat.TotalPages)
+            {
+                _page = resultat.TotalPages;
+                resultat = await Api.GetFacturesAsync(_page, _taille);
+            }
+
+            _factures = resultat;
+        }
+        catch (Exception)
+        {
+            Notif.ErreurServeur("Chargement des factures impossible");
+        }
+        finally
+        {
+            _chargement = false;
+        }
     }
 
     private async Task OuvrirCreation()
@@ -406,24 +423,36 @@
         {
             _tiersSelect = await Api.GetTiersSelectAsync(nature);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            _erreur = "Erreur de chargement des tiers : " + ex.Message;
+            Notif.Erreur("La liste des tiers n'a pas pu être chargée. Fermez et rouvrez le formulaire pour réessayer.", "Tiers indisponibles");
         }
     }
 
     private void VoirDetail(FactureDto f) => _factureDetail = f;
     private void AjouterLigne() => _cLignes.Add(new LigneForm());
     private void SupprimerLigne(int i) => _cLignes.RemoveAt(i);
-    private async Task PageSuivante() { _page++; await ChargerAsync(); }
-    private async Task PagePrecedente() { _page--; await ChargerAsync(); }
+    private async Task AllerPage(int page) { _page = page; await ChargerAsync(); }
+    private async Task ChangerTaille(int taille) { _taille = taille; _page = 1; await ChargerAsync(); }
 
     private async Task TelechargerPdf(Guid id)
     {
-        var pdf = await Api.GetFacturePdfAsync(id);
-        if (pdf is null) return;
-        var base64 = Convert.ToBase64String(pdf);
-        await JS.InvokeVoidAsync("downloadPdf", base64, $"Facture_{id}.pdf");
+        try
+        {
+            var pdf = await Api.GetFacturePdfAsync(id);
+            if (pdf is null)
+            {
+                Notif.Erreur("Le PDF de cette facture n'a pas pu être généré. Réessayez dans un instant.", "Téléchargement impossible");
+                return;
+            }
+
+            var base64 = Convert.ToBase64String(pdf);
+            await JS.InvokeVoidAsync("downloadPdf", base64, $"Facture_{id}.pdf");
+        }
+        catch (Exception)
+        {
+            Notif.ErreurServeur("Téléchargement impossible");
+        }
     }
 
     private async Task CreerFacture()
@@ -449,9 +478,11 @@
                     TauxTVA: l.TauxTVA)).ToList()
             ));
             _creationOuverte = false;
+            _page = 1;
+            Notif.Succes("La facture a été enregistrée. Retrouvez-la en tête de liste.", "Facture créée");
             await ChargerAsync();
         }
-        catch (Exception ex) { _erreur = ex.Message; }
+        catch (Exception ex) { Notif.Erreur(ex.Message, "Création impossible"); }
         finally { _sauvegarde = false; }
     }
 

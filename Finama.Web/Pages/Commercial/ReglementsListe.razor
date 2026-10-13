@@ -1,0 +1,63 @@
+﻿@page "/commercial/reglements"
+@using System.Globalization
+
+<div class="page-wrapper position-relative">
+    <div class="page-header mb-4">
+        <h2 class="page-title"><i class="bi bi-cash-coin me-2 text-primary"></i>Suivi des Règlements</h2>
+        <p class="page-subtitle text-muted">Historique des encaissements et paiements reçus de vos clients</p>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Date règlement</th>
+                            <th>Facture liée</th>
+                            <th>Client</th>
+                            <th class="text-center">Mode de paiement</th>
+                            <th class="text-end pe-4">Montant Encaissé</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Simulation de données statiques reprenant ton design -->
+                        <tr>
+                            <td class="ps-4 fw-semibold text-secondary">28/05/2026</td>
+                            <td class="font-monospace small">FAC-2026-0084</td>
+                            <td class="fw-bold">Société Sahel Telecom</td>
+                            <td class="text-center">
+                                <span class="badge bg-warning-subtle text-warning border px-2 py-1">
+                                    <i class="bi bi-phone me-1"></i>Wave
+                                </span>
+                            </td>
+                            <td class="text-end fw-bold text-success pe-4">+ 850 000 XOF</td>
+                        </tr>
+                        <tr>
+                            <td class="ps-4 fw-semibold text-secondary">25/05/2026</td>
+                            <td class="font-monospace small">FAC-2026-0081</td>
+                            <td class="fw-bold">Alexander Vokou (Freelance)</td>
+                            <td class="text-center">
+                                <span class="badge bg-info-subtle text-info border px-2 py-1">
+                                    <i class="bi bi-bank me-1"></i>Virement Bancaire
+                                </span>
+                            </td>
+                            <td class="text-end fw-bold text-success pe-4">+ 1 500 000 XOF</td>
+                        </tr>
+                        <tr>
+                            <td class="ps-4 fw-semibold text-secondary">20/05/2026</td>
+                            <td class="font-monospace small">FAC-2026-0079</td>
+                            <td class="fw-bold">Librairie du Centre</td>
+                            <td class="text-center">
+                                <span class="badge bg-success-subtle text-success border px-2 py-1">
+                                    <i class="bi bi-wallet2 me-1"></i>Espèces (Cash)
+                                </span>
+                            </td>
+                            <td class="text-end fw-bold text-success pe-4">+ 120 000 XOF</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

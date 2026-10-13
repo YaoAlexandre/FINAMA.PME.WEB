@@ -1,0 +1,252 @@
+﻿@page "/commercial/clients"
+@using Finama.Web.Models
+@using Finama.Web.Services
+@using Radzen
+@inject DevisApiService Api
+@inject NavigationManager Nav
+@inject NotificationService NotificationService
+
+<div class="page-wrapper position-relative">
+    <!-- En-tête calqué sur ton UX -->
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="page-title"><i class="bi bi-person-lines-fill me-2 text-primary"></i>Mes Clients</h2>
+            <p class="page-subtitle text-muted">Gérez le portefeuille clients et suivez leur volume d'affaires</p>
+        </div>
+        <button class="btn btn-primary shadow-sm px-4" @onclick="() => _afficherFormulaire = true">
+            <i class="bi bi-person-plus-fill me-2"></i>Nouveau Client
+        </button>
+    </div>
+
+    @if (_messageAlerte != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show shadow-sm border-0 mb-3" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>@_messageAlerte
+            <button type="button" class="btn-close" @onclick="() => _messageAlerte = null"></button>
+        </div>
+    }
+
+    <!-- Table principale dans le même style p-0 -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Client / Raison Sociale</th>
+                            <th>Téléphone</th>
+                            <th>Localisation</th>
+                            <th class="text-center">Devis actifs</th>
+                            <th class="text-end">Volume d'affaires (TTC)</th>
+                            <th class="text-end pe-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_clients == null)
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status"></div>
+                                </td>
+                            </tr>
+                        }
+                        else if (!_clients.Any())
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    <i class="bi bi-people fs-2 d-block mb-2 text-secondary"></i>
+                                    Aucun client enregistré pour le moment.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var client in _clients)
+                            {
+                                <tr>
+                                    <td class="ps-4">
+                                        <div class="d-flex align-items-center">
+                                            <div class="avatar bg-primary-subtle text-primary rounded-circle me-2 d-flex align-items-center justify-content-center fw-bold" style="width: 35px; height: 35px;">
+                                                @client.Nom[0].ToString().ToUpper()
+                                            </div>
+                                            <span class="fw-bold text-dark">@client.Nom</span>
+                                        </div>
+                                    </td>
+                                    <td>@client.Telephone</td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(client.Ville))
+                                        {
+                                            <span>@client.Ville, @client.Pays</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small">Non renseigné</span>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        @if (client.DevisEnCoursCompte > 0)
+                                        {
+                                            <span class="badge bg-info text-dark rounded-pill">@client.DevisEnCoursCompte</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small">-</span>
+                                        }
+                                    </td>
+                                    <td class="text-end fw-bold text-primary">
+                                        @client.VolumeAffairesTTC.ToString("N0") XOF
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => AfficherDetails(client)">
+                                            <i class="bi bi-eye-fill me-1"></i>Voir détails
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- UX Panneau Latéral (Offcanvas) pour les détails d'un client -->
+@if (_clientSelectionne != null)
+{
+    <div class="offcanvas show offcanvas-end border-0 shadow-lg" tabindex="-1" style="visibility: visible; background: #fff; width: 400px; z-index: 1050;">
+        <div class="offcanvas-header bg-light border-bottom p-4">
+            <h5 class="offcanvas-title fw-bold"><i class="bi bi-card-text me-2"></i>Fiche Client</h5>
+            <button type="button" class="btn-close" @onclick="FermerDetails"></button>
+        </div>
+        <div class="offcanvas-body p-4">
+            <div class="text-center mb-4">
+                <div class="avatar bg-primary text-white rounded-circle mx-auto d-flex align-items-center justify-content-center fw-bold shadow-sm mb-2" style="width: 70px; height: 70px; font-size: 1.5rem;">
+                    @_clientSelectionne.Nom[0].ToString().ToUpper()
+                </div>
+                <h4 class="fw-bold mb-1">@_clientSelectionne.Nom</h4>
+                <span class="badge bg-primary-subtle text-primary px-3 py-1 rounded-pill">
+                    Volume d'affaires : @_clientSelectionne.VolumeAffairesTTC.ToString("N0") XOF
+                </span>
+            </div>
+
+            <hr class="text-muted opacity-25" />
+
+            <div class="mb-4">
+                <h6 class="text-uppercase text-muted small fw-bold mb-3">Coordonnées</h6>
+                <div class="mb-3">
+                    <label class="text-muted small d-block">Téléphone</label>
+                    <span class="fw-semibold">@_clientSelectionne.Telephone</span>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small d-block">Adresse / Localisation</label>
+                    <span class="fw-semibold">@_clientSelectionne.Ville, @_clientSelectionne.Pays</span>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <h6 class="text-uppercase text-muted small fw-bold mb-3">Activité Commerciale</h6>
+                <div class="p-3 bg-light rounded border">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="text-muted small">Devis actifs en cours :</span>
+                        <span class="fw-bold text-dark">@_clientSelectionne.DevisEnCoursCompte</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-grid gap-2 mt-5">
+                <button class="btn btn-outline-primary btn-sm" @onclick='() => Nav.NavigateTo("/commercial/devis/nouveau")'>
+                    <i class="bi bi-plus-lg me-2"></i>Créer un devis pour ce client
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop fade show" style="z-index: 1040; backdrop-filter: blur(2px); background: rgba(0,0,0,0.2);" @onclick="FermerDetails"></div>
+}
+
+<!-- UX Modale pour ajouter un nouveau client -->
+@if (_afficherFormulaire)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 1060;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-light border-0">
+                    <h5 class="fw-bold modal-title"><i class="bi bi-person-plus me-2"></i>Ajouter un nouveau client</h5>
+                    <button type="button" class="btn-close" @onclick="() => _afficherFormulaire = false"></button>
+                </div>
+                <!-- Remplacement temporaire par un formulaire simple de démonstration -->
+                <form @onsubmit="EnregistrerClient">
+                    <div class="modal-body p-4">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label small fw-bold">Nom / Raison Sociale</label>
+                                <input class="form-control" @bind="_nouveauNom" required />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold">Téléphone</label>
+                                <input class="form-control" @bind="_nouveauTelephone" required />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Ville</label>
+                                <input class="form-control" @bind="_nouvelleVille" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Pays</label>
+                                <input class="form-control" @bind="_nouveauPays" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0">
+                        <button type="button" class="btn btn-light" @onclick="() => _afficherFormulaire = false">Annuler</button>
+                        <button type="submit" class="btn btn-primary px-4">Créer le client</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ClientCommercialDto>? _clients;
+    private ClientCommercialDto? _clientSelectionne;
+    private bool _afficherFormulaire = false;
+    private string? _messageAlerte;
+
+    // Champs de formulaire temporaires
+    private string _nouveauNom = "";
+    private string _nouveauTelephone = "";
+    private string _nouvelleVille = "";
+    private string _nouveauPays = "Burkina Faso";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ChargerClients();
+    }
+
+    private async Task ChargerClients()
+    {
+        _clients = await Api.GetClientsCommercialAsync();
+    }
+
+    private void AfficherDetails(ClientCommercialDto client)
+    {
+        _clientSelectionne = client;
+    }
+
+    private void FermerDetails()
+    {
+        _clientSelectionne = null;
+    }
+
+    private async Task EnregistrerClient()
+    {
+        // Simulation d'enregistrement pour l'exemple UX
+        _messageAlerte = $"Le client {_nouveauNom} a été créé avec succès.";
+        _nouveauNom = ""; _nouveauTelephone = ""; _nouvelleVille = "";
+        _afficherFormulaire = false;
+
+        await ChargerClients();
+        NotificationService.Notify(NotificationSeverity.Success, "Succès", "Client ajouté au portefeuille.");
+    }
+}

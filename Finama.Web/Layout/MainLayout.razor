@@ -5,7 +5,9 @@
 @inject NavigationManager Nav
 
 <RadzenNotification />
+
 <div class="finama-layout">
+    <!-- Overlay de chargement maintenu uniquement pendant la première vérification -->
     @if (_verificationEnCours)
     {
         <div class="d-flex flex-column justify-content-center align-items-center vh-100 bg-dark text-white w-100 position-fixed top-0 start-0" style="z-index: 9999;">
@@ -13,167 +15,182 @@
             <div class="font-monospace small text-muted">Contrôle de sécurité de la session...</div>
         </div>
     }
-    else
-    {
-        <aside class="sidebar @(_sidebarOpen ? "open" : "")">
-            <div class="sidebar-brand d-flex justify-content-between align-items-center">
-                <div class="d-flex align-items-center gap-2">
-                    <div class="brand-logo"><i class="bi bi-wallet2 text-white"></i></div>
-                    <span class="brand-name">Finama</span>
-                </div>
 
-                <button class="btn text-white border-0 d-lg-none" @onclick="ToggleSidebar" style="font-size: 1.2rem; padding: 4px;">
-                    <i class="bi bi-x-lg"></i>
-                </button>
+    <aside class="sidebar @(_sidebarOpen ? "open" : "")">
+        <div class="sidebar-brand d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+                <div class="brand-logo"><img src="images/logo-icon.svg" alt="" /></div>
+                <span class="brand-name">Finama</span>
             </div>
 
-            <nav class="sidebar-nav" @onclick="GererClicNav">
-                <div class="nav-section">
-                    <span class="nav-section-label">Principal</span>
-                    <NavLink href="/" class="nav-item" Match="NavLinkMatch.All">
-                        <i class="bi bi-speedometer2 nav-icon"></i>
-                        <span>Tableau de bord</span>
-                    </NavLink>
+            <button class="btn text-white border-0 d-lg-none" @onclick="ToggleSidebar" style="font-size: 1.2rem; padding: 4px;">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
 
-                    <AuthorizeView Policy="Saisie">
-                        <Authorized>
-                            <NavLink href="/comptabilite/ecritures" class="nav-item">
-                                <i class="bi bi-pencil-square nav-icon"></i>
-                                <span>Écritures</span>
-                            </NavLink>
-                            <NavLink href="/factures" class="nav-item">
-                                <i class="bi bi-file-earmark-text nav-icon"></i>
-                                <span>Factures</span>
-                            </NavLink>
-                            <NavLink href="/referentiel/tiers" class="nav-item">
-                                <i class="bi bi-people-fill nav-icon"></i>
-                                <span>Tiers</span>
-                            </NavLink>
-                        </Authorized>
-                    </AuthorizeView>
-                </div>
+        <nav class="sidebar-nav" @onclick="GererClicNav">
+            <div class="nav-section">
+                <span class="nav-section-label">Principal</span>
+                <NavLink href="/" class="nav-item" Match="NavLinkMatch.All">
+                    <i class="bi bi-speedometer2 nav-icon"></i>
+                    <span>Tableau de bord</span>
+                </NavLink>
 
-                <div class="nav-section">
-                    <span class="nav-section-label">Reporting</span>
-                    <AuthorizeView Policy="Saisie">
-                        <Authorized>
-                            <NavLink href="/balance" class="nav-item">
-                                <i class="bi bi-journal-check nav-icon"></i>
-                                <span>Balance</span>
-                            </NavLink>
-                            <NavLink href="/grand-livre" class="nav-item">
-                                <i class="bi bi-journal-text nav-icon"></i>
-                                <span>Grand Livre</span>
-                            </NavLink>
-                            <NavLink href="/plan-comptable" class="nav-item">
-                                <i class="bi bi-book-half nav-icon"></i>
-                                <span>Plan comptable</span>
-                            </NavLink>
-                        </Authorized>
-                    </AuthorizeView>
-                </div>
+                <AuthorizeView Policy="Saisie">
+                    <Authorized>
+                        <NavLink href="/comptabilite/ecritures" class="nav-item">
+                            <i class="bi bi-pencil-square nav-icon"></i>
+                            <span>Écritures</span>
+                        </NavLink>
+                        <NavLink href="/factures" class="nav-item">
+                            <i class="bi bi-file-earmark-text nav-icon"></i>
+                            <span>Factures</span>
+                        </NavLink>
+                        <NavLink href="/referentiel/tiers" class="nav-item">
+                            <i class="bi bi-people-fill nav-icon"></i>
+                            <span>Tiers</span>
+                        </NavLink>
+                    </Authorized>
+                </AuthorizeView>
+            </div>
 
-                <div class="nav-section">
-                    <span class="nav-section-label">Commercial</span>
-                    <AuthorizeView Policy="Commercial">
-                        <Authorized>
-                            <NavLink href="/devis" class="nav-item">
-                                <i class="bi bi-file-earmark-check nav-icon"></i>
-                                <span>Mes devis</span>
-                            </NavLink>
-                            <NavLink href="/commercial/clients" class="nav-item">
-                                <i class="bi bi-person-lines-fill nav-icon"></i>
-                                <span>Mes clients</span>
-                            </NavLink>
-                            <NavLink href="/commercial/pipeline" class="nav-item">
-                                <i class="bi bi-funnel nav-icon"></i>
-                                <span>Pipeline</span>
-                            </NavLink>
-                        </Authorized>
-                    </AuthorizeView>
-                </div>
+            <div class="nav-section">
+                <span class="nav-section-label">Reporting</span>
+                <AuthorizeView Policy="Saisie">
+                    <Authorized>
+                        <NavLink href="/balance" class="nav-item">
+                            <i class="bi bi-journal-check nav-icon"></i>
+                            <span>Balance</span>
+                        </NavLink>
+                        <NavLink href="/grand-livre" class="nav-item">
+                            <i class="bi bi-journal-text nav-icon"></i>
+                            <span>Grand Livre</span>
+                        </NavLink>
+                        <NavLink href="/plan-comptable" class="nav-item">
+                            <i class="bi bi-book-half nav-icon"></i>
+                            <span>Plan comptable</span>
+                        </NavLink>
+                    </Authorized>
+                </AuthorizeView>
+            </div>
 
-                <div class="nav-section">
-                    <span class="nav-section-label">Paramètres</span>
+            <div class="nav-section">
+                <span class="nav-section-label">Commercial</span>
+                <AuthorizeView Policy="Commercial">
+                    <Authorized>
+                        <NavLink href="/commercial/devis" class="nav-item">
+                            <i class="bi bi-file-earmark-check nav-icon"></i>
+                            <span>Mes devis</span>
+                        </NavLink>
+                        <NavLink href="/commercial/clients" class="nav-item">
+                            <i class="bi bi-person-lines-fill nav-icon"></i>
+                            <span>Mes clients</span>
+                        </NavLink>
+                        <NavLink href="/commercial/pipeline" class="nav-item">
+                            <i class="bi bi-funnel nav-icon"></i>
+                            <span>Pipeline</span>
+                        </NavLink>
+                    </Authorized>
+                </AuthorizeView>
+            </div>
 
-                    <AuthorizeView Policy="AdminTenant">
-                        <Authorized>
-                            <NavLink href="/configuration/classes-comptables" class="nav-item">
-                                <i class="bi bi-gear-wide-connected nav-icon"></i>
-                                <span>Classes OHADA</span>
-                            </NavLink>
-                            <NavLink href="/utilisateurs" class="nav-item">
-                                <i class="bi bi-shield-lock nav-icon"></i>
-                                <span>Utilisateurs</span>
-                            </NavLink>
-                            <NavLink href="/entreprise" class="nav-item">
-                                <i class="bi bi-building nav-icon"></i>
-                                <span>Mon entreprise</span>
-                            </NavLink>
-                        </Authorized>
-                    </AuthorizeView>
-                </div>
-            </nav>
+            <div class="nav-section">
+                <span class="nav-section-label">Paramètres</span>
 
-            <div class="sidebar-footer">
-                <div class="user-card">
-                    <div class="user-avatar">@(_userInitiales)</div>
-                    <div class="user-info">
-                        <span class="user-nom">@_userNom</span>
-                        <span class="user-entreprise text-muted">@_entrepriseNom</span>
+                <AuthorizeView Policy="AdminTenant">
+                    <Authorized>
+                        <NavLink href="/configuration/classes-comptables" class="nav-item">
+                            <i class="bi bi-gear-wide-connected nav-icon"></i>
+                            <span>Classes OHADA</span>
+                        </NavLink>
+                        <NavLink href="/utilisateurs" class="nav-item">
+                            <i class="bi bi-shield-lock nav-icon"></i>
+                            <span>Utilisateurs</span>
+                        </NavLink>
+                        <NavLink href="/entreprise" class="nav-item">
+                            <i class="bi bi-building nav-icon"></i>
+                            <span>Mon entreprise</span>
+                        </NavLink>
+                    </Authorized>
+                </AuthorizeView>
+            </div>
+
+            <AuthorizeView Roles="SuperAdmin">
+                <Authorized>
+                    <div class="nav-section mt-3 pt-3 border-top border-secondary">
+                        <span class="nav-section-label text-warning fw-bold">Administration SaaS</span>
+                        <NavLink href="/superadmin/tenants" class="nav-item">
+                            <i class="bi bi-building-gear nav-icon text-warning"></i>
+                            <span>Gestion des PME</span>
+                        </NavLink>
+                        <!-- 🌟 NOUVEAU MENU : DEMANDES D'ACCÈS -->
+                        <NavLink href="/superadmin/demandes-acces" class="nav-item">
+                            <i class="bi bi-person-check nav-icon text-warning"></i>
+                            <span>Demandes d'accès</span>
+                        </NavLink>
                     </div>
+                </Authorized>
+            </AuthorizeView>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="user-card">
+                <div class="user-avatar">@(_userInitiales)</div>
+                <div class="user-info">
+                    <span class="user-nom">@_userNom</span>
+                    <span class="user-entreprise text-muted">@_entrepriseNom</span>
                 </div>
-                <button class="btn-logout" @onclick="Deconnecter" title="Déconnexion">
-                    <i class="bi bi-power"></i>
-                </button>
             </div>
-        </aside>
+            <button class="btn-logout" @onclick="Deconnecter" title="Déconnexion">
+                <i class="bi bi-power"></i>
+            </button>
+        </div>
+    </aside>
 
-        <main class="main-content">
-            <div class="topbar px-4">
-                <button class="btn-menu" @onclick="ToggleSidebar">
-                    <i class="bi bi-list fs-4"></i>
-                </button>
+    <main class="main-content">
+        <div class="topbar px-4">
+            <button class="btn-menu" @onclick="ToggleSidebar">
+                <i class="bi bi-list fs-4"></i>
+            </button>
 
-                <div class="topbar-right d-flex align-items-center gap-2">
-                    <ThemeSwitcher />
+            <div class="topbar-right d-flex align-items-center gap-2">
+                <ThemeSwitcher />
 
-                    <div class="dropdown">
-                        <button class="btn btn-sm btn-outline-primary dropdown-toggle fw-bold px-3 py-2"
-                                type="button"
-                                @onclick="ToggleDropdown"
-                                @onclick:stopPropagation>
-                            <i class="bi bi-cash-coin me-1"></i> @_deviseActiveCode (@_deviseSymbole)
-                        </button>
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-primary dropdown-toggle fw-bold px-3 py-2"
+                            type="button"
+                            @onclick="ToggleDropdown"
+                            @onclick:stopPropagation>
+                        <i class="bi bi-cash-coin me-1"></i> @_deviseActiveCode (@_deviseSymbole)
+                    </button>
 
-                        <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 @(_dropdownOpen ? "show" : "")"
-                            style="position: absolute; right: 0; left: auto;">
-                            <li><h6 class="dropdown-header font-monospace small text-uppercase">Devises de la plateforme</h6></li>
-                            <li><hr class="dropdown-divider"></li>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 @(_dropdownOpen ? "show" : "")"
+                        style="position: absolute; right: 0; left: auto;">
+                        <li><h6 class="dropdown-header font-monospace small text-uppercase">Devises de la plateforme</h6></li>
+                        <li><hr class="dropdown-divider"></li>
 
-                            @if (_listeDevises != null)
+                        @if (_listeDevises != null)
+                        {
+                            @foreach (var dev in _listeDevises)
                             {
-                                @foreach (var dev in _listeDevises)
-                                {
-                                    <li @key="dev.Code">
-                                        <button type="button"
-                                                class="dropdown-item small d-flex justify-content-between align-items-center @(_deviseActiveCode == dev.Code ? "active" : "")"
-                                                @onclick='() => ClicDevise(dev.Code, dev.Symbole)'>
-                                            <span>@dev.Code (@dev.Symbole)</span>
-                                            <span class="text-muted small ms-2" style="font-size: 0.75rem;">@dev.Libelle</span>
-                                        </button>
-                                    </li>
-                                }
+                                <li @key="dev.Code">
+                                    <button type="button"
+                                            class="dropdown-item small d-flex justify-content-between align-items-center @(_deviseActiveCode == dev.Code ? "active" : "")"
+                                            @onclick='() => ClicDevise(dev.Code, dev.Symbole)'>
+                                        <span>@dev.Code (@dev.Symbole)</span>
+                                        <span class="text-muted small ms-2" style="font-size: 0.75rem;">@dev.Libelle</span>
+                                    </button>
+                                </li>
                             }
-                        </ul>
-                    </div>
+                        }
+                    </ul>
                 </div>
             </div>
-            <div class="page-wrapper p-4">
-                @Body
-            </div>
-        </main>
-    }
+        </div>
+        <div class="page-wrapper p-4">
+            @Body
+        </div>
+    </main>
 </div>
 
 <style>
@@ -283,7 +300,8 @@
 </style>
 
 @code {
-    private bool _verificationEnCours = true; // 🌟 AJOUT : Bloque l'interface par défaut
+    private bool _verificationEnCours = true;
+    private bool _isInitialized = false;
     private bool _sidebarOpen = true;
     private string _userNom = "";
     private string _userInitiales = "?";
@@ -293,15 +311,28 @@
     private string _deviseActiveCode = "XOF";
     private bool _dropdownOpen = false;
 
-    // protected override async Task OnParametersSetAsync()
-    // {
-    //     // 🌟 INTERCEPTION : S'exécute automatiquement à chaque changement de page/paramètre d'URL
-    //     await SecuriserAccesAsync();
-    // }
-
     protected override async Task OnInitializedAsync()
     {
-        // 🟢 S'exécute une seule fois au démarrage
+        await SecuriserAccesAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Ne réexécute la vérification complète que si le composant n'était pas encore initialisé
+        if (_isInitialized)
+        {
+            var uriRelative = Nav.ToBaseRelativePath(Nav.Uri).ToLower();
+            if (!uriRelative.StartsWith("connexion") && !uriRelative.StartsWith("register"))
+            {
+                var estConnecte = await Api.EstConnecteAsync();
+                if (!estConnecte)
+                {
+                    Nav.NavigateTo("/connexion", forceLoad: false);
+                }
+            }
+            return;
+        }
+
         await SecuriserAccesAsync();
     }
 
@@ -309,10 +340,10 @@
     {
         var uriRelative = Nav.ToBaseRelativePath(Nav.Uri).ToLower();
 
-        // Autoriser l'accès libre aux pages de connexion/inscription sans boucler sur le contrôle
-        if (uriRelative.StartsWith("connexion") || uriRelative.StartsWith("register") || uriRelative.StartsWith("connexion"))
+        if (uriRelative.StartsWith("connexion") || uriRelative.StartsWith("register"))
         {
             _verificationEnCours = false;
+            _isInitialized = true;
             return;
         }
 
@@ -321,17 +352,18 @@
         if (!estConnecte)
         {
             _verificationEnCours = false;
-            Nav.NavigateTo("/connexion", forceLoad: false); // Redirection sécurisée
+            _isInitialized = true;
+            Nav.NavigateTo("/connexion", forceLoad: false);
         }
         else
         {
-            // Si le chargement initial des données n'a pas encore été fait, on peuple l'état
             if (string.IsNullOrEmpty(_userNom))
             {
                 await ChargerDonneesSessionAsync();
             }
             _verificationEnCours = false;
-            StateHasChanged(); // Libère et affiche l'interface
+            _isInitialized = true;
+            StateHasChanged();
         }
     }
 
@@ -360,7 +392,7 @@
 
         if (!string.IsNullOrEmpty(_userNom))
         {
-            var parts = _userNom.Split(' ');
+            var parts = _userNom.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             _userInitiales = parts.Length >= 2
                 ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
                 : _userNom[..1].ToUpper();
@@ -370,16 +402,13 @@
     private void ToggleSidebar()
     {
         _sidebarOpen = !_sidebarOpen;
-        StateHasChanged();
     }
 
     private void GererClicNav()
     {
-        // Logique de responsive mobile (fermeture automatique si écran étroit au clic)
-        if (Nav.ToBaseRelativePath(Nav.Uri) != "")
-        {
-            // Optionnel : fermer la sidebar en mode mobile ici
-        }
+        // En écran mobile, on replie la sidebar automatiquement lors du clic sur un lien
+        // Optionnel : décommentez si vous souhaitez ce comportement sur mobile
+        // _sidebarOpen = false;
     }
 
     private async Task Deconnecter()
@@ -398,6 +427,5 @@
         _deviseActiveCode = code;
         _deviseSymbole = symbole;
         _dropdownOpen = false;
-        StateHasChanged();
     }
 }

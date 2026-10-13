@@ -1,11 +1,13 @@
-﻿@page "/utilisateurs"
+@page "/utilisateurs"
 @attribute [Authorize(Policy = "AdminTenant")]
 @using Finama.Web.Models
 @using Finama.Web.Services
+@using Finama.Web.Shared
 @using Radzen
 @inject FinamaApiService Api
 @inject NavigationManager Nav
 @inject NotificationService NotificationService
+@inject IJSRuntime JS
 
 <div class="page-wrapper position-relative">
     <div class="page-header d-flex justify-content-between align-items-center mb-4">
@@ -17,14 +19,6 @@
             <i class="bi bi-person-plus-fill me-2"></i>Nouvel Utilisateur
         </button>
     </div>
-
-    @if (_messageAlerte != null)
-    {
-        <div class="alert alert-success alert-dismissible fade show shadow-sm border-0 mb-3" role="alert">
-            <i class="bi bi-check-circle-fill me-2"></i>@_messageAlerte
-            <button type="button" class="btn-close" @onclick="() => _messageAlerte = null"></button>
-        </div>
-    }
 
     <div class="card border-0 shadow-sm">
         <div class="card-body p-0">
@@ -48,15 +42,20 @@
                                 </td>
                             </tr>
                         }
+                        else if (!_utilisateurs.Any())
+                        {
+                            <tr><td colspan="5" class="text-center py-4 text-muted small">Aucun utilisateur pour le moment.</td></tr>
+                        }
                         else
                         {
-                            @foreach (var user in _utilisateurs)
+                            @foreach (var user in _utilisateurs.Page(_page, _taille))
                             {
-                                <tr>
+                                var occupe = _enCours.Contains(user.Id);
+                                <tr class="@(user.EstActif ? "" : "opacity-75")">
                                     <td class="ps-4">
                                         <div class="d-flex align-items-center">
                                             <div class="avatar bg-primary-subtle text-primary rounded-circle me-2 d-flex align-items-center justify-content-center fw-bold" style="width: 35px; height: 35px;">
-                                                @user.Prenom[0].ToString().ToUpper()@user.Nom[0].ToString().ToUpper()
+                                                @Initiales(user)
                                             </div>
                                             <span class="fw-bold">@user.Prenom @user.Nom</span>
                                         </div>
@@ -69,13 +68,31 @@
                                     </td>
                                     <td class="text-center">
                                         <span class="badge rounded-pill @(user.EstActif ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger") px-2 py-1">
-                                            @(user.EstActif ? "Actif" : "Inactif")
+                                            @(user.EstActif ? "Actif" : "Suspendu")
                                         </span>
                                     </td>
                                     <td class="text-end pe-4">
-                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => AfficherDetails(user)">
-                                            <i class="bi bi-eye-fill me-1"></i>Voir détails
-                                        </button>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-secondary" title="Voir la fiche" @onclick="() => AfficherDetails(user)">
+                                                <i class="bi bi-eye-fill"></i>
+                                            </button>
+                                            <button class="btn btn-outline-secondary" title="Réinitialiser le mot de passe"
+                                                    @onclick="() => DemanderReinitialisation(user)" disabled="@occupe">
+                                                <i class="bi bi-key"></i>
+                                            </button>
+                                            <button class="btn @(user.EstActif ? "btn-outline-danger" : "btn-outline-success")"
+                                                    title="@(user.EstActif ? "Suspendre l'accès" : "Réactiver l'accès")"
+                                                    @onclick="() => DemanderBascule(user)" disabled="@occupe">
+                                                @if (occupe)
+                                                {
+                                                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                                                }
+                                                else
+                                                {
+                                                    <i class="bi @(user.EstActif ? "bi-person-x" : "bi-person-check")"></i>
+                                                }
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             }
@@ -84,61 +101,70 @@
                 </table>
             </div>
         </div>
+        @if (_utilisateurs is { Count: > 0 })
+        {
+            <div class="card-footer bg-transparent border-top py-3 px-3">
+                <Pagination Page="_page" PageSize="_taille" TotalItems="_utilisateurs.Count" Unite="utilisateurs"
+                            OnPageChange="p => _page = p" OnPageSizeChange="ChangerTaille" PageSizes="@(new[] { 10, 20, 50 })" />
+            </div>
+        }
     </div>
 </div>
 
+@* ===== Fiche utilisateur ===== *@
 @if (_utilisateurSelectionne != null)
 {
-    <div class="offcanvas show offcanvas-end border-0 shadow-lg" tabindex="-1" style="visibility: visible; background: #fff; width: 400px; z-index: 1050;">
+    var u = _utilisateurSelectionne;
+    var occupe = _enCours.Contains(u.Id);
+
+    <div class="offcanvas show offcanvas-end border-0 shadow-lg" tabindex="-1" style="visibility: visible; background: var(--bg-card); color: var(--text-main); width: 400px; max-width: 100vw; z-index: 1050;">
         <div class="offcanvas-header bg-light border-bottom p-4">
             <h5 class="offcanvas-title fw-bold"><i class="bi bi-card-text me-2"></i>Fiche Utilisateur</h5>
-            <button type="button" class="btn-close" @onclick="FermerDetails"></button>
+            <button type="button" class="btn-close" aria-label="Fermer" @onclick="FermerDetails"></button>
         </div>
         <div class="offcanvas-body p-4">
             <div class="text-center mb-4">
                 <div class="avatar bg-primary text-white rounded-circle mx-auto d-flex align-items-center justify-content-center fw-bold shadow-sm mb-2" style="width: 70px; height: 70px; font-size: 1.5rem;">
-                    @_utilisateurSelectionne.Prenom[0].ToString().ToUpper()@_utilisateurSelectionne.Nom[0].ToString().ToUpper()
+                    @Initiales(u)
                 </div>
-                <h4 class="fw-bold mb-1">@_utilisateurSelectionne.Prenom @_utilisateurSelectionne.Nom</h4>
-                <span class="badge @(_utilisateurSelectionne.EstActif ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger") px-3 py-1 rounded-pill">
-                    @(_utilisateurSelectionne.EstActif ? "Compte Actif" : "Compte Suspendu")
+                <h4 class="fw-bold mb-1">@u.Prenom @u.Nom</h4>
+                <span class="badge @(u.EstActif ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger") px-3 py-1 rounded-pill">
+                    @(u.EstActif ? "Compte actif" : "Compte suspendu")
                 </span>
             </div>
 
-            <hr class="text-muted opacity-25My" />
+            <hr class="text-muted opacity-25" />
 
             <div class="mb-4">
                 <h6 class="text-uppercase text-muted small fw-bold mb-3">Informations de connexion</h6>
                 <div class="mb-3">
                     <label class="text-muted small d-block">Identifiant unique (ID)</label>
-                    <span class="font-monospace small text-secondary">@_utilisateurSelectionne.Id</span>
+                    <span class="font-monospace small text-secondary">@u.Id</span>
                 </div>
                 <div class="mb-3">
-                    <label class="text-muted small d-block">Adresse Email</label>
-                    <span class="fw-semibold">@_utilisateurSelectionne.Email</span>
+                    <label class="text-muted small d-block">Adresse email</label>
+                    <span class="fw-semibold">@u.Email</span>
                 </div>
             </div>
 
             <div class="mb-4">
-                <h6 class="text-uppercase text-muted small fw-bold mb-3">Permissions & Droits</h6>
+                <h6 class="text-uppercase text-muted small fw-bold mb-3">Permissions et droits</h6>
                 <div class="p-3 bg-light rounded border">
                     <div class="d-flex align-items-center mb-2">
                         <i class="bi bi-shield-check text-primary me-2 fs-5"></i>
-                        <span class="fw-bold">@ConvertirRoleAffichage(_utilisateurSelectionne.Role)</span>
+                        <span class="fw-bold">@ConvertirRoleAffichage(u.Role)</span>
                     </div>
-                    <p class="small text-muted mb-0">
-                        @ObtenirDescriptionRole(_utilisateurSelectionne.Role)
-                    </p>
+                    <p class="small text-muted mb-0">@ObtenirDescriptionRole(u.Role)</p>
                 </div>
             </div>
 
             <div class="d-grid gap-2 mt-5">
-                <button class="btn btn-outline-primary btn-sm" disabled>
+                <button class="btn btn-outline-primary btn-sm" @onclick="() => DemanderReinitialisation(u)" disabled="@occupe">
                     <i class="bi bi-key me-2"></i>Réinitialiser le mot de passe
                 </button>
-                <button class="btn @(_utilisateurSelectionne.EstActif ? "btn-outline-danger" : "btn-outline-success") btn-sm" disabled>
-                    <i class="bi @(_utilisateurSelectionne.EstActif ? "bi-person-x" : "bi-person-check") me-2"></i>
-                    @(_utilisateurSelectionne.EstActif ? "Suspendre l'accès" : "Réactiver l'accès")
+                <button class="btn @(u.EstActif ? "btn-outline-danger" : "btn-outline-success") btn-sm" @onclick="() => DemanderBascule(u)" disabled="@occupe">
+                    <i class="bi @(u.EstActif ? "bi-person-x" : "bi-person-check") me-2"></i>
+                    @(u.EstActif ? "Suspendre l'accès" : "Réactiver l'accès")
                 </button>
             </div>
         </div>
@@ -147,6 +173,7 @@
     <div class="modal-backdrop fade show" style="z-index: 1040; backdrop-filter: blur(2px); background: rgba(0,0,0,0.2);" @onclick="FermerDetails"></div>
 }
 
+@* ===== Nouvel utilisateur ===== *@
 @if (_afficherFormulaire)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 1060;">
@@ -154,7 +181,7 @@
             <div class="modal-content border-0 shadow-lg">
                 <div class="modal-header bg-light border-0">
                     <h5 class="fw-bold modal-title"><i class="bi bi-person-plus me-2"></i>Ajouter un collaborateur</h5>
-                    <button type="button" class="btn-close" @onclick="() => _afficherFormulaire = false"></button>
+                    <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => _afficherFormulaire = false"></button>
                 </div>
                 <EditForm Model="_request" OnValidSubmit="EnregistrerUtilisateur">
                     <DataAnnotationsValidator />
@@ -169,12 +196,13 @@
                                 <input class="form-control" @bind="_request.Prenom" required />
                             </div>
                             <div class="col-12">
-                                <label class="form-label small fw-bold">Adresse Email</label>
+                                <label class="form-label small fw-bold">Adresse email</label>
                                 <input type="email" class="form-control" @bind="_request.Email" required />
                             </div>
                             <div class="col-12">
                                 <label class="form-label small fw-bold">Mot de passe temporaire</label>
                                 <input type="password" class="form-control" @bind="_request.MotDePasse" required />
+                                <div class="form-text">Le collaborateur devra le modifier à sa première connexion.</div>
                             </div>
                             <div class="col-12">
                                 <label class="form-label small fw-bold">Rôle d'accès</label>
@@ -196,74 +224,185 @@
     </div>
 }
 
+@* ===== Mot de passe temporaire à transmettre (si l'email n'a pas pu partir) ===== *@
+@if (_motDePasseAffiche is not null)
+{
+    <div class="modal-backdrop fade show" style="z-index:1065"></div>
+    <div class="modal fade show d-block" style="z-index:1070" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold">Mot de passe temporaire</h5>
+                    <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => _motDePasseAffiche = null"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">L'email n'a pas pu être envoyé. Transmettez ce mot de passe à @_motDePasseAffiche.Value.Utilisateur. Il ne sera plus affiché.</p>
+                    <div class="input-group">
+                        <input class="form-control font-monospace" readonly value="@_motDePasseAffiche.Value.MotDePasse" />
+                        <button class="btn btn-outline-primary" @onclick="CopierMotDePasse">
+                            <i class="bi @(_copie ? "bi-check2" : "bi-clipboard") me-1"></i>@(_copie ? "Copié" : "Copier")
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button class="btn btn-primary" @onclick="() => _motDePasseAffiche = null">Terminé</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<ConfirmDialog Visible="@(_confirmation is not null)"
+               Titre="@_confirmation?.Titre"
+               Message="@_confirmation?.Message"
+               LibelleConfirmer="@(_confirmation?.Libelle ?? "Confirmer")"
+               Style="@(_confirmation?.Style ?? "primary")"
+               Busy="_confirmationBusy"
+               OnConfirm="ExecuterConfirmation"
+               OnCancel="() => _confirmation = null" />
+
 @code {
+    private record Confirmation(string Titre, string Message, string Libelle, string Style, Func<Task> Action);
+
     private List<UtilisateurDto>? _utilisateurs;
     private UtilisateurDto? _utilisateurSelectionne;
     private bool _afficherFormulaire = false;
-    private string? _messageAlerte;
     private CreerCollaborateurRequest _request = new();
 
-    protected override async Task OnInitializedAsync()
-    {
+    private readonly HashSet<Guid> _enCours = new();
+    private Confirmation? _confirmation;
+    private bool _confirmationBusy;
+    private (string Utilisateur, string MotDePasse)? _motDePasseAffiche;
+    private bool _copie;
 
-        await ChargerUtilisateurs();
-    }
+    protected override async Task OnInitializedAsync() => await ChargerUtilisateurs();
+
+    private int _page = 1;
+    private int _taille = 10;
 
     private async Task ChargerUtilisateurs()
     {
         _utilisateurs = await Api.GetUtilisateursTenantAsync();
+        _page = PagingExtensions.PageValide(_page, _utilisateurs?.Count ?? 0, _taille);
     }
 
-    private void AfficherDetails(UtilisateurDto user)
-    {
-        _utilisateurSelectionne = user;
-    }
+    private void ChangerTaille(int taille) { _taille = taille; _page = 1; }
 
-    private void FermerDetails()
+    private void AfficherDetails(UtilisateurDto user) => _utilisateurSelectionne = user;
+    private void FermerDetails() => _utilisateurSelectionne = null;
+
+    private static string Initiales(UtilisateurDto u)
     {
-        _utilisateurSelectionne = null;
+        var p = string.IsNullOrWhiteSpace(u.Prenom) ? "" : u.Prenom.Trim()[..1];
+        var n = string.IsNullOrWhiteSpace(u.Nom) ? "" : u.Nom.Trim()[..1];
+        return (p + n).ToUpper();
     }
 
     private async Task EnregistrerUtilisateur()
     {
         var erreur = await Api.CreerCollaborateurAsync(_request);
-
         if (erreur == null)
         {
-            // Succès
-            _messageAlerte = $"L'accès pour {_request.Prenom} {_request.Nom} a été configuré.";
+            NotificationService.Succes($"L'accès de {_request.Prenom} {_request.Nom} est créé. Il devra changer son mot de passe à sa première connexion.", "Collaborateur ajouté");
             _request = new();
             _afficherFormulaire = false;
             await ChargerUtilisateurs();
-            NotificationService.Notify(NotificationSeverity.Success, "Succès", "Collaborateur ajouté.");
         }
         else
         {
-            // Erreur
-            NotificationService.Notify(NotificationSeverity.Error, "Erreur", erreur);
+            NotificationService.Erreur(erreur, "Création impossible");
         }
     }
 
-    private string ConvertirRoleAffichage(string roleBrut)
+    // ---- Suspendre / réactiver ----
+    private void DemanderBascule(UtilisateurDto u)
     {
-        return roleBrut switch
-        {
-            "AdminTenant" => "Administrateur Entreprise",
-            "Comptable" => "Comptable",
-            "Lecture" => "Lecture seule",
-            "SuperAdmin" => "Super Admin Plateforme",
-            _ => roleBrut
-        };
+        var suspendre = u.EstActif;
+        _confirmation = new Confirmation(
+            suspendre ? "Suspendre cet accès ?" : "Réactiver cet accès ?",
+            suspendre
+                ? $"{u.Prenom} {u.Nom} sera déconnecté et ne pourra plus se connecter tant que son accès n'est pas réactivé."
+                : $"{u.Prenom} {u.Nom} pourra de nouveau se connecter.",
+            suspendre ? "Suspendre" : "Réactiver",
+            suspendre ? "danger" : "success",
+            async () =>
+            {
+                _enCours.Add(u.Id);
+                try
+                {
+                    var r = await Api.ModifierStatutUtilisateurAsync(u.Id, !u.EstActif);
+                    Notifier(r.Succes, r.Succes ? "Accès mis à jour" : "Action impossible", r.Message);
+                    if (r.Succes) { await ChargerUtilisateurs(); SynchroniserSelection(u.Id); }
+                }
+                finally { _enCours.Remove(u.Id); }
+            });
     }
 
-    private string ObtenirDescriptionRole(string roleBrut)
+    // ---- Réinitialiser le mot de passe ----
+    private void DemanderReinitialisation(UtilisateurDto u)
     {
-        return roleBrut switch
-        {
-            "AdminTenant" => "A accès à la configuration totale du compte, à la balance, aux écritures et à la création des accès utilisateurs pour l'entreprise.",
-            "Comptable" => "Peut saisir de nouvelles écritures comptables, consulter les journaux et éditer les états financiers (Balance, Grand Livre).",
-            "Lecture" => "Accès restreint à la consultation des journaux et des rapports de synthèse. Toute modification est bloquée.",
-            _ => "Droits standards du profil."
-        };
+        _confirmation = new Confirmation(
+            "Réinitialiser le mot de passe ?",
+            $"Un mot de passe temporaire sera envoyé à {u.Email}. Ses sessions ouvertes seront fermées et il devra choisir un nouveau mot de passe à sa prochaine connexion.",
+            "Réinitialiser", "primary",
+            async () =>
+            {
+                _enCours.Add(u.Id);
+                try
+                {
+                    var r = await Api.ReinitialiserMotDePasseUtilisateurAsync(u.Id);
+                    Notifier(r.Succes, r.Succes ? "Mot de passe réinitialisé" : "Action impossible", r.Message);
+                    if (r.Succes && !string.IsNullOrEmpty(r.MotDePasseTemporaire))
+                    {
+                        _copie = false;
+                        _motDePasseAffiche = ($"{u.Prenom} {u.Nom}", r.MotDePasseTemporaire);
+                    }
+                }
+                finally { _enCours.Remove(u.Id); }
+            });
     }
+
+    private async Task ExecuterConfirmation()
+    {
+        if (_confirmation is null) return;
+        _confirmationBusy = true;
+        try { await _confirmation.Action(); }
+        catch (Exception ex) { Notifier(false, "Erreur de communication", ex.Message); }
+        finally { _confirmationBusy = false; _confirmation = null; }
+    }
+
+    private async Task CopierMotDePasse()
+    {
+        if (_motDePasseAffiche is null) return;
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", _motDePasseAffiche.Value.MotDePasse);
+        _copie = true;
+    }
+
+    // Garde la fiche ouverte à jour après une action
+    private void SynchroniserSelection(Guid id)
+        => _utilisateurSelectionne = _utilisateurs?.FirstOrDefault(x => x.Id == id) is { } maj && _utilisateurSelectionne?.Id == id
+            ? maj : _utilisateurSelectionne;
+
+    private void Notifier(bool succes, string titre, string message)
+    {
+        if (succes) NotificationService.Succes(message, titre);
+        else NotificationService.Erreur(message, titre);
+    }
+
+    private string ConvertirRoleAffichage(string roleBrut) => roleBrut switch
+    {
+        "AdminTenant" => "Administrateur Entreprise",
+        "Comptable" => "Comptable",
+        "Lecture" => "Lecture seule",
+        "SuperAdmin" => "Super Admin Plateforme",
+        _ => roleBrut
+    };
+
+    private string ObtenirDescriptionRole(string roleBrut) => roleBrut switch
+    {
+        "AdminTenant" => "A accès à la configuration totale du compte, à la balance, aux écritures et à la création des accès utilisateurs pour l'entreprise.",
+        "Comptable" => "Peut saisir de nouvelles écritures comptables, consulter les journaux et éditer les états financiers (Balance, Grand Livre).",
+        "Lecture" => "Accès restreint à la consultation des journaux et des rapports de synthèse. Toute modification est bloquée.",
+        _ => "Droits standards du profil."
+    };
 }

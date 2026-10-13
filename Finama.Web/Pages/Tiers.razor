@@ -128,16 +128,9 @@
         </table>
     </div>
 
-    <div class="card-footer bg-white py-3 d-flex flex-column flex-sm-row justify-content-between align-items-center gap-3 border-top border-light">
-        <small class="text-muted font-monospace">Page @_resultat.Page sur @_resultat.TotalPages (@_resultat.TotalItems au total)</small>
-        <div class="pagination-controls d-flex gap-1.5">
-            <button class="btn btn-sm btn-light border px-3" disabled="@(_resultat.Page <= 1)" @onclick="() => ChangerPage(-1)">
-                <i class="bi bi-chevron-left me-1"></i> Precedent
-            </button>
-            <button class="btn btn-sm btn-light border px-3" disabled="@(_resultat.Page >= _resultat.TotalPages)" @onclick="() => ChangerPage(1)">
-                Suivant <i class="bi bi-chevron-right ms-1"></i>
-            </button>
-        </div>
+    <div class="card-footer bg-transparent border-top py-3 px-3">
+        <Pagination Page="_resultat.Page" PageSize="_resultat.PageSize" TotalItems="_resultat.TotalItems"
+                    Unite="tiers" OnPageChange="AllerPage" OnPageSizeChange="ChangerTaille" />
     </div>
 </div>
 
@@ -489,9 +482,9 @@
         }
     }
 
-    private async Task OnRechercheKeyUp(KeyboardEventArgs e) => await ChargerDonnees();
-
-    private async Task ChangerPage(int delta) { _filtre.Page += delta; await ChargerDonnees(); }
+    private async Task AllerPage(int p) { _filtre.Page = p; await ChargerDonnees(); }
+    private async Task ChangerTaille(int t) { _filtre.PageSize = t; _filtre.Page = 1; await ChargerDonnees(); }
+    private async Task OnRechercheKeyUp(KeyboardEventArgs e) { _filtre.Page = 1; await ChargerDonnees(); }
 
     private async Task OuvrirCreation()
     {
@@ -587,7 +580,7 @@
         _isSubmitting = true;
         try
         {
-            _createModel.TenantId = State.Utilisateur.TenantId;
+            // _createModel.TenantId = State.Utilisateur.TenantId;
             var resultat = await Api.CreerTiersAsync(_createModel);
             if (resultat != null)
             {

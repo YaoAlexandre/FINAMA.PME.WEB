@@ -59,3 +59,52 @@ public class LigneDevisDto
     public decimal MontantTVA { get; set; }
     public decimal MontantTTC { get; set; }
 }
+
+
+// ─── Pipeline Kanban ──────────────────────────────────────────────────────────
+public enum EtapePipeline
+{
+    Nouveau = 0,
+    DevisEnvoye = 1,
+    EnNegociation = 2,
+    Gagne = 3,
+    Perdu = 4
+}
+
+public class OpportuniteDto
+{
+    public Guid Id { get; set; }
+    public string Numero { get; set; } = string.Empty; // OPP-2026-XXX ou numéro de Devis lié
+    public string Titre { get; set; } = string.Empty;
+    public string ClientNom { get; set; } = string.Empty;
+    public decimal Montant { get; set; }
+    public EtapePipeline Etape { get; set; }
+    public Guid? DevisId { get; set; }
+}
+
+public class ChangerEtapeRequest
+{
+    public EtapePipeline NouvelleEtape { get; set; }
+}
+
+// ─── Vue Spécifique Commercial Clients ────────────────────────────────────────
+public class ClientCommercialDto
+{
+    public Guid Id { get; set; }
+    public string Nom { get; set; } = string.Empty;
+    public string Telephone { get; set; } = string.Empty;
+    public string Ville { get; set; } = string.Empty;
+    public string Pays { get; set; } = string.Empty;
+    public int DevisEnCoursCompte { get; set; }
+    public decimal VolumeAffairesTTC { get; set; }
+}
+
+
+public class ArticleDto
+{
+    public Guid Id { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Designation { get; set; } = string.Empty;
+    public decimal PrixUnitaireHT { get; set; }
+    public decimal TauxTVA { get; set; }
+}

@@ -1,7 +1,9 @@
 @page "/plan-comptable"
 @using Finama.Web.Models
 @layout MainLayout
+@using Finama.Web.Shared
 @inject FinamaApiService Api
+@inject NotificationService Notif
 
 <PageTitle>Plan comptable — Finama</PageTitle>
 
@@ -141,17 +143,14 @@
             </table>
         </div>
 
-        <div class="card-footer bg-white py-3 d-flex flex-column flex-sm-row justify-content-between align-items-center gap-3 border-top border-light">
-            <small class="text-muted font-monospace">Page @_page sur @(_comptes?.TotalPages ?? 1) (@(_comptes?.TotalItems ?? 0) comptes au total)</small>
-            <div class="pagination-controls d-flex gap-1.5">
-                <button class="btn btn-sm btn-light border px-3" disabled="@(_page <= 1)" @onclick="PagePrecedente">
-                    <i class="bi bi-chevron-left me-1"></i> Précédent
-                </button>
-                <button class="btn btn-sm btn-light border px-3" disabled="@(_page >= (_comptes?.TotalPages ?? 1))" @onclick="PageSuivante">
-                    Suivant <i class="bi bi-chevron-right ms-1"></i>
-                </button>
+        @if (_comptes is { TotalItems: > 0 })
+        {
+            <div class="card-footer bg-transparent border-top py-3 px-3">
+                <Pagination Page="_comptes.Page" PageSize="_comptes.PageSize" TotalItems="_comptes.TotalItems"
+                            Unite="comptes" OnPageChange="AllerPage" OnPageSizeChange="ChangerTaille"
+                            PageSizes="@(new[] { 25, 50, 100 })" />
             </div>
-        </div>
+        }
     }
 </div>
 
@@ -273,6 +272,7 @@
     private string _filtreClasse = "";
     private string? _recherche;
     private int _page = 1;
+    private int _taille = 50;
     private CompteComptableDto? _compteEdite;
     private CompteComptableDto? _parentSelectionne;
 
@@ -284,25 +284,37 @@
     private async Task ChargerAsync()
     {
         _chargement = true;
-
-        // Sécurité : On s'assure que la page demandée n'est pas aberrante
-        if (_page < 1) _page = 1;
-
-        _comptes = await Api.GetPlanComptableAsync(
-            classe: string.IsNullOrEmpty(_filtreClasse) ? null : _filtreClasse,
-            recherche: _recherche,
-            page: _page,
-            pageSize: 50
-        );
-
-        // Ajustement de sécurité : Si après chargement la page courante dépasse le max de pages réelles
-        if (_comptes is not null && _page > _comptes.TotalPages && _comptes.TotalPages > 0)
+        try
         {
-            _page = _comptes.TotalPages;
-            await ChargerAsync(); // Recharge la dernière page valide
-        }
+            if (_page < 1) _page = 1;
 
-        _chargement = false;
+            var resultat = await Api.GetPlanComptableAsync(
+                classe: string.IsNullOrEmpty(_filtreClasse) ? null : _filtreClasse,
+                recherche: _recherche,
+                page: _page,
+                pageSize: _taille);
+
+            // Page devenue vide (filtre plus restrictif, taille de page changée) : retour à la dernière page valide
+            if (resultat is { TotalPages: > 0 } && _page > resultat.TotalPages)
+            {
+                _page = resultat.TotalPages;
+                resultat = await Api.GetPlanComptableAsync(
+                    classe: string.IsNullOrEmpty(_filtreClasse) ? null : _filtreClasse,
+                    recherche: _recherche,
+                    page: _page,
+                    pageSize: _taille);
+            }
+
+            _comptes = resultat;
+        }
+        catch (Exception)
+        {
+            Notif.ErreurServeur("Plan comptable indisponible");
+        }
+        finally
+        {
+            _chargement = false;
+        }
     }
 
     // 🌟 Correction 1 : Gérer proprement le changement de classe
@@ -321,24 +333,9 @@
         await ChargerAsync();
     }
 
-    // 🌟 Correction 3 : Sécurisation des limites de pages
-    private async Task PageSuivante()
-    {
-        if (_comptes is not null && _page < _comptes.TotalPages)
-        {
-            _page++;
-            await ChargerAsync();
-        }
-    }
+    private async Task AllerPage(int page) { _page = page; await ChargerAsync(); }
 
-    private async Task PagePrecedente()
-    {
-        if (_page > 1)
-        {
-            _page--;
-            await ChargerAsync();
-        }
-    }
+    private async Task ChangerTaille(int taille) { _taille = taille; _page = 1; await ChargerAsync(); }
 
     private void OuvrirCreation()
     {
@@ -384,9 +381,12 @@
         try
         {
             await Api.ChangerStatutCompteAsync(c.Id, !c.EstActif);
+            Notif.Succes(c.EstActif ? $"Le compte {c.Numero} est désactivé : il n'apparaît plus dans les saisies."
+                                    : $"Le compte {c.Numero} est de nouveau actif.",
+                         c.EstActif ? "Compte désactivé" : "Compte activé");
             await ChargerAsync();
         }
-        catch (Exception ex) { _erreur = ex.Message; }
+        catch (Exception ex) { Notif.Erreur(ex.Message, "Changement de statut impossible"); }
     }
 
     private async Task Sauvegarder()
@@ -413,10 +413,14 @@
                     EstActif: bool.Parse(_actif),
                     CompteParentId: _compteEdite.CompteParentId));
             }
+            var creation = _compteEdite is null;
+            var numero = creation ? _numero : _compteEdite!.Numero;
             FermerModal();
+            Notif.Succes(creation ? $"Le compte {numero} a été ajouté au plan comptable." : $"Le compte {numero} a été mis à jour.",
+                         creation ? "Compte créé" : "Compte modifié");
             await ChargerAsync();
         }
-        catch (Exception ex) { _erreur = ex.Message; }
+        catch (Exception ex) { Notif.Erreur(ex.Message, "Enregistrement impossible"); }
         finally { _sauvegarde = false; }
     }
 }

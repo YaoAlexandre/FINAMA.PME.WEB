@@ -1,0 +1,505 @@
+@page "/superadmin/tenants"
+@using Finama.Web.Models
+@using Finama.Web.Services
+@using Finama.Web.Shared
+@attribute [Authorize(Roles = "SuperAdmin")]
+@inject ITenantAdminService TenantService
+@inject NotificationService Notif
+
+<PageTitle>Entreprises | Administration Finama</PageTitle>
+
+<div class="container-fluid py-4 px-2 px-md-4">
+    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-4">
+        <div>
+            <h3 class="fw-bold text-dark mb-1">Entreprises</h3>
+            <p class="text-muted small mb-0">Abonnements, accès, utilisateurs et comptabilité de chaque entreprise.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary btn-sm px-3" href="/superadmin/demandes-acces">
+                <i class="bi bi-inbox me-1"></i> Demandes d'accès
+            </a>
+            <button class="btn btn-outline-primary btn-sm px-3" @onclick="ChargerDonnees" disabled="@chargement">
+                <i class="bi bi-arrow-clockwise me-1 @(chargement ? "spin" : "")"></i> Actualiser
+            </button>
+        </div>
+    </div>
+
+    @if (chargement && stats == null)
+    {
+        <div class="card border-0 shadow-sm p-5 text-center">
+            <div class="spinner-border text-primary mx-auto mb-3" role="status"></div>
+            <p class="text-muted mb-0">Chargement des entreprises...</p>
+        </div>
+    }
+    else
+    {
+        @if (stats != null)
+        {
+            <div class="row g-3 mb-4">
+                <div class="col-6 col-md-3"><div class="card border-0 shadow-sm p-3 h-100">
+                    <span class="text-muted small">Entreprises</span><h2 class="fw-bold m-0 mt-1">@stats.TotalTenants</h2></div></div>
+                <div class="col-6 col-md-3"><div class="card border-0 shadow-sm p-3 h-100 border-start border-success border-4">
+                    <span class="text-muted small">Actives</span><h2 class="fw-bold text-success m-0 mt-1">@stats.TenantsActifs</h2></div></div>
+                <div class="col-6 col-md-3"><div class="card border-0 shadow-sm p-3 h-100 border-start border-danger border-4">
+                    <span class="text-muted small">Suspendues</span><h2 class="fw-bold text-danger m-0 mt-1">@stats.TenantsSuspendus</h2></div></div>
+                <div class="col-6 col-md-3"><div class="card border-0 shadow-sm p-3 h-100 border-start border-info border-4">
+                    <span class="text-muted small">Utilisateurs</span><h2 class="fw-bold text-info m-0 mt-1">@stats.TotalUtilisateurs</h2></div></div>
+            </div>
+        }
+
+        <div class="card border-0 shadow-sm overflow-hidden">
+            <div class="card-header bg-white py-3 border-0">
+                <div class="row g-2 align-items-center">
+                    <div class="col-12 col-lg-7 d-flex flex-wrap gap-2">
+                        @foreach (var (f, libelle, n) in Chips())
+                        {
+                            <button class="btn btn-sm rounded-pill @(filtre == f ? "btn-dark" : "btn-outline-secondary")"
+                                    @onclick="() => { filtre = f; _page = 1; }">
+                                @libelle <span class="opacity-75 ms-1">@n</span>
+                            </button>
+                        }
+                    </div>
+                    <div class="col-12 col-lg-5">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                            <input type="text" class="form-control bg-light border-start-0"
+                                   placeholder="Rechercher par nom, email ou pays"
+                                   @bind="rechercheTerme" @bind:event="oninput" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if (!TenantsFiltres.Any())
+            {
+                <div class="p-5 text-center text-muted">
+                    <i class="bi bi-search fs-2 d-block mb-2"></i>
+                    <p class="mb-2">Aucune entreprise ne correspond à ces critères.</p>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="ReinitialiserFiltres">Réinitialiser les filtres</button>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive d-none d-md-block">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light border-bottom">
+                            <tr class="text-secondary small">
+                                <th>Entreprise</th>
+                                <th>Abonnement</th>
+                                <th>Utilisateurs</th>
+                                <th>Statut</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var t in TenantsPage)
+                            {
+                                var (texte, classe) = Echeance(t);
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold text-dark">@t.Nom</div>
+                                        <div class="small text-muted">@t.Email@(string.IsNullOrEmpty(t.Pays) ? "" : $" — {t.Pays}")</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">@t.Plan</span>
+                                        <div class="small @classe mt-1">@texte</div>
+                                    </td>
+                                    <td><span class="badge bg-secondary-subtle text-secondary border"><i class="bi bi-person me-1"></i>@t.NbUtilisateurs</span></td>
+                                    <td>@BadgeStatut(t.EstActif)</td>
+                                    <td class="text-end">@BoutonsActions(t)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-md-none p-3 d-flex flex-column gap-3">
+                    @foreach (var t in TenantsPage)
+                    {
+                        var (texte, classe) = Echeance(t);
+                        <div class="card border shadow-sm p-3">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <h6 class="fw-bold text-dark mb-0">@t.Nom</h6>
+                                    <span class="small text-muted">@t.Email</span>
+                                </div>
+                                @BadgeStatut(t.EstActif)
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center pt-2 border-top small">
+                                <span><span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1">@t.Plan</span><span class="@classe">@texte</span></span>
+                                <span class="text-muted"><i class="bi bi-person me-1"></i>@t.NbUtilisateurs</span>
+                            </div>
+                            <div class="mt-3 d-flex justify-content-end">@BoutonsActions(t)</div>
+                        </div>
+                    }
+                </div>
+
+                <div class="card-footer bg-transparent border-top py-3 px-3">
+                    <Pagination Page="PageCourante" PageSize="_taille" TotalItems="TenantsFiltres.Count()" Unite="entreprises"
+                                OnPageChange="p => _page = p" OnPageSizeChange="ChangerTaille" />
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@* ===== Fenêtre : abonnement ===== *@
+@if (tenantAbo is not null)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-bold">Activer un abonnement</h5>
+                        <div class="text-muted small">@tenantAbo.Nom</div>
+                    </div>
+                    <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => tenantAbo = null" disabled="@abonnementBusy"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label small fw-medium">Formule</label>
+                    <select class="form-select mb-3" @bind="planChoisi">
+                        @foreach (var p in PlansAbonnement.Liste)
+                        {
+                            <option value="@p.Valeur">@p.Libelle</option>
+                        }
+                    </select>
+
+                    <label class="form-label small fw-medium">Durée à ajouter</label>
+                    <div class="btn-group w-100 mb-2" role="group">
+                        @foreach (var d in new[] { 30, 90, 180, 365 })
+                        {
+                            <button type="button" class="btn btn-sm @(dureeJours == d ? "btn-primary" : "btn-outline-primary")"
+                                    @onclick="() => dureeJours = d">@LibelleDuree(d)</button>
+                        }
+                    </div>
+                    <div class="input-group input-group-sm mb-3">
+                        <input type="number" min="1" class="form-control" @bind="dureeJours" @bind:event="oninput" />
+                        <span class="input-group-text">jours</span>
+                    </div>
+
+                    <div class="rounded bg-light p-3 small">
+                        Échéance actuelle : <strong>@(tenantAbo.AbonnementExpireAt?.ToLocalTime().ToString("dd/MM/yyyy") ?? "aucune")</strong><br />
+                        Nouvelle échéance : <strong class="text-success">@NouvelleEcheance.ToLocalTime().ToString("dd/MM/yyyy")</strong>
+                        <div class="text-muted mt-1">La durée est ajoutée à l'échéance en cours si elle n'est pas dépassée.</div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button class="btn btn-light" @onclick="() => tenantAbo = null" disabled="@abonnementBusy">Annuler</button>
+                    <button class="btn btn-primary" @onclick="EnregistrerAbonnement" disabled="@(abonnementBusy || dureeJours <= 0)">
+                        @if (abonnementBusy) { <span class="spinner-border spinner-border-sm me-1" role="status"></span> }
+                        Activer l'abonnement
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ===== Fenêtre : utilisateurs ===== *@
+@if (tenantUsers is not null)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-bold">Utilisateurs</h5>
+                        <div class="text-muted small">@tenantUsers.Nom</div>
+                    </div>
+                    <button type="button" class="btn-close" aria-label="Fermer" @onclick="FermerUtilisateurs"></button>
+                </div>
+                <div class="modal-body">
+                    @if (utilisateurs is null)
+                    {
+                        <div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></div>
+                    }
+                    else if (!utilisateurs.Any())
+                    {
+                        <p class="text-center text-muted py-4 mb-0">Cette entreprise n'a aucun utilisateur.</p>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var u in utilisateurs)
+                            {
+                                <div class="list-group-item px-0 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                    <div>
+                                        <div class="fw-semibold @(u.EstActif ? "" : "text-muted text-decoration-line-through")">@u.Prenom @u.Nom</div>
+                                        <div class="small text-muted">@u.Email</div>
+                                        <div class="small text-muted">
+                                            <span class="badge bg-light text-dark border me-1">@u.Role</span>
+                                            @(u.DerniereConnexionAt.HasValue ? $"Dernière connexion le {u.DerniereConnexionAt.Value.ToLocalTime():dd/MM/yyyy HH:mm}" : "Jamais connecté")
+                                        </div>
+                                    </div>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-secondary" title="@(u.EstActif ? "Désactiver" : "Réactiver")"
+                                                @onclick="() => BasculerUtilisateur(u)">
+                                            <i class="bi @(u.EstActif ? "bi-pause-circle" : "bi-play-circle")"></i>
+                                        </button>
+                                        <button class="btn btn-outline-secondary" title="Réinitialiser le mot de passe"
+                                                @onclick="() => DemanderReinitialisation(u)">
+                                            <i class="bi bi-key"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger" title="Supprimer"
+                                                @onclick="() => DemanderSuppression(u)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<ConfirmDialog Visible="@(confirmation is not null)"
+               Titre="@confirmation?.Titre"
+               Message="@confirmation?.Message"
+               LibelleConfirmer="@(confirmation?.Libelle ?? "Confirmer")"
+               Style="@(confirmation?.Style ?? "primary")"
+               Busy="confirmationBusy"
+               OnConfirm="ExecuterConfirmation"
+               OnCancel="() => confirmation = null" />
+
+@code {
+    private enum Filtre { Tous, Actifs, Suspendus, Echeance }
+    private record Confirmation(string Titre, string Message, string Libelle, string Style, Func<Task> Action);
+
+    private List<TenantAdminDto> tenants = new();
+    private DashboardStatsDto? stats;
+    private bool chargement = true;
+
+    private string rechercheTerme = string.Empty;
+    private Filtre filtre = Filtre.Tous;
+
+    private Confirmation? confirmation;
+    private bool confirmationBusy;
+
+    private TenantAdminDto? tenantAbo;
+    private int planChoisi = PlansAbonnement.Liste[0].Valeur;
+    private int dureeJours = 30;
+    private bool abonnementBusy;
+
+    private TenantAdminDto? tenantUsers;
+    private List<UtilisateurAdminDto>? utilisateurs;
+
+    private IEnumerable<TenantAdminDto> TenantsFiltres => tenants
+        .Where(t => filtre switch
+        {
+            Filtre.Actifs => t.EstActif,
+            Filtre.Suspendus => !t.EstActif,
+            Filtre.Echeance => t.JoursRestants is <= 7,
+            _ => true
+        })
+        .Where(t => string.IsNullOrWhiteSpace(rechercheTerme)
+            || t.Nom.Contains(rechercheTerme, StringComparison.OrdinalIgnoreCase)
+            || t.Email.Contains(rechercheTerme, StringComparison.OrdinalIgnoreCase)
+            || t.Pays.Contains(rechercheTerme, StringComparison.OrdinalIgnoreCase));
+
+    private DateTime NouvelleEcheance
+    {
+        get
+        {
+            var actuelle = tenantAbo?.AbonnementExpireAt;
+            var depart = actuelle.HasValue && actuelle.Value > DateTime.UtcNow ? actuelle.Value : DateTime.UtcNow;
+            return depart.AddDays(Math.Max(dureeJours, 0));
+        }
+    }
+
+    private IEnumerable<(Filtre, string, int)> Chips() => new[]
+    {
+        (Filtre.Tous, "Toutes", tenants.Count),
+        (Filtre.Actifs, "Actives", tenants.Count(t => t.EstActif)),
+        (Filtre.Suspendus, "Suspendues", tenants.Count(t => !t.EstActif)),
+        (Filtre.Echeance, "Échéance sous 7 jours", tenants.Count(t => t.JoursRestants is <= 7))
+    };
+
+    protected override async Task OnInitializedAsync() => await ChargerDonnees();
+
+    private async Task ChargerDonnees()
+    {
+        chargement = true;
+        try
+        {
+            stats = await TenantService.ObtenirStatsAsync();
+            tenants = await TenantService.ObtenirTenantsAsync();
+        }
+        catch (Exception ex)
+        {
+            Notifier($"Erreur de chargement : {ex.Message}", "danger");
+        }
+        finally
+        {
+            chargement = false;
+        }
+    }
+
+    private int _page = 1;
+    private int _taille = 10;
+    private int PageCourante => PagingExtensions.PageValide(_page, TenantsFiltres.Count(), _taille);
+    private IEnumerable<TenantAdminDto> TenantsPage => TenantsFiltres.Page(PageCourante, _taille);
+    private void ChangerTaille(int taille) { _taille = taille; _page = 1; }
+
+    private void ReinitialiserFiltres() { rechercheTerme = string.Empty; filtre = Filtre.Tous; _page = 1; }
+
+    // ---- Fragments partagés tableau / cartes ----
+    private RenderFragment BadgeStatut(bool actif) => @<span class="badge border px-2 py-1 @(actif ? "bg-success-subtle text-success border-success-subtle" : "bg-danger-subtle text-danger border-danger-subtle")">
+        <i class="bi @(actif ? "bi-check-circle-fill" : "bi-slash-circle-fill") me-1"></i>@(actif ? "Actif" : "Suspendu")</span>;
+
+    private RenderFragment BoutonsActions(TenantAdminDto t) => @<div class="btn-group btn-group-sm">
+        <button class="btn btn-outline-primary" title="Activer ou prolonger l'abonnement" @onclick="() => OuvrirAbonnement(t)">
+            <i class="bi bi-calendar2-check"></i>
+        </button>
+        <button class="btn btn-outline-secondary" title="Voir les utilisateurs" @onclick="() => OuvrirUtilisateurs(t)">
+            <i class="bi bi-people"></i>
+        </button>
+        <button class="btn btn-outline-secondary" title="Initialiser le plan comptable" @onclick="() => DemanderInitCompta(t)">
+            <i class="bi bi-journal-check"></i>
+        </button>
+        <button class="btn @(t.EstActif ? "btn-outline-danger" : "btn-outline-success")"
+                title="@(t.EstActif ? "Suspendre l'accès" : "Réactiver l'accès")" @onclick="() => DemanderBascule(t)">
+            <i class="bi @(t.EstActif ? "bi-pause-circle" : "bi-play-circle")"></i>
+        </button>
+    </div>;
+
+    private static (string Texte, string Classe) Echeance(TenantAdminDto t)
+    {
+        if (t.JoursRestants is null) return ("Sans échéance", "text-muted");
+        var j = t.JoursRestants.Value;
+        return j < 0 ? ($"Expiré depuis {-j} j", "text-danger fw-semibold")
+             : j == 0 ? ("Expire aujourd'hui", "text-danger fw-semibold")
+             : j <= 7 ? ($"Expire dans {j} j", "text-warning-emphasis fw-semibold")
+             : ($"Jusqu'au {t.AbonnementExpireAt!.Value.ToLocalTime():dd/MM/yyyy}", "text-muted");
+    }
+
+    private static string LibelleDuree(int jours) => jours switch { 30 => "1 mois", 90 => "3 mois", 180 => "6 mois", 365 => "1 an", _ => $"{jours} j" };
+
+    // ---- Confirmation générique ----
+    private async Task ExecuterConfirmation()
+    {
+        if (confirmation is null) return;
+        confirmationBusy = true;
+        try { await confirmation.Action(); }
+        finally { confirmationBusy = false; confirmation = null; }
+    }
+
+    private async Task<bool> Executer(Func<Task<ResultatApi>> action)
+    {
+        try
+        {
+            var r = await action();
+            Notifier(r.Message, r.Succes ? "success" : "danger");
+            return r.Succes;
+        }
+        catch (Exception ex)
+        {
+            Notifier($"Erreur de communication : {ex.Message}", "danger");
+            return false;
+        }
+    }
+
+    // ---- Entreprises ----
+    private void DemanderBascule(TenantAdminDto t)
+    {
+        var suspendre = t.EstActif;
+        confirmation = new Confirmation(
+            suspendre ? "Suspendre l'accès ?" : "Réactiver l'accès ?",
+            suspendre
+                ? $"Les {t.NbUtilisateurs} utilisateur(s) de « {t.Nom} » seront déconnectés et ne pourront plus se connecter."
+                : $"Les utilisateurs de « {t.Nom} » pourront de nouveau se connecter.",
+            suspendre ? "Suspendre" : "Réactiver",
+            suspendre ? "danger" : "success",
+            async () =>
+            {
+                if (await Executer(() => TenantService.ChangerStatutTenantAsync(t.Id, !t.EstActif)))
+                    await ChargerDonnees();
+            });
+    }
+
+    private void DemanderInitCompta(TenantAdminDto t)
+    {
+        confirmation = new Confirmation(
+            "Initialiser la comptabilité ?",
+            $"Crée les classes, le plan de comptes OHADA et l'exercice de l'année pour « {t.Nom} ». Ce qui existe déjà n'est pas modifié.",
+            "Initialiser", "primary",
+            async () => await Executer(() => TenantService.InitialiserComptabiliteAsync(t.Id)));
+    }
+
+    // ---- Abonnement ----
+    private void OuvrirAbonnement(TenantAdminDto t)
+    {
+        tenantAbo = t;
+        dureeJours = 30;
+        planChoisi = PlansAbonnement.Liste.FirstOrDefault(p => p.Libelle.Equals(t.Plan, StringComparison.OrdinalIgnoreCase))?.Valeur
+                     ?? PlansAbonnement.Liste[0].Valeur;
+    }
+
+    private async Task EnregistrerAbonnement()
+    {
+        if (tenantAbo is null || dureeJours <= 0) return;
+        abonnementBusy = true;
+        try
+        {
+            var ok = await Executer(() => TenantService.ActiverAbonnementAsync(
+                tenantAbo.Id, new ActiverAbonnementRequest { Plan = planChoisi, DureeJours = dureeJours }));
+            if (ok) { tenantAbo = null; await ChargerDonnees(); }
+        }
+        finally { abonnementBusy = false; }
+    }
+
+    // ---- Utilisateurs ----
+    private async Task OuvrirUtilisateurs(TenantAdminDto t)
+    {
+        tenantUsers = t;
+        utilisateurs = null;
+        try { utilisateurs = await TenantService.ObtenirUtilisateursAsync(t.Id); }
+        catch (Exception ex) { Notifier($"Impossible de charger les utilisateurs : {ex.Message}", "danger"); tenantUsers = null; }
+    }
+
+    private async Task FermerUtilisateurs()
+    {
+        tenantUsers = null;
+        utilisateurs = null;
+        await ChargerDonnees();
+    }
+
+    private async Task BasculerUtilisateur(UtilisateurAdminDto u)
+    {
+        if (await Executer(() => TenantService.ChangerStatutUtilisateurAsync(u.Id, !u.EstActif)))
+            u.EstActif = !u.EstActif;
+    }
+
+    private void DemanderReinitialisation(UtilisateurAdminDto u)
+    {
+        confirmation = new Confirmation(
+            "Réinitialiser le mot de passe ?",
+            $"Un mot de passe temporaire sera envoyé à {u.Email}. Ses sessions ouvertes seront fermées.",
+            "Réinitialiser", "primary",
+            async () => await Executer(() => TenantService.ReinitialiserMotDePasseAsync(u.Id)));
+    }
+
+    private void DemanderSuppression(UtilisateurAdminDto u)
+    {
+        confirmation = new Confirmation(
+            "Supprimer l'utilisateur ?",
+            $"{u.Prenom} {u.Nom} ne pourra plus se connecter. L'adresse {u.Email} ne pourra pas être réutilisée.",
+            "Supprimer", "danger",
+            async () =>
+            {
+                if (await Executer(() => TenantService.SupprimerUtilisateurAsync(u.Id)))
+                    utilisateurs?.Remove(u);
+            });
+    }
+
+    private void Notifier(string message, string type)
+    {
+        if (type == "success") Notif.Succes(message, "Terminé");
+        else Notif.Erreur(message);
+    }
+}

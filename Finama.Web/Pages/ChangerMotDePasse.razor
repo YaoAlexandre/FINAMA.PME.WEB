@@ -1,0 +1,106 @@
+﻿@page "/changer-mot-de-passe"
+@using Finama.Web.Models
+@using Finama.Web.Services
+@layout EmptyLayout
+@inject FinamaApiService Api
+@inject NavigationManager Nav
+@inject AppState State
+
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-header">
+            <div class="brand-logo">F</div>
+            <h1 class="auth-title">Nouveau mot de passe</h1>
+            <p style="font-size: 13px; color: #666; margin-top: 5px;">
+                Pour des raisons de sécurité, vous devez modifier votre mot de passe avant de continuer.
+            </p>
+        </div>
+
+        <EditForm Model="_model" OnValidSubmit="ValiderChangementMotDePasse">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label>Mot de passe actuel / temporaire</label>
+                <InputText @bind-Value="_model.AncienMotDePasseOuCode" type="password" class="form-control" />
+                <ValidationMessage For="@(() => _model.AncienMotDePasseOuCode)" style="color:red; font-size: 12px;" />
+            </div>
+
+            <div class="form-group">
+                <label>Nouveau mot de passe</label>
+                <InputText @bind-Value="_model.NouveauMotDePasse" type="password" class="form-control" />
+                <ValidationMessage For="@(() => _model.NouveauMotDePasse)" style="color:red; font-size: 12px;" />
+            </div>
+
+            <div class="form-group">
+                <label>Confirmer le nouveau mot de passe</label>
+                <InputText @bind-Value="_model.ConfirmerMotDePasse" type="password" class="form-control" />
+                <ValidationMessage For="@(() => _model.ConfirmerMotDePasse)" style="color:red; font-size: 12px;" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <p style="color:red; font-size: 13px; margin-bottom: 10px;">⚠️ @_errorMessage</p>
+            }
+
+            @if (!string.IsNullOrEmpty(_successMessage))
+            {
+                <p style="color:green; font-size: 13px; margin-bottom: 10px;">✅ @_successMessage</p>
+            }
+
+            <button type="submit" class="btn-auth" disabled="@_isSubmitting" style="margin-top: 15px;">
+                @if (_isSubmitting)
+                {
+                    <span>Mise à jour en cours...</span>
+                }
+                else
+                {
+                    <span>Enregistrer le mot de passe</span>
+                }
+            </button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private ChangerMotDePasseModel _model = new();
+    private bool _isSubmitting = false;
+    private string? _errorMessage;
+    private string? _successMessage;
+
+    private async Task ValiderChangementMotDePasse()
+    {
+        _isSubmitting = true;
+        _errorMessage = null;
+        _successMessage = null;
+
+        try
+        {
+            var result = await Api.ChangerMotDePasseAsync(_model);
+
+            if (result != null && result.IsSuccess)
+            {
+                _successMessage = "Mot de passe mis à jour avec succès. Redirection...";
+
+                if (State.Utilisateur != null)
+                {
+                    State.Utilisateur = State.Utilisateur with { DoitChangerMotDePasse = false };
+                }
+
+                await Task.Delay(1500);
+                Nav.NavigateTo("/");
+            }
+            else
+            {
+                _errorMessage = result?.Message ?? "Échec de la mise à jour du mot de passe.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Erreur : {ex.Message}";
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}

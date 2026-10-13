@@ -13,7 +13,7 @@
 <div class="auth-container">
     <div class="auth-card">
         <div class="auth-header">
-            <div class="brand-logo">F</div>
+            <img class="auth-brand" src="images/logo-full-light.svg" alt="Finama" />
             <h1 class="auth-title">
                 @(_enAttenteDeOtp ? "Vérification de sécurité" : "Bienvenue sur Finama")
             </h1>
@@ -97,19 +97,6 @@
     private string? _errorMessage;
     private bool _isResending = false;
 
-    protected override async Task OnInitializedAsync()
-    {
-        var estConfiance = await LocalStorage.GetItemAsync<string>("device_trusted");
-        var expiration = await LocalStorage.GetItemAsync<string>("device_expiry");
-
-        if (estConfiance == "true" && DateTime.Parse(expiration) > DateTime.UtcNow)
-        {
-            // ATTENTION : C'est ici le problème.
-            // Si tu bypasses l'API ici, tu ne peux pas te connecter car
-            // l'API n'aura pas généré ton JWT.
-        }
-    }
-
     private async Task GererSoumissionGlobale()
     {
         _isSubmitting = true;
@@ -120,22 +107,19 @@
             if (!_enAttenteDeOtp)
             {
                 // ─── ÉTAPE 1 : Appel initial au Login ───
-                // Note adaptative : Ton Api.LoginAsync doit renvoyer un indicateur pour savoir si l'OTP est activé
                 var resultatLogin = await Api.LoginAsync(_model.Email, _model.MotDePasse);
 
                 if (resultatLogin != null)
                 {
-                    // Si l'API renvoie un succès mais que l'AccessToken est vide,
-                    // ça veut dire que le mot de passe est bon et qu'on attend l'OTP !
+                    // Si l'AccessToken est vide, le mot de passe est valide et l'OTP est requis
                     if (string.IsNullOrEmpty(resultatLogin.AccessToken))
                     {
                         _enAttenteDeOtp = true;
                     }
                     else
                     {
-                        // Si l'API renvoie directement un token (ex: en dev ou si OTP désactivé), on connecte direct
-                        State.Utilisateur = resultatLogin;
-                        Nav.NavigateTo("/");
+                        // Connexion directe (si OTP désactivé ou appareil de confiance serveur)
+                        await TraiterConnexionReussie(resultatLogin);
                     }
                 }
                 else
@@ -145,32 +129,18 @@
             }
             else
             {
-                // ─── ÉTAPE 2 : Appel à l'Endpoint de vérification de l'OTP ───
+                // ─── ÉTAPE 2 : Vérification de l'OTP ───
                 if (string.IsNullOrWhiteSpace(_codeOtp) || _codeOtp.Length < 6)
                 {
                     _errorMessage = "Veuillez saisir un code OTP valide à 6 chiffres.";
                     return;
                 }
 
-                // Ici, tu appelles ton nouvel endpoint Swagger 'verify-otp' que ton ApiService doit mapper
                 var authData = await Api.VerifyOtpAsync(_model.Email, _codeOtp);
 
                 if (authData != null)
                 {
-                    State.Utilisateur = authData;
-                    await LocalStorage.SetItemAsync("accessToken", authData.AccessToken);
-                    State.Utilisateur = authData;
-                    // Dans ta méthode de validation après succès de l'OTP
-                    await LocalStorage.SetItemAsync("device_trusted", "true");
-                    await LocalStorage.SetItemAsync("device_expiry", DateTime.UtcNow.AddDays(30).ToString());
-
-                    // 3. 🛡️ LA PARTIE MANQUANTE : Notifier le système de sécurité
-                    // Tu dois caster le provider vers ta classe personnalisée
-                    if (AuthStateProvider is CustomAuthStateProvider customProvider)
-                    {
-                        customProvider.NotifyUserAuthentication(authData.AccessToken);
-                    }
-                    Nav.NavigateTo("/");
+                    await TraiterConnexionReussie(authData);
                 }
                 else
                 {
@@ -180,7 +150,6 @@
         }
         catch (Exception ex)
         {
-            // Capture proprement les messages personnalisés renvoyés par ton middleware d'exception (ex: "Le code OTP a expiré.")
             _errorMessage = ex.Message.Contains("401") || ex.Message.Contains("Unauthorized")
                 ? "Échec de l'authentification. Vérifiez vos informations."
                 : $"Erreur : {ex.Message}";
@@ -192,21 +161,44 @@
         }
     }
 
+    private async Task TraiterConnexionReussie(AuthResponse authData)
+    {
+        // 1. Mise à jour du State et du LocalStorage
+        State.Utilisateur = authData;
+        await LocalStorage.SetItemAsync("accessToken", authData.AccessToken);
+        await LocalStorage.SetItemAsync("device_trusted", "true");
+        await LocalStorage.SetItemAsync("device_expiry", DateTime.UtcNow.AddDays(30).ToString());
+
+        // 2. Notification de l'état d'authentification à Blazor
+        if (AuthStateProvider is CustomAuthStateProvider customProvider)
+        {
+            customProvider.NotifyUserAuthentication(authData.AccessToken);
+        }
+
+        // 3. Redirection conditionnelle selon l'obligation de changer le mot de passe
+        if (authData.DoitChangerMotDePasse)
+        {
+            Nav.NavigateTo("/changer-mot-de-passe");
+        }
+        else
+        {
+            Nav.NavigateTo("/");
+        }
+    }
+
     private async Task GererRenvoiOtp()
     {
         _isResending = true;
-        _isSubmitting = true; // Bloque aussi le bouton principal pour éviter le spam
+        _isSubmitting = true;
         _errorMessage = null;
-        _codeOtp = string.Empty; // On vide l'ancien code expiré
+        _codeOtp = string.Empty;
 
         try
         {
-            // On ré-appelle simplement le Login initial avec l'email et le mot de passe déjà stockés dans le modèle
             var resultatLogin = await Api.LoginAsync(_model.Email, _model.MotDePasse);
 
             if (resultatLogin != null && string.IsNullOrEmpty(resultatLogin.AccessToken))
             {
-                // Le mail est reparti avec un nouveau code ! On affiche un petit message de succès temporaire
                 _errorMessage = "✅ Un nouveau code OTP a été envoyé à votre adresse e-mail.";
             }
             else

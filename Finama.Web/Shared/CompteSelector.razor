@@ -1,0 +1,171 @@
+@using System.Globalization
+@using System.Text
+@using Finama.Web.Models
+
+@* Sélecteur de compte : tapez un numéro (521) ou un mot (banque, client).
+   Flèches haut/bas pour naviguer, Entrée pour choisir, Échap pour fermer. *@
+
+<div class="cpt-sel">
+    @if (!_ouvert && Valeur is not null)
+    {
+        <button type="button" class="cpt-chip" @onclick="Ouvrir" title="@Valeur.Code — @Valeur.Libelle">
+            <span class="cpt-dot cpt-c@(Classe(Valeur.Code))" aria-hidden="true"></span>
+            <span class="cpt-code">@Valeur.Code</span>
+            <span class="cpt-lib">@Valeur.Libelle</span>
+            <i class="bi bi-pencil ms-auto text-muted small" aria-hidden="true"></i>
+        </button>
+    }
+    else
+    {
+        <input @ref="_input" type="text" autocomplete="off" role="combobox" aria-expanded="@_ouvert" aria-autocomplete="list"
+               class="form-control form-control-sm @(Invalide ? "is-invalid" : "")"
+               placeholder="@Placeholder" value="@_recherche"
+               @oninput="OnInput" @onfocus="Ouvrir" @onblur="Fermer" @onkeydown="OnKey" />
+
+        @if (_ouvert)
+        {
+            <ul class="cpt-liste shadow" role="listbox">
+                @if (!_resultats.Any())
+                {
+                    <li class="cpt-vide">Aucun compte ne correspond à « @_recherche ».</li>
+                }
+                else
+                {
+                    @for (var i = 0; i < _resultats.Count; i++)
+                    {
+                        var index = i;
+                        var c = _resultats[i];
+                        <li role="option" aria-selected="@(index == _actif)"
+                            class="cpt-item @(index == _actif ? "actif" : "")"
+                            @onmousedown="() => Choisir(c)" @onmousedown:preventDefault>
+                            <span class="cpt-dot cpt-c@(Classe(c.Code))" aria-hidden="true"></span>
+                            <span class="cpt-code">@Surligner(c.Code)</span>
+                            <span class="cpt-lib">@Surligner(c.Libelle)</span>
+                            <span class="cpt-classe">@NomClasse(c.Code)</span>
+                        </li>
+                    }
+                    @if (_nbCorrespondances > _resultats.Count)
+                    {
+                        <li class="cpt-vide">+ @(_nbCorrespondances - _resultats.Count) autres : précisez votre recherche.</li>
+                    }
+                }
+            </ul>
+        }
+    }
+</div>
+
+@code {
+    private const int MaxResultats = 40;
+
+    [Parameter] public IReadOnlyList<CompteSelectDto> Comptes { get; set; } = Array.Empty<CompteSelectDto>();
+    [Parameter] public Guid Value { get; set; }
+    [Parameter] public EventCallback<Guid> ValueChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Numéro ou nom du compte";
+    [Parameter] public bool Invalide { get; set; }
+
+    private ElementReference _input;
+    private bool _ouvert;
+    private bool _focusEnAttente;
+    private string _recherche = string.Empty;
+    private int _actif;
+    private int _nbCorrespondances;
+    private List<CompteSelectDto> _resultats = new();
+
+    private CompteSelectDto? Valeur => Value == Guid.Empty ? null : Comptes.FirstOrDefault(c => c.Id == Value);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusEnAttente)
+        {
+            _focusEnAttente = false;
+            await _input.FocusAsync();
+        }
+    }
+
+    private void Ouvrir()
+    {
+        if (!_ouvert && Valeur is not null) _focusEnAttente = true; // le chip devient un champ de saisie
+        _ouvert = true;
+        Rechercher();
+    }
+
+    private void Fermer()
+    {
+        _ouvert = false;
+        _recherche = string.Empty;
+    }
+
+    private void OnInput(ChangeEventArgs e)
+    {
+        _recherche = e.Value?.ToString() ?? string.Empty;
+        _ouvert = true;
+        Rechercher();
+    }
+
+    private void Rechercher()
+    {
+        var q = Normaliser(_recherche);
+        var correspondances = string.IsNullOrEmpty(q)
+            ? Comptes
+            : Comptes.Where(c => Normaliser(c.Code).StartsWith(q) || Normaliser(c.Code).Contains(q) || Normaliser(c.Libelle).Contains(q));
+
+        // Les comptes dont le numéro commence par la saisie passent en premier
+        var triees = correspondances
+            .OrderByDescending(c => !string.IsNullOrEmpty(q) && Normaliser(c.Code).StartsWith(q))
+            .ThenBy(c => c.Code, StringComparer.Ordinal)
+            .ToList();
+
+        _nbCorrespondances = triees.Count;
+        _resultats = triees.Take(MaxResultats).ToList();
+        _actif = 0;
+    }
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "ArrowDown": _ouvert = true; _actif = Math.Min(_actif + 1, Math.Max(_resultats.Count - 1, 0)); break;
+            case "ArrowUp": _actif = Math.Max(_actif - 1, 0); break;
+            case "Enter": if (_ouvert && _resultats.Count > 0) await Choisir(_resultats[_actif]); break;
+            case "Escape": Fermer(); break;
+        }
+    }
+
+    private async Task Choisir(CompteSelectDto compte)
+    {
+        _ouvert = false;
+        _recherche = string.Empty;
+        await ValueChanged.InvokeAsync(compte.Id);
+    }
+
+    // ---- Présentation ----
+    private static int Classe(string code) => code.Length > 0 && char.IsDigit(code[0]) ? code[0] - '0' : 0;
+
+    private static string NomClasse(string code) => Classe(code) switch
+    {
+        1 => "Capitaux", 2 => "Immobilisations", 3 => "Stocks", 4 => "Tiers",
+        5 => "Trésorerie", 6 => "Charges", 7 => "Produits", 8 => "Autres charges et produits", _ => ""
+    };
+
+    private static string Normaliser(string s)
+    {
+        var d = s.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(d.Length);
+        foreach (var ch in d)
+            if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark) sb.Append(ch);
+        return sb.ToString();
+    }
+
+    // Met en évidence la partie recherchée
+    private RenderFragment Surligner(string texte) => builder =>
+    {
+        var q = _recherche.Trim();
+        var i = q.Length == 0 ? -1 : texte.IndexOf(q, StringComparison.OrdinalIgnoreCase);
+        if (i < 0) { builder.AddContent(0, texte); return; }
+        builder.AddContent(1, texte[..i]);
+        builder.OpenElement(2, "mark");
+        builder.AddContent(3, texte.Substring(i, q.Length));
+        builder.CloseElement();
+        builder.AddContent(4, texte[(i + q.Length)..]);
+    };
+}

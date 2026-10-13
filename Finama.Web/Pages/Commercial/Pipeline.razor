@@ -1,0 +1,173 @@
+﻿@page "/commercial/pipeline"
+@using Finama.Web.Models
+@using Finama.Web.Services
+@inject DevisApiService Api
+@inject NavigationManager Nav
+
+<div class="page-wrapper position-relative">
+    <!-- En-tête cloné sur l'identité Finama -->
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="page-title"><i class="bi bi-funnel me-2 text-primary"></i>Pipeline Opportunités</h2>
+            <p class="page-subtitle text-muted">Suivez et faites évoluer vos négociations commerciales étape par étape</p>
+        </div>
+        <button class="btn btn-primary shadow-sm px-4" @onclick='() => Nav.NavigateTo("/commercial/devis/nouveau")'>
+            <i class="bi bi-plus-lg me-2"></i>Nouveau Devis
+        </button>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else
+    {
+        <!-- Container Kanban Horizontal -->
+        <div class="d-flex gap-3 align-items-start pb-3" style="overflow-x: auto; min-height: 70vh;">
+            @foreach (EtapePipeline etape in Enum.GetValues(typeof(EtapePipeline)))
+            {
+                var oppsDeLEtape = _opportunites.Where(o => o.Etape == etape).ToList();
+
+                <!-- Colonne de flux réalignée graphiquement -->
+                <div class="kanban-column bg-light rounded-3 p-3 shadow-sm border-0" style="min-width: 290px; width: 290px; background-color: #f8f9fa!important;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="fw-bold text-uppercase small text-muted font-monospace" style="letter-spacing: 0.5px;">@ObtenirLibelleEtape(etape)</span>
+                        <span class="badge @ObtenirClasseBadge(etape) rounded-pill px-2">@oppsDeLEtape.Count</span>
+                    </div>
+
+                    <div class="kanban-cards d-flex flex-column gap-2" style="min-height: 50vh;">
+                        @if (!oppsDeLEtape.Any())
+                        {
+                            <div class="text-center text-muted py-4 small fst-italic bg-white rounded-3 border border-dashed opacity-70">
+                                Aucune affaire ici
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var opp in oppsDeLEtape)
+                            {
+                                <!-- Carte Kanban style "Finama Users List" -->
+                                <div class="card border-0 shadow-sm p-3 kanban-card border-start border-4 @ObtenirClasseBordure(etape)"
+                                     @onclick="() => AllerAuDocument(opp)">
+
+                                    <div class="d-flex justify-content-between align-items-start mb-1">
+                                        <span class="font-monospace small text-secondary" style="font-size: 0.75rem;">@opp.Numero</span>
+
+                                        <!-- Actions rapides -->
+                                        <div class="dropdown" @onclick:stopPropagation>
+                                            <button class="btn btn-sm p-0 text-muted border-0" type="button" data-bs-toggle="dropdown">
+                                                <i class="bi bi-three-dots-vertical"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 py-1">
+                                                @foreach (EtapePipeline dest in Enum.GetValues(typeof(EtapePipeline)))
+                                                {
+                                                    if (dest != etape)
+                                                    {
+                                                        <li>
+                                                            <button class="dropdown-item small py-1" @onclick="() => Deplacer(opp.Id, dest)">
+                                                                Transférer vers : @ObtenirLibelleEtape(dest)
+                                                            </button>
+                                                        </li>
+                                                    }
+                                                }
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    <div class="fw-bold text-dark text-truncate mb-2" style="font-size: 0.9rem;">@opp.Titre</div>
+
+                                    <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top border-light">
+                                        <div class="d-flex align-items-center text-truncate me-2">
+                                            <div class="avatar bg-secondary-subtle text-secondary rounded-circle d-flex align-items-center justify-content-center fw-bold me-2" style="width: 22px; height: 22px; font-size: 0.7rem;">
+                                                @opp.ClientNom[0].ToString().ToUpper()
+                                            </div>
+                                            <span class="text-muted text-truncate small" style="font-size: 0.8rem;">@opp.ClientNom</span>
+                                        </div>
+                                        <span class="fw-bold text-primary small text-nowrap">@opp.Montant.ToString("N0") XOF</span>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .kanban-column {
+        max-height: 75vh;
+        overflow-y: auto;
+    }
+
+    .kanban-card {
+        cursor: pointer;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        background: #fff;
+        border-radius: 8px !important;
+    }
+
+        .kanban-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 .35rem .95rem rgba(0,0,0,.08) !important;
+        }
+
+    .border-dashed {
+        border-style: dashed !important;
+    }
+</style>
+
+@code {
+    private List<OpportuniteDto> _opportunites = new();
+    private bool _isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Données d'exemple pour l'identité visuelle
+        _opportunites = new List<OpportuniteDto> {
+            new() { Id = Guid.NewGuid(), Numero = "OPP-2026-01", Titre = "Audit SecOps & Infra", ClientNom = "Sahel Telecom", Montant = 4500000, Etape = EtapePipeline.Nouveau },
+            new() { Id = Guid.NewGuid(), Numero = "OPP-2026-02", Titre = "Déploiement Module PayHub", ClientNom = "Banque BCSTP", Montant = 12500000, Etape = EtapePipeline.DevisEnvoye }
+        };
+    }
+
+    private void Deplacer(Guid id, EtapePipeline dest)
+    {
+        var opp = _opportunites.FirstOrDefault(o => o.Id == id);
+        if (opp != null) opp.Etape = dest;
+    }
+
+    private void AllerAuDocument(OpportuniteDto opp) { /* Navigation */ }
+
+    private string ObtenirLibelleEtape(EtapePipeline etape) => etape switch
+    {
+        EtapePipeline.Nouveau => "Nouveau",
+        EtapePipeline.DevisEnvoye => "Devis Envoyé",
+        EtapePipeline.EnNegociation => "Négociation",
+        EtapePipeline.Gagne => "Gagné 🎉",
+        EtapePipeline.Perdu => "Perdu ❌",
+        _ => etape.ToString()
+    };
+
+    private string ObtenirClasseBadge(EtapePipeline etape) => etape switch
+    {
+        EtapePipeline.Nouveau => "bg-secondary text-white",
+        EtapePipeline.DevisEnvoye => "bg-info text-dark",
+        EtapePipeline.EnNegociation => "bg-warning text-dark",
+        EtapePipeline.Gagne => "bg-success text-white",
+        EtapePipeline.Perdu => "bg-danger text-white",
+        _ => "bg-light text-dark"
+    };
+
+    private string ObtenirClasseBordure(EtapePipeline etape) => etape switch
+    {
+        EtapePipeline.Nouveau => "border-secondary",
+        EtapePipeline.DevisEnvoye => "border-info",
+        EtapePipeline.EnNegociation => "border-warning",
+        EtapePipeline.Gagne => "border-success",
+        EtapePipeline.Perdu => "border-danger",
+        _ => ""
+    };
+}

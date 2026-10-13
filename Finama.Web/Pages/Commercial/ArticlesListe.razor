@@ -1,0 +1,167 @@
+﻿@page "/commercial/articles"
+@using Finama.Web.Models
+@using Finama.Web.Services
+@using Radzen
+@inject DevisApiService Api
+@inject NavigationManager Nav
+@inject NotificationService NotificationService
+
+<div class="page-wrapper position-relative">
+    <!-- En-tête standardisé Finama -->
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="page-title"><i class="bi bi-box-seam me-2 text-primary"></i>Articles & Services</h2>
+            <p class="page-subtitle text-muted">Gérez votre catalogue de produits et prestations de services</p>
+        </div>
+        <button class="btn btn-primary shadow-sm px-4" @onclick="() => _afficherFormulaire = true">
+            <i class="bi bi-plus-circle-fill me-2"></i>Nouvel Article
+        </button>
+    </div>
+
+    @if (_messageAlerte != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show shadow-sm border-0 mb-3" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>@_messageAlerte
+            <button type="button" class="btn-close" @onclick="() => _messageAlerte = null"></button>
+        </div>
+    }
+
+    <!-- Table du catalogue -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Code</th>
+                            <th>Désignation</th>
+                            <th class="text-end">Prix Unitaire HT</th>
+                            <th class="text-center">Taux TVA</th>
+                            <th class="text-end pe-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_articles == null)
+                        {
+                            <tr>
+                                <td colspan="5" class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status"></div>
+                                </td>
+                            </tr>
+                        }
+                        else if (!_articles.Any())
+                        {
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted">
+                                    <i class="bi bi-box fs-2 d-block mb-2 text-secondary"></i>
+                                    Votre catalogue est vide.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var art in _articles)
+                            {
+                                <tr>
+                                    <td class="ps-4 font-monospace small fw-bold text-secondary">@art.Code</td>
+                                    <td class="fw-bold text-dark">@art.Designation</td>
+                                    <td class="text-end fw-semibold">@art.PrixUnitaireHT.ToString("N0") XOF</td>
+                                    <td class="text-center">
+                                        <span class="badge bg-light text-dark border">@art.TauxTVA %</span>
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => AfficherDetails(art)">
+                                            <i class="bi bi-eye-fill me-1"></i>Détails
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modale d'ajout d'un Article / Service -->
+@if (_afficherFormulaire)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 1060;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-light border-0">
+                    <h5 class="fw-bold modal-title"><i class="bi bi-plus-square me-2"></i>Ajouter une référence</h5>
+                    <button type="button" class="btn-close" @onclick="() => _afficherFormulaire = false"></button>
+                </div>
+                <form @onsubmit="EnregistrerArticle">
+                    <div class="modal-body p-4">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Code Article</label>
+                                <input class="form-control font-monospace" placeholder="EX: ART-001" @bind="_nouveauCode" required />
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label small fw-bold">Désignation / Libellé</label>
+                                <input class="form-control" @bind="_nouvelleDesignation" required />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Prix Unitaire HT</label>
+                                <input type="number" class="form-control text-end" @bind="_nouveauPrix" required />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Taux TVA (%)</label>
+                                <select class="form-select" @bind="_nouveauTauxTVA">
+                                    <option value="18">18 % (Standard UEMOA)</option>
+                                    <option value="0">0 % (Exonéré)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0">
+                        <button type="button" class="btn btn-light" @onclick="() => _afficherFormulaire = false">Annuler</button>
+                        <button type="submit" class="btn btn-primary px-4">Enregistrer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ArticleDto>? _articles;
+    private bool _afficherFormulaire = false;
+    private string? _messageAlerte;
+
+    private string _nouveauCode = "";
+    private string _nouvelleDesignation = "";
+    private decimal _nouveauPrix = 0;
+    private decimal _nouveauTauxTVA = 18;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Simulation chargement (à lier à ton DevisApiService plus tard)
+        _articles = new List<ArticleDto> {
+            new() { Id = Guid.NewGuid(), Code = "PREST-IT", Designation = "Prestation Conseil / Développement .NET", PrixUnitaireHT = 250000, TauxTVA = 18 },
+            new() { Id = Guid.NewGuid(), Code = "MAT-RT-01", Designation = "Routeur Cisco Professionnel v2", PrixUnitaireHT = 450000, TauxTVA = 18 }
+        };
+    }
+
+    private void AfficherDetails(ArticleDto art) { /* Logique Offcanvas optionnelle */ }
+
+    private async Task EnregistrerArticle()
+    {
+        _articles?.Add(new ArticleDto
+        {
+            Id = Guid.NewGuid(),
+            Code = _nouveauCode.ToUpper(),
+            Designation = _nouvelleDesignation,
+            PrixUnitaireHT = _nouveauPrix,
+            TauxTVA = _nouveauTauxTVA
+        });
+        _messageAlerte = $"L'article '{_nouvelleDesignation}' a bien été injecté au catalogue.";
+        _afficherFormulaire = false;
+        _nouveauCode = ""; _nouvelleDesignation = ""; _nouveauPrix = 0;
+        NotificationService.Notify(NotificationSeverity.Success, "Succès", "Article ajouté.");
+    }
+}
