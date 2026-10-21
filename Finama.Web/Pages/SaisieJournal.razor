@@ -276,7 +276,9 @@
         var problemes = new List<string>();
 
         if (string.IsNullOrWhiteSpace(_request.Libelle)) problemes.Add("Saisissez le libellé de l'opération.");
-        if (State.DonneesTableauBord?.ExerciceId == null) problemes.Add("Aucun exercice comptable n'est sélectionné.");
+        // L'exercice est déduit de la date saisie (fonctionne aussi après F5, sans passer par le tableau de bord)
+        var exerciceId = await ResoudreExerciceAsync(_request.DateEcriture);
+        if (exerciceId is null) problemes.Add($"Aucun exercice ouvert ne couvre la date du {_request.DateEcriture:dd/MM/yyyy}.");
         if (utiles.Count < 2) problemes.Add("Une écriture comporte au moins deux lignes.");
 
         foreach (var l in utiles)
@@ -297,7 +299,7 @@
         {
             var payload = new CreerEcritureRequest
             {
-                ExerciceId = State.DonneesTableauBord!.ExerciceId,
+                ExerciceId = exerciceId!.Value,
                 DateEcriture = _request.DateEcriture,
                 Journal = _request.Journal,
                 Libelle = _request.Libelle.Trim(),
@@ -336,5 +338,23 @@
         {
             _isSubmitting = false;
         }
+    }
+
+    /// <summary>Exercice ouvert contenant la date ; repli sur l'exercice du tableau de bord.</summary>
+    private async Task<Guid?> ResoudreExerciceAsync(DateTime date)
+    {
+        try
+        {
+            var exercices = await Api.GetExercicesAsync();
+            var exercice = exercices.FirstOrDefault(e => !e.EstCloture && date.Date >= e.DateDebut.Date && date.Date <= e.DateFin.Date);
+            if (exercice is not null) return exercice.Id;
+        }
+        catch
+        {
+            // Réseau indisponible : on tente l'exercice déjà chargé
+        }
+
+        var id = State.DonneesTableauBord?.ExerciceId;
+        return id is { } g && g != Guid.Empty ? g : null;
     }
 }

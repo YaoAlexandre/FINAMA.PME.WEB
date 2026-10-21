@@ -22,6 +22,14 @@
     <link href="images/logo-icon.svg" rel="icon" type="image/svg+xml" />
     <link href="icon-192.png" rel="apple-touch-icon" />
     <link href="Finama.Web.styles.css" rel="stylesheet" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#0F8873" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link href="Finama.Web.styles.css" rel="stylesheet" />
+    <link href="/css/finama-mobile.css" rel="stylesheet" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Finama" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <script>
         window.themeManager = {
             setTheme: (theme) => {
@@ -38,31 +46,472 @@
         document.documentElement.setAttribute('data-theme', themeManager.getPreferredTheme());
         document.documentElement.setAttribute('data-bs-theme', themeManager.getPreferredTheme());
     </script>
+    <!-- ════════ ÉCRAN DE CHARGEMENT FINAMA — à coller dans <head> de wwwroot/index.html ════════ -->
+    <style>
+        .fn-load {
+            position: fixed;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+            z-index: 9999;
+            background: #0b1324;
+            font-family: 'Poppins', system-ui, sans-serif;
+            color: #e2e8f0;
+        }
+            /* halos qui dérivent */
+            .fn-load::before, .fn-load::after {
+                content: "";
+                position: absolute;
+                width: 60vmax;
+                height: 60vmax;
+                border-radius: 50%;
+                filter: blur(80px);
+                opacity: .45;
+                animation: fn-derive 14s ease-in-out infinite alternate;
+            }
+
+            .fn-load::before {
+                background: radial-gradient(circle, #0F8873 0%, transparent 65%);
+                top: -20vmax;
+                left: -15vmax;
+            }
+
+            .fn-load::after {
+                background: radial-gradient(circle, #1d4ed8 0%, transparent 65%);
+                bottom: -25vmax;
+                right: -20vmax;
+                animation-delay: -7s;
+            }
+
+        .fn-grille {
+            position: absolute;
+            inset: 0;
+            opacity: .07;
+            background-image: linear-gradient(#94a3b8 1px, transparent 1px), linear-gradient(90deg, #94a3b8 1px, transparent 1px);
+            background-size: 56px 56px;
+            mask-image: radial-gradient(circle at center, #000 0%, transparent 70%);
+        }
+
+        .fn-centre {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 22px;
+            text-align: center;
+            padding: 24px;
+        }
+
+        /* scène : logo + orbite des modules */
+        .fn-scene {
+            position: relative;
+            width: 240px;
+            height: 240px;
+            display: grid;
+            place-items: center;
+        }
+
+        .fn-orbite {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 1px dashed rgba(148,163,184,.25);
+            animation: fn-tourne 9s linear infinite, fn-apparait .6s .9s both;
+        }
+
+        .fn-module {
+            position: absolute;
+            width: 44px;
+            height: 44px;
+            margin: -22px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            color: #fff;
+            font-size: 20px;
+            box-shadow: 0 6px 18px rgba(0,0,0,.35);
+            animation: fn-contre 9s linear infinite;
+        }
+
+            .fn-module:nth-child(1) {
+                top: 0;
+                left: 50%;
+                background: #2563eb;
+            }
+
+            .fn-module:nth-child(2) {
+                top: 50%;
+                left: 100%;
+                background: #0ea5c6;
+            }
+
+            .fn-module:nth-child(3) {
+                top: 100%;
+                left: 50%;
+                background: #16a34a;
+            }
+
+            .fn-module:nth-child(4) {
+                top: 50%;
+                left: 0;
+                background: #eab308;
+            }
+
+        .fn-logo {
+            width: 116px;
+            height: 116px;
+            position: relative;
+            border-radius: 28px;
+            overflow: hidden;
+            box-shadow: 0 0 0 0 rgba(46,207,152,.55), 0 18px 40px rgba(15,136,115,.45);
+            animation: fn-rebond .8s cubic-bezier(.34,1.56,.64,1) both, fn-pouls 2.4s 1.4s ease-in-out infinite;
+        }
+
+            .fn-logo svg {
+                width: 100%;
+                height: 100%;
+                display: block;
+            }
+
+            .fn-logo .fn-f, .fn-logo .fn-barre, .fn-logo .fn-point {
+                transform-box: fill-box;
+            }
+
+            .fn-logo .fn-f {
+                transform-origin: top center;
+                animation: fn-trace .55s .35s cubic-bezier(.65,0,.35,1) both;
+            }
+
+            .fn-logo .fn-barre {
+                transform-origin: left center;
+                animation: fn-glisse .45s .75s cubic-bezier(.34,1.56,.64,1) both;
+            }
+
+            .fn-logo .fn-point {
+                transform-origin: center;
+                animation: fn-pop .45s 1s cubic-bezier(.34,1.56,.64,1) both;
+            }
+
+            .fn-logo::after {
+                content: "";
+                position: absolute;
+                inset: -40%;
+                background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,.45) 50%, transparent 60%);
+                transform: translateX(-100%);
+                animation: fn-reflet 3s 1.6s ease-in-out infinite;
+            }
+
+        .fn-nom {
+            font-size: 40px;
+            font-weight: 700;
+            letter-spacing: .14em;
+            margin: 0;
+            background: linear-gradient(90deg, #2ECF98, #e2e8f0, #2ECF98);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: fn-monte .6s 1.1s both, fn-brille 4s 1.7s linear infinite;
+        }
+
+        /* messages qui défilent */
+        .fn-messages {
+            position: relative;
+            height: 24px;
+            width: 320px;
+            font-size: 15px;
+            color: #94a3b8;
+            animation: fn-monte .6s 1.3s both;
+        }
+
+            .fn-messages span {
+                position: absolute;
+                inset: 0;
+                opacity: 0;
+                white-space: nowrap;
+                animation: fn-message 10s infinite;
+            }
+
+                .fn-messages span:nth-child(2) {
+                    animation-delay: 2.5s;
+                }
+
+                .fn-messages span:nth-child(3) {
+                    animation-delay: 5s;
+                }
+
+                .fn-messages span:nth-child(4) {
+                    animation-delay: 7.5s;
+                }
+
+        /* progression réelle du chargement (variables fournies par Blazor) */
+        .fn-progression {
+            width: 300px;
+            animation: fn-monte .6s 1.4s both;
+        }
+
+        .fn-barre-fond {
+            height: 6px;
+            border-radius: 6px;
+            background: rgba(148,163,184,.18);
+            overflow: hidden;
+        }
+
+        .fn-barre-plein {
+            height: 100%;
+            width: var(--blazor-load-percentage, 8%);
+            border-radius: 6px;
+            transition: width .3s ease;
+            background: linear-gradient(90deg, #0F8873, #2ECF98, #0F8873);
+            background-size: 200% 100%;
+            animation: fn-flux 1.6s linear infinite;
+        }
+
+        .fn-pourcent {
+            margin-top: 8px;
+            font-size: 12px;
+            letter-spacing: .12em;
+            color: #64748b;
+        }
+
+            .fn-pourcent::after {
+                content: var(--blazor-load-percentage-text, "Chargement");
+            }
+
+        @keyframes fn-rebond {
+            from {
+                transform: scale(.2) rotate(-25deg);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1) rotate(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fn-pouls {
+            0%,100% {
+                box-shadow: 0 0 0 0 rgba(46,207,152,.5), 0 18px 40px rgba(15,136,115,.45);
+            }
+
+            50% {
+                box-shadow: 0 0 0 18px rgba(46,207,152,0), 0 18px 40px rgba(15,136,115,.45);
+            }
+        }
+
+        @keyframes fn-trace {
+            from {
+                transform: scaleY(0);
+                opacity: 0;
+            }
+
+            to {
+                transform: scaleY(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fn-glisse {
+            from {
+                transform: scaleX(0);
+            }
+
+            to {
+                transform: scaleX(1);
+            }
+        }
+
+        @keyframes fn-pop {
+            from {
+                transform: scale(0);
+            }
+
+            to {
+                transform: scale(1);
+            }
+        }
+
+        @keyframes fn-reflet {
+            0% {
+                transform: translateX(-100%);
+            }
+
+            40%,100% {
+                transform: translateX(100%);
+            }
+        }
+
+        @keyframes fn-tourne {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes fn-contre {
+            to {
+                transform: rotate(-360deg);
+            }
+        }
+
+        @keyframes fn-apparait {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes fn-monte {
+            from {
+                opacity: 0;
+                transform: translateY(14px);
+            }
+
+            to {
+                opacity: 1;
+                transform: none;
+            }
+        }
+
+        @keyframes fn-brille {
+            to {
+                background-position: 200% center;
+            }
+        }
+
+        @keyframes fn-message {
+            0% {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            4%,22% {
+                opacity: 1;
+                transform: none;
+            }
+
+            26%,100% {
+                opacity: 0;
+                transform: translateY(-8px);
+            }
+        }
+
+        @keyframes fn-flux {
+            to {
+                background-position: -200% 0;
+            }
+        }
+
+        @keyframes fn-derive {
+            to {
+                transform: translate(8vmax, 6vmax) scale(1.1);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .fn-load *, .fn-load::before, .fn-load::after {
+                animation-duration: .01s !important;
+                animation-iteration-count: 1 !important;
+            }
+        }
+
+        @media (max-width: 420px) {
+            .fn-scene {
+                width: 200px;
+                height: 200px;
+            }
+
+            .fn-nom {
+                font-size: 32px;
+            }
+
+            .fn-messages, .fn-progression {
+                width: 280px;
+            }
+
+            .fn-messages {
+                font-size: 13px;
+            }
+        }
+        /* Suite dans l'application (MainLayout) : pas d'animation d'entrée, seulement les animations continues */
+        .fn-suite .fn-logo {
+            animation: fn-pouls 2.4s ease-in-out infinite;
+        }
+
+        .fn-suite .fn-nom {
+            animation: fn-brille 4s linear infinite;
+        }
+
+        .fn-suite .fn-orbite {
+            animation: fn-tourne 9s linear infinite;
+        }
+
+        .fn-suite .fn-messages, .fn-suite .fn-progression, .fn-suite .fn-logo::after {
+            animation: none;
+        }
+
+            .fn-suite .fn-messages .fn-fixe {
+                opacity: 1;
+                animation: none;
+            }
+
+        .fn-suite .fn-barre-plein {
+            width: 100%;
+        }
+    </style>
+
 </head>
 
 <body>
     <div id="app">
-        <div class="splash-container">
-            <div class="glow-sphere glow-blue"></div>
-            <div class="glow-sphere glow-purple"></div>
-
-            <div class="splash-card">
-                <div class="splash-logo-wrapper">
-                    <img src="images/logo-icon.svg" alt="Finama" />
+        <!-- ════════ ÉCRAN DE CHARGEMENT FINAMA — remplace le contenu de <div id="app"> … </div> dans wwwroot/index.html ════════ -->
+        <div class="fn-load" role="status" aria-label="Chargement de Finama">
+            <div class="fn-grille"></div>
+            <div class="fn-centre">
+                <div class="fn-scene">
+                    <div class="fn-orbite">
+                        <span class="fn-module" title="Finance & Compta"><i class="bi bi-wallet2"></i></span>
+                        <span class="fn-module" title="Ventes & Devis"><i class="bi bi-file-earmark-check"></i></span>
+                        <span class="fn-module" title="Commerce & Ventes"><i class="bi bi-cart3"></i></span>
+                        <span class="fn-module" title="Administration"><i class="bi bi-gear"></i></span>
+                    </div>
+                    <div class="fn-logo">
+                        <svg viewBox="0 0 512 512" aria-hidden="true">
+                            <defs>
+                                <linearGradient id="fn-degrade" x1="0" y1="0" x2="1" y2="1">
+                                    <stop offset="0" stop-color="#0F8873" />
+                                    <stop offset=".55" stop-color="#14B07E" />
+                                    <stop offset="1" stop-color="#2ECF98" />
+                                </linearGradient>
+                            </defs>
+                            <rect width="512" height="512" fill="url(#fn-degrade)" />
+                            <path class="fn-f" d="M154 119H392L347 183H215V390H154Z" fill="#fff" />
+                            <path class="fn-barre" d="M154 223H311L283 282H154Z" fill="#D1FAE5" />
+                            <circle class="fn-point" cx="367" cy="342" r="30" fill="#fff" />
+                        </svg>
+                    </div>
                 </div>
 
-                <h2 class="splash-title">FINAMA</h2>
-                <div class="badge-gradient-neon mb-3">Comptabilité simple et sécurisée</div>
+                <h1 class="fn-nom">FINAMA</h1>
 
-                <p class="splash-subtitle">Analyse et synchronisation des journaux comptables...</p>
-
-                <div class="splash-progress-bar">
-                    <div class="splash-progress-line"></div>
+                <div class="fn-messages" aria-hidden="true">
+                    <span>Préparation de votre espace…</span>
+                    <span>Chargement de la caisse et du stock…</span>
+                    <span>Synchronisation de la comptabilité…</span>
+                    <span>Presque prêt…</span>
                 </div>
 
-                <span class="splash-footer-text">Connexion sécurisée locale active</span>
+                <div class="fn-progression">
+                    <div class="fn-barre-fond"><div class="fn-barre-plein"></div></div>
+                    <div class="fn-pourcent"></div>
+                </div>
             </div>
         </div>
+
     </div>
 
     <div id="blazor-error-ui">

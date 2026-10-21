@@ -1,89 +1,76 @@
-﻿using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.JSInterop;
 using System.Security.Claims;
-using System.Net.Http.Headers;
 using System.Text.Json;
-using Blazored.LocalStorage; // Assure-toi d'avoir ce package NuGet
 
 namespace Finama.Web.Services;
 
-
-
+/// <summary>
+/// État d'authentification Blazor construit depuis le JWT stocké ("finama_token").
+/// Jeton expiré SANS refresh token → anonyme (redirection connexion).
+/// Jeton expiré AVEC refresh token → reste connecté : AuthHeaderHandler renouvelle au premier appel API.
+/// </summary>
 public class CustomAuthStateProvider : AuthenticationStateProvider
 {
-    private readonly ILocalStorageService _localStorage;
-    private readonly HttpClient _http;
+    private static readonly AuthenticationState Anonyme = new(new ClaimsPrincipal(new ClaimsIdentity()));
 
-    public CustomAuthStateProvider(ILocalStorageService localStorage, HttpClient http)
+    private readonly IJSRuntime _js;
+
+    public CustomAuthStateProvider(IJSRuntime js)
     {
-        _localStorage = localStorage;
-        _http = http;
+        _js = js;
     }
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        var token = await _localStorage.GetItemAsync<string>("finama_token");
-
-        if (string.IsNullOrEmpty(token))
+        string? token, refresh;
+        try
         {
-            return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
+            token = await _js.InvokeAsync<string?>("localStorage.getItem", "finama_token");
+            refresh = await _js.InvokeAsync<string?>("localStorage.getItem", "finama_refresh");
+        }
+        catch
+        {
+            return Anonyme; // JS indisponible (prérendu)
         }
 
-        // On crée l'identité à partir des claims contenus dans le token
-        var identity = new ClaimsIdentity(ParseClaimsFromJwt(token), "jwt");
-        var user = new ClaimsPrincipal(identity);
+        if (string.IsNullOrEmpty(token)) return Anonyme;
+        if (JwtOutils.EstExpire(token, margeSecondes: 0) && string.IsNullOrEmpty(refresh)) return Anonyme;
 
-        return new AuthenticationState(user);
+        return new AuthenticationState(CreerPrincipal(token));
     }
 
-    // Dans votre CustomAuthenticationStateProvider.cs Côté Blazor
-    private IEnumerable<Claim> ParseClaimsFromJwt(string jwt)
-    {
-        var payload = jwt.Split('.')[1];
-        var jsonBytes = ParseBase64WithoutPadding(payload);
-        var keyValuePairs = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonBytes);
-
-        var claims = new List<Claim>();
-
-        if (keyValuePairs != null)
-        {
-            foreach (var kvp in keyValuePairs)
-            {
-                // Mapper la claim "role" brute vers ClaimTypes.Role pour IsInRole("SuperAdmin")
-                if (kvp.Key == "role")
-                {
-                    claims.Add(new Claim(ClaimTypes.Role, kvp.Value.ToString()!));
-                }
-                else
-                {
-                    claims.Add(new Claim(kvp.Key, kvp.Value.ToString()!));
-                }
-            }
-        }
-
-        return claims;
-    }
-
-    private byte[] ParseBase64WithoutPadding(string base64)
-    {
-        switch (base64.Length % 4)
-        {
-            case 2: base64 += "=="; break;
-            case 3: base64 += "="; break;
-        }
-        return Convert.FromBase64String(base64);
-    }
-
-    // Dans ta classe CustomAuthStateProvider
     public void NotifyUserAuthentication(string token)
-    {
-        var authState = Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity(ParseClaimsFromJwt(token), "jwt"))));
-        NotifyAuthenticationStateChanged(authState);
-    }
+        => NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(CreerPrincipal(token))));
 
     public void NotifyUserLogout()
+        => NotifyAuthenticationStateChanged(Task.FromResult(Anonyme));
+
+    private static ClaimsPrincipal CreerPrincipal(string token)
     {
-        var anonymousUser = new ClaimsPrincipal(new ClaimsIdentity());
-        var authState = Task.FromResult(new AuthenticationState(anonymousUser));
-        NotifyAuthenticationStateChanged(authState);
+        var claims = new List<Claim>();
+
+        foreach (var (cle, valeur) in JwtOutils.LirePayload(token))
+        {
+            var type = cle switch
+            {
+                "role" => ClaimTypes.Role,
+                "nom" => ClaimTypes.Name,
+                "sub" => ClaimTypes.NameIdentifier,
+                _ => cle
+            };
+
+            // Un claim peut être un tableau (plusieurs rôles) : un Claim par valeur
+            if (valeur.ValueKind == JsonValueKind.Array)
+                claims.AddRange(valeur.EnumerateArray().Select(v => new Claim(type, v.ToString())));
+            else
+                claims.Add(new Claim(type, valeur.ToString()));
+
+            // Conserve aussi le nom brut (compatibilité avec le code existant qui lit "nom", "sub", "role")
+            if (type != cle && valeur.ValueKind != JsonValueKind.Array)
+                claims.Add(new Claim(cle, valeur.ToString()));
+        }
+
+        return new ClaimsPrincipal(new ClaimsIdentity(claims, "jwt", ClaimTypes.Name, ClaimTypes.Role));
     }
 }

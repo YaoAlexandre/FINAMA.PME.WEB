@@ -1,0 +1,28 @@
+@* Montant : chiffres uniquement (touches bloquées, collage nettoyé), entier positif, 13 chiffres max. *@
+<div class="input-group">
+    <input type="text" inputmode="numeric" maxlength="13" class="form-control font-monospace text-end @Classe"
+           value="@(Value == 0 && !_saisi ? "0" : Value.ToString("0"))"
+           onkeydown="return event.key.length > 1 || event.ctrlKey || event.metaKey || /[0-9]/.test(event.key)"
+           @oninput="SurSaisie" />
+    @if (!string.IsNullOrEmpty(Suffixe))
+    {
+        <span class="input-group-text">@Suffixe</span>
+    }
+</div>
+
+@code {
+    [Parameter] public decimal Value { get; set; }
+    [Parameter] public EventCallback<decimal> ValueChanged { get; set; }
+    [Parameter] public string? Suffixe { get; set; } = "FCFA";
+    [Parameter] public string Classe { get; set; } = "";
+
+    private bool _saisi;
+
+    private async Task SurSaisie(ChangeEventArgs e)
+    {
+        _saisi = true;
+        var chiffres = new string((e.Value?.ToString() ?? "").Where(char.IsDigit).ToArray());   // collage : on ne garde que les chiffres
+        Value = decimal.TryParse(chiffres, out var v) ? v : 0;
+        await ValueChanged.InvokeAsync(Value);
+    }
+}

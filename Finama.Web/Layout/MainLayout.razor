@@ -1,8 +1,11 @@
 @using Finama.Web.Models
 @using Finama.Web.Services
 @inherits LayoutComponentBase
+@implements IAsyncDisposable
 @inject FinamaApiService Api
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject ModulesService Modules
 
 <RadzenNotification />
 
@@ -10,9 +13,23 @@
     <!-- Overlay de chargement maintenu uniquement pendant la première vérification -->
     @if (_verificationEnCours)
     {
-        <div class="d-flex flex-column justify-content-center align-items-center vh-100 bg-dark text-white w-100 position-fixed top-0 start-0" style="z-index: 9999;">
-            <div class="spinner-border text-primary mb-3" role="status"></div>
-            <div class="font-monospace small text-muted">Contrôle de sécurité de la session...</div>
+        <!-- Suite visuelle de l'écran de chargement (index.html) : même décor, sans animation d'entrée -->
+        <div class="fn-load fn-suite" role="status" aria-label="Ouverture de votre session">
+            <div class="fn-grille"></div>
+            <div class="fn-centre">
+                <div class="fn-scene">
+                    <div class="fn-orbite">
+                        <span class="fn-module"><i class="bi bi-wallet2"></i></span>
+                        <span class="fn-module"><i class="bi bi-file-earmark-check"></i></span>
+                        <span class="fn-module"><i class="bi bi-cart3"></i></span>
+                        <span class="fn-module"><i class="bi bi-gear"></i></span>
+                    </div>
+                    <div class="fn-logo"><img src="icons/icon-512.png" alt="" style="width:100%;height:100%" /></div>
+                </div>
+                <h1 class="fn-nom">FINAMA</h1>
+                <div class="fn-messages"><span class="fn-fixe">Ouverture de votre session…</span></div>
+                <div class="fn-progression"><div class="fn-barre-fond"><div class="fn-barre-plein"></div></div></div>
+            </div>
         </div>
     }
 
@@ -23,114 +40,274 @@
                 <span class="brand-name">Finama</span>
             </div>
 
-            <button class="btn text-white border-0 d-lg-none" @onclick="ToggleSidebar" style="font-size: 1.2rem; padding: 4px;">
+            <button class="btn text-white border-0 d-lg-none" @onclick="ToggleSidebar" style="font-size: 1.2rem; padding: 4px;" aria-label="Fermer le menu">
                 <i class="bi bi-x-lg"></i>
             </button>
         </div>
 
+        <!-- SÉLECTEUR DE MODULE : un seul point d'entrée, avec description et accueil des modules -->
+        <div class="px-3 py-2 border-bottom border-secondary border-opacity-25">
+            <div class="menu-zone position-relative">
+                <button class="module-switch w-100" type="button" @onclick="ToggleModuleDropdown"
+                        aria-haspopup="true" aria-expanded="@(_moduleDropdownOpen ? "true" : "false")">
+                    <span class="module-icone @InfoModule(_moduleActif).Fond"><i class="bi @InfoModule(_moduleActif).Icone"></i></span>
+                    <span class="module-texte">
+                        <span class="d-block fw-bold text-white small text-truncate">@InfoModule(_moduleActif).Titre</span>
+                        <span class="module-sous-titre">@(string.IsNullOrWhiteSpace(_entrepriseNom) ? "Changer de module" : _entrepriseNom)</span>
+                    </span>
+                    <i class="bi bi-chevron-expand text-muted flex-shrink-0"></i>
+                </button>
+
+                <div class="module-menu @(_moduleDropdownOpen ? "show" : "")" role="menu">
+                    <button type="button" role="menuitem" class="module-item @(_moduleActif == "MODULES" ? "actif" : "")" @onclick="AllerAuxModules">
+                        <span class="module-icone bg-secondary bg-opacity-25 text-light"><i class="bi bi-grid-3x3-gap"></i></span>
+                        <span class="module-texte">
+                            <span class="d-block fw-bold small">Accueil des modules</span>
+                            <span class="module-desc">Vue d'ensemble et points d'attention</span>
+                        </span>
+                        @if (_moduleActif == "MODULES") { <i class="bi bi-check2 module-coche"></i> }
+                    </button>
+
+                    <div class="module-separateur"></div>
+
+                    @if (Modules.Actuels.Comptabilite)
+                    {
+                        <AuthorizeView Policy="LectureSeule">
+                            <Authorized>@ItemModule("COMPTA")</Authorized>
+                        </AuthorizeView>
+                    }
+
+                    @if (Modules.Actuels.GestionCommerciale)
+                    {
+                        <AuthorizeView Policy="Ventes">
+                            <Authorized>@ItemModule("VENTES")</Authorized>
+                        </AuthorizeView>
+                    }
+
+                    @if (Modules.Actuels.Commerce)
+                    {
+                        <AuthorizeView Policy="Commercial">
+                            <Authorized>@ItemModule("COMMERCE")</Authorized>
+                        </AuthorizeView>
+                    }
+
+                    <AuthorizeView Policy="AdminTenant" Context="admin">
+                        <Authorized>@ItemModule("ADMIN")</Authorized>
+                        <NotAuthorized>
+                            <AuthorizeView Policy="Utilisateurs" Context="utilisateurs">
+                                <Authorized>@ItemModule("ADMIN")</Authorized>
+                            </AuthorizeView>
+                        </NotAuthorized>
+                    </AuthorizeView>
+                </div>
+            </div>
+        </div>
+
         <nav class="sidebar-nav" @onclick="GererClicNav">
-            <div class="nav-section">
-                <span class="nav-section-label">Principal</span>
-                <NavLink href="/" class="nav-item" Match="NavLinkMatch.All">
-                    <i class="bi bi-speedometer2 nav-icon"></i>
-                    <span>Tableau de bord</span>
-                </NavLink>
+            @if (_moduleActif == "COMPTA")
+            {
+                <!-- ESPACE COMPTABILITÉ & FINANCE -->
+                <div class="nav-section">
+                    <span class="nav-section-label">Tableau de bord</span>
+                    <NavLink href="/" class="nav-item" Match="NavLinkMatch.All">
+                        <i class="bi bi-speedometer2 nav-icon"></i>
+                        <span>Vue d'ensemble</span>
+                    </NavLink>
 
-                <AuthorizeView Policy="Saisie">
+                    <AuthorizeView Policy="Saisie">
+                        <Authorized>
+                            <span class="nav-section-label mt-3">Opérations</span>
+                            <NavLink href="/comptabilite/ecritures" class="nav-item">
+                                <i class="bi bi-pencil-square nav-icon"></i>
+                                <span>Écritures</span>
+                            </NavLink>
+                            <NavLink href="/factures" class="nav-item">
+                                <i class="bi bi-file-earmark-text nav-icon"></i>
+                                <span>Factures</span>
+                            </NavLink>
+                            <NavLink href="/referentiel/tiers" class="nav-item">
+                                <i class="bi bi-people-fill nav-icon"></i>
+                                <span>Tiers</span>
+                            </NavLink>
+                        </Authorized>
+                    </AuthorizeView>
+                </div>
+
+                <div class="nav-section">
+                    <span class="nav-section-label">Reporting Financier</span>
+                    <AuthorizeView Policy="Saisie">
+                        <Authorized>
+                            <NavLink href="/balance" class="nav-item">
+                                <i class="bi bi-journal-check nav-icon"></i>
+                                <span>Balance</span>
+                            </NavLink>
+                            <NavLink href="/grand-livre" class="nav-item">
+                                <i class="bi bi-journal-text nav-icon"></i>
+                                <span>Grand Livre</span>
+                            </NavLink>
+                            <NavLink href="/plan-comptable" class="nav-item">
+                                <i class="bi bi-book-half nav-icon"></i>
+                                <span>Plan comptable</span>
+                            </NavLink>
+                        </Authorized>
+                    </AuthorizeView>
+                </div>
+
+            }
+            else if (_moduleActif == "VENTES")
+            {
+                <!-- ESPACE VENTES & DEVIS -->
+                <div class="nav-section">
+                    <span class="nav-section-label text-info fw-bold">Ventes</span>
+                    <NavLink href="/ventes" class="nav-item" Match="NavLinkMatch.All">
+                        <i class="bi bi-speedometer2 nav-icon"></i>
+                        <span>Tableau de bord</span>
+                    </NavLink>
+                    <NavLink href="/ventes/devis" class="nav-item">
+                        <i class="bi bi-file-earmark-text nav-icon"></i>
+                        <span>Devis</span>
+                    </NavLink>
+                    <NavLink href="/ventes/pipeline" class="nav-item">
+                        <i class="bi bi-kanban nav-icon"></i>
+                        <span>Pipeline</span>
+                    </NavLink>
+                    <NavLink href="/ventes/clients" class="nav-item">
+                        <i class="bi bi-person-lines-fill nav-icon"></i>
+                        <span>Clients</span>
+                    </NavLink>
+                    <NavLink href="/factures" class="nav-item">
+                        <i class="bi bi-receipt nav-icon"></i>
+                        <span>Factures</span>
+                    </NavLink>
+                </div>
+            }
+            else if (_moduleActif == "COMMERCE")
+            {
+                <!-- ESPACE COMMERCE & VENTES : menus selon le métier (Caissier : vente ; Magasinier : stock) -->
+                <AuthorizeView Policy="Caisse">
                     <Authorized>
-                        <NavLink href="/comptabilite/ecritures" class="nav-item">
-                            <i class="bi bi-pencil-square nav-icon"></i>
-                            <span>Écritures</span>
-                        </NavLink>
-                        <NavLink href="/factures" class="nav-item">
-                            <i class="bi bi-file-earmark-text nav-icon"></i>
-                            <span>Factures</span>
-                        </NavLink>
-                        <NavLink href="/referentiel/tiers" class="nav-item">
-                            <i class="bi bi-people-fill nav-icon"></i>
-                            <span>Tiers</span>
-                        </NavLink>
+                <div class="nav-section">
+                    <span class="nav-section-label text-success fw-bold">Vente</span>
+                    <NavLink href="/commerce/caisse" class="nav-item">
+                        <i class="bi bi-receipt nav-icon"></i>
+                        <span>Ouvrir la caisse</span>
+                        <span class="badge badge-pos ms-auto">POS</span>
+                    </NavLink>
+                    <NavLink href="/commerce/clients" class="nav-item">
+                        <i class="bi bi-people nav-icon"></i>
+                        <span>Clients & fidélité</span>
+                    </NavLink>
+                    <AuthorizeView Policy="FinJournee" Context="finJournee">
+                        <Authorized>
+                            <NavLink href="/commerce/fin-journee" class="nav-item">
+                                <i class="bi bi-calendar-check nav-icon"></i>
+                                <span>Fin de journée</span>
+                            </NavLink>
+                        </Authorized>
+                    </AuthorizeView>
+                </div>
                     </Authorized>
                 </AuthorizeView>
-            </div>
 
-            <div class="nav-section">
-                <span class="nav-section-label">Reporting</span>
-                <AuthorizeView Policy="Saisie">
+                <AuthorizeView Policy="Stock">
                     <Authorized>
-                        <NavLink href="/balance" class="nav-item">
-                            <i class="bi bi-journal-check nav-icon"></i>
-                            <span>Balance</span>
-                        </NavLink>
-                        <NavLink href="/grand-livre" class="nav-item">
-                            <i class="bi bi-journal-text nav-icon"></i>
-                            <span>Grand Livre</span>
-                        </NavLink>
-                        <NavLink href="/plan-comptable" class="nav-item">
-                            <i class="bi bi-book-half nav-icon"></i>
-                            <span>Plan comptable</span>
-                        </NavLink>
+                <div class="nav-section mt-3">
+                    <span class="nav-section-label">Catalogue</span>
+                    <NavLink href="/commerce/produits" class="nav-item">
+                        <i class="bi bi-box-seam nav-icon"></i>
+                        <span>Articles & services</span>
+                    </NavLink>
+                    <NavLink href="/commerce/categories" class="nav-item">
+                        <i class="bi bi-tags nav-icon"></i>
+                        <span>Catégories</span>
+                    </NavLink>
+                    <NavLink href="/commerce/etiquettes" class="nav-item">
+                        <i class="bi bi-upc-scan nav-icon"></i>
+                        <span>Étiquettes</span>
+                    </NavLink>
+                </div>
+
+                <div class="nav-section">
+                    <span class="nav-section-label">Stock</span>
+                    <NavLink href="/commerce/magasins" class="nav-item">
+                        <i class="bi bi-shop nav-icon"></i>
+                        <span>Magasins & dépôts</span>
+                    </NavLink>
+                    <NavLink href="/commerce/stocks" class="nav-item">
+                        <i class="bi bi-boxes nav-icon"></i>
+                        <span>Niveaux de stock</span>
+                    </NavLink>
+                    <NavLink href="/commerce/inventaires" class="nav-item">
+                        <i class="bi bi-clipboard-check nav-icon"></i>
+                        <span>Inventaires</span>
+                    </NavLink>
+                </div>
                     </Authorized>
                 </AuthorizeView>
-            </div>
-
-            <div class="nav-section">
-                <span class="nav-section-label">Commercial</span>
-                <AuthorizeView Policy="Commercial">
-                    <Authorized>
-                        <NavLink href="/commercial/devis" class="nav-item">
-                            <i class="bi bi-file-earmark-check nav-icon"></i>
-                            <span>Mes devis</span>
-                        </NavLink>
-                        <NavLink href="/commercial/clients" class="nav-item">
-                            <i class="bi bi-person-lines-fill nav-icon"></i>
-                            <span>Mes clients</span>
-                        </NavLink>
-                        <NavLink href="/commercial/pipeline" class="nav-item">
-                            <i class="bi bi-funnel nav-icon"></i>
-                            <span>Pipeline</span>
-                        </NavLink>
-                    </Authorized>
-                </AuthorizeView>
-            </div>
-
-            <div class="nav-section">
-                <span class="nav-section-label">Paramètres</span>
 
                 <AuthorizeView Policy="AdminTenant">
                     <Authorized>
-                        <NavLink href="/configuration/classes-comptables" class="nav-item">
-                            <i class="bi bi-gear-wide-connected nav-icon"></i>
-                            <span>Classes OHADA</span>
-                        </NavLink>
-                        <NavLink href="/utilisateurs" class="nav-item">
-                            <i class="bi bi-shield-lock nav-icon"></i>
-                            <span>Utilisateurs</span>
-                        </NavLink>
-                        <NavLink href="/entreprise" class="nav-item">
-                            <i class="bi bi-building nav-icon"></i>
-                            <span>Mon entreprise</span>
-                        </NavLink>
+                        <div class="nav-section">
+                            <span class="nav-section-label">Configuration</span>
+                            <NavLink href="/commerce/parametres" class="nav-item">
+                                <i class="bi bi-sliders nav-icon"></i>
+                                <span>Mon activité & options</span>
+                            </NavLink>
+                        </div>
                     </Authorized>
                 </AuthorizeView>
-            </div>
+            }
+            else if (_moduleActif == "ADMIN")
+            {
+                <!-- ESPACE PARAMÈTRES & ADMINISTRATION -->
+                <div class="nav-section">
+                    <span class="nav-section-label">Configuration Entreprise</span>
+                    <AuthorizeView Policy="AdminTenant">
+                        <Authorized>
+                            <NavLink href="/configuration/classes-comptables" class="nav-item">
+                                <i class="bi bi-gear-wide-connected nav-icon"></i>
+                                <span>Classes OHADA</span>
+                            </NavLink>
+                        </Authorized>
+                    </AuthorizeView>
+                    <AuthorizeView Policy="Utilisateurs">
+                        <Authorized>
+                            <NavLink href="/utilisateurs" class="nav-item">
+                                <i class="bi bi-people nav-icon"></i>
+                                <span>Utilisateurs</span>
+                            </NavLink>
+                            <NavLink href="/administration/profils" class="nav-item">
+                                <i class="bi bi-ui-checks-grid nav-icon"></i>
+                                <span>Profils & permissions</span>
+                            </NavLink>
+                        </Authorized>
+                    </AuthorizeView>
+                    <AuthorizeView Policy="AdminTenant">
+                        <Authorized>
+                            <NavLink href="/entreprise" class="nav-item">
+                                <i class="bi bi-building nav-icon"></i>
+                                <span>Mon entreprise</span>
+                            </NavLink>
+                        </Authorized>
+                    </AuthorizeView>
+                </div>
 
-            <AuthorizeView Roles="SuperAdmin">
-                <Authorized>
-                    <div class="nav-section mt-3 pt-3 border-top border-secondary">
-                        <span class="nav-section-label text-warning fw-bold">Administration SaaS</span>
-                        <NavLink href="/superadmin/tenants" class="nav-item">
-                            <i class="bi bi-building-gear nav-icon text-warning"></i>
-                            <span>Gestion des PME</span>
-                        </NavLink>
-                        <!-- 🌟 NOUVEAU MENU : DEMANDES D'ACCÈS -->
-                        <NavLink href="/superadmin/demandes-acces" class="nav-item">
-                            <i class="bi bi-person-check nav-icon text-warning"></i>
-                            <span>Demandes d'accès</span>
-                        </NavLink>
-                    </div>
-                </Authorized>
-            </AuthorizeView>
+                <AuthorizeView Roles="SuperAdmin">
+                    <Authorized>
+                        <div class="nav-section mt-3 pt-3 border-top border-secondary border-opacity-25">
+                            <span class="nav-section-label text-warning fw-bold">Administration SaaS</span>
+                            <NavLink href="/superadmin/tenants" class="nav-item">
+                                <i class="bi bi-building-gear nav-icon text-warning"></i>
+                                <span>Gestion des PME</span>
+                            </NavLink>
+                            <NavLink href="/superadmin/demandes-acces" class="nav-item">
+                                <i class="bi bi-person-check nav-icon text-warning"></i>
+                                <span>Demandes d'accès</span>
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+            }
         </nav>
 
         <div class="sidebar-footer">
@@ -141,54 +318,61 @@
                     <span class="user-entreprise text-muted">@_entrepriseNom</span>
                 </div>
             </div>
-            <button class="btn-logout" @onclick="Deconnecter" title="Déconnexion">
+            <button class="btn-logout" @onclick="Deconnecter" title="Déconnexion" aria-label="Déconnexion">
                 <i class="bi bi-power"></i>
             </button>
         </div>
     </aside>
 
     <main class="main-content">
+        <BandeauSupport />
         <div class="topbar px-4">
-            <button class="btn-menu" @onclick="ToggleSidebar">
+            <button class="btn-menu" @onclick="ToggleSidebar" aria-label="Afficher ou masquer le menu">
                 <i class="bi bi-list fs-4"></i>
             </button>
 
-            <div class="topbar-right d-flex align-items-center gap-2">
+            <div class="topbar-right d-flex align-items-center gap-3">
+                <span class="badge bg-secondary font-monospace d-none d-md-inline-block">
+                    Module : @(_moduleActif == "COMPTA" ? "Finance & Compta" : _moduleActif == "COMMERCE" ? "Commerce & Ventes" : _moduleActif == "VENTES" ? "Ventes & Devis" : _moduleActif == "ADMIN" ? "Administration" : "Accueil")
+                </span>
+
                 <ThemeSwitcher />
 
-                <div class="dropdown">
-                    <button class="btn btn-sm btn-outline-primary dropdown-toggle fw-bold px-3 py-2"
-                            type="button"
-                            @onclick="ToggleDropdown"
-                            @onclick:stopPropagation>
-                        <i class="bi bi-cash-coin me-1"></i> @_deviseActiveCode (@_deviseSymbole)
-                    </button>
-
-                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 @(_dropdownOpen ? "show" : "")"
-                        style="position: absolute; right: 0; left: auto;">
-                        <li><h6 class="dropdown-header font-monospace small text-uppercase">Devises de la plateforme</h6></li>
-                        <li><hr class="dropdown-divider"></li>
-
-                        @if (_listeDevises != null)
-                        {
-                            @foreach (var dev in _listeDevises)
-                            {
-                                <li @key="dev.Code">
-                                    <button type="button"
-                                            class="dropdown-item small d-flex justify-content-between align-items-center @(_deviseActiveCode == dev.Code ? "active" : "")"
-                                            @onclick='() => ClicDevise(dev.Code, dev.Symbole)'>
-                                        <span>@dev.Code (@dev.Symbole)</span>
-                                        <span class="text-muted small ms-2" style="font-size: 0.75rem;">@dev.Libelle</span>
-                                    </button>
-                                </li>
-                            }
-                        }
-                    </ul>
-                </div>
+                <!-- Devise de tenue de la comptabilité : fixe (OHADA : une seule monnaie de tenue).
+                     Les opérations en devises étrangères se saisissent dans les écritures / factures avec leur taux. -->
+                <span class="badge rounded-pill border border-primary text-primary fw-bold px-3 py-2 d-inline-flex align-items-center"
+                      title="Devise de tenue de la comptabilité de @(_entrepriseNom). Tous les montants sont exprimés dans cette devise.">
+                    <i class="bi bi-cash-coin me-1"></i>@_deviseActiveCode (@_deviseSymbole)
+                </span>
             </div>
         </div>
-        <div class="page-wrapper p-4">
-            @Body
+        <div class="page-wrapper p-3 p-md-4">
+            @if (!_verificationEnCours && !Modules.EstActif(_moduleActif))
+            {
+                <!-- Garde : module non inclus dans l'abonnement (l'API refuse de toute façon) -->
+                <div class="text-center py-5" style="max-width: 560px; margin: 40px auto;">
+                    @if (Modules.Actuels.SansEntreprise)
+                    {
+                        <i class="bi bi-buildings fs-1 text-warning d-block mb-3"></i>
+                        <h4 class="fw-bold">Compte d'administration de la plateforme</h4>
+                        <p class="text-muted">Ce compte n'a pas d'entreprise, donc pas de données comptables ni commerciales.
+                            Pour voir l'application comme un client, ouvrez une session <strong>Support</strong> depuis la gestion des PME.</p>
+                        <a href="/superadmin/tenants" class="btn btn-warning fw-bold"><i class="bi bi-headset me-1"></i>Gestion des PME</a>
+                    }
+                    else
+                    {
+                        <i class="bi bi-lock fs-1 text-warning d-block mb-3"></i>
+                        <h4 class="fw-bold">Module non activé</h4>
+                        <p class="text-muted">Le module « @InfoModule(_moduleActif).Titre » n'est pas inclus dans l'abonnement de votre entreprise.
+                            Contactez Finama pour l'ajouter à votre formule.</p>
+                        <a href="/modules" class="btn btn-success">Retour aux modules</a>
+                    }
+                </div>
+            }
+            else
+            {
+                @Body
+            }
         </div>
     </main>
 </div>
@@ -196,7 +380,7 @@
 <style>
     :root {
         --sidebar-w: 260px;
-        --bleu: #0d6efd;
+        --bleu: #198754 !important;
     }
 
     @@media (min-width: 992px) {
@@ -271,8 +455,8 @@
     }
 
         .nav-item:hover {
-            background: rgba(255, 255, 255, 0.05);
-            color: #fff;
+            background: rgba(25, 135, 84, 0.15) !important; /* Fond vert subtil au survol */
+            color: #28a745 !important; /* Texte vert */
         }
 
         .nav-item.active {
@@ -280,11 +464,305 @@
             color: #fff !important;
         }
 
+    .nav-item.active .badge-pos {
+        background: rgba(255, 255, 255, 0.25) !important;
+        color: #fff !important;
+    }
+
+    .badge-pos {
+        background: rgba(25, 135, 84, 0.25) !important;
+        color: #28a745 !important;
+        font-weight: 600;
+        font-size: 0.65rem;
+    }
+
+    /* ───────── Sélecteur de module ───────── */
+    .module-switch {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        transition: background .15s ease;
+    }
+
+        .module-switch:hover,
+        .module-switch[aria-expanded="true"] {
+            background: rgba(255, 255, 255, 0.09);
+        }
+
+    .module-icone {
+        width: 32px;
+        height: 32px;
+        flex: 0 0 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        font-size: 1rem;
+    }
+
+    /* Bloc texte d'une ligne : min-width:0 autorise le rétrécissement (sinon le texte déborde du menu) */
+    .module-texte {
+        flex: 1 1 auto;
+        min-width: 0;
+        text-align: left;
+    }
+
+    /* Sous-titre du bouton : une ligne avec "…" */
+    .module-sous-titre {
+        display: block;
+        font-size: .7rem;
+        color: #8b95a5;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Description dans le menu : jusqu'à 2 lignes, lisible en entier */
+    .module-desc {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
+        font-size: .72rem;
+        line-height: 1.3;
+        color: #8b95a5;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .module-coche {
+        flex: 0 0 auto;
+        color: #10b981;
+        font-size: 1rem;
+    }
+
+    .module-menu {
+        display: none;
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        z-index: 1060;
+        padding: 6px;
+        background: #1b2330;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 12px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+        max-height: calc(100vh - 170px);   /* petits écrans : le menu défile, pas la page */
+        overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
+    }
+
+        .module-menu.show {
+            display: block;
+            animation: module-menu-in .12s ease-out;
+        }
+
+    @@keyframes module-menu-in {
+        from { opacity: 0; transform: translateY(-4px); }
+        to { opacity: 1; transform: none; }
+    }
+
+    .module-item {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 8px;
+        background: none;
+        border: 0;
+        border-radius: 8px;
+        color: #e9ecef;
+        text-align: left;
+        transition: background .12s ease;
+    }
+
+        .module-item:hover,
+        .module-item:focus-visible {
+            background: rgba(255, 255, 255, 0.08);
+            outline: none;
+        }
+
+        .module-item.actif {
+            background: rgba(16, 185, 129, 0.14);
+            box-shadow: inset 3px 0 0 #10b981;   /* repère vert sur le module courant */
+        }
+
+    .module-separateur {
+        height: 1px;
+        margin: 6px 4px;
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Barre de défilement discrète (navigation latérale et menu des modules) */
+    .sidebar-nav,
+    .module-menu {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, .18) transparent;
+    }
+
+        .sidebar-nav::-webkit-scrollbar,
+        .module-menu::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar-nav::-webkit-scrollbar-thumb,
+        .module-menu::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, .18);
+            border-radius: 3px;
+        }
+
+        .sidebar-nav::-webkit-scrollbar-track,
+        .module-menu::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .module-menu.show { animation: none; }
+    }
+
     .nav-icon {
         font-size: 1.1rem;
         display: inline-flex;
         align-items: center;
         justify-content: center;
+    }
+
+    /* ───────── Notifications (Radzen) : carte flottante en haut à droite, au-dessus de la sidebar et des modales ───────── */
+    .rz-notification {
+        position: fixed !important;
+        inset: auto !important;
+        top: 76px !important;
+        right: 16px !important;
+        z-index: 3000 !important;
+        width: min(400px, calc(100vw - 32px));
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        pointer-events: none;
+    }
+
+        .rz-notification > div {
+            pointer-events: auto;
+        }
+
+    .rz-notification-item-wrapper {
+        --toast-accent: #0d6efd;
+        position: relative;
+        width: 100% !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+        overflow: hidden;
+        border-radius: 12px;
+        background: var(--bs-body-bg, #fff) !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, .22), 0 2px 6px rgba(0, 0, 0, .12);
+        animation: finama-toast-in .22s ease-out;
+    }
+
+    .rz-notification-success { --toast-accent: #198754; }
+    .rz-notification-error { --toast-accent: #dc3545; }
+    .rz-notification-warn { --toast-accent: #f59f00; }
+    .rz-notification-info { --toast-accent: #0d6efd; }
+
+    .rz-notification-item-wrapper .rz-notification-item {
+        background: transparent !important;
+        color: var(--bs-body-color, #212529) !important;
+        border-left: 5px solid var(--toast-accent);
+        border-radius: 0;
+        padding: 14px 12px 16px 14px;
+        box-shadow: none !important;
+    }
+
+    .rz-notification-title {
+        font-weight: 700;
+        font-size: .95rem;
+    }
+
+    .rz-notification-content {
+        font-size: .875rem;
+        opacity: .85;
+        line-height: 1.35;
+        white-space: pre-line;
+        word-break: break-word;
+    }
+
+    /* Icônes : Bootstrap Icons (déjà chargé) plutôt que la police Radzen, dont la ligature s'affichait en texte brut si absente */
+    .rz-notification-item-wrapper .rz-notification-icon {
+        flex: 0 0 auto;
+        width: 22px;
+        height: 22px;
+        font-size: 0 !important;
+        color: var(--toast-accent) !important;
+    }
+
+        .rz-notification-item-wrapper .rz-notification-icon::before {
+            font-family: "bootstrap-icons" !important;
+            font-style: normal;
+            font-size: 1.35rem;
+            line-height: 1;
+            content: "\f430" !important;
+        }
+
+    .rz-notification-success .rz-notification-icon::before { content: "\f26a" !important; }
+    .rz-notification-error .rz-notification-icon::before { content: "\f622" !important; }
+    .rz-notification-warn .rz-notification-icon::before { content: "\f33a" !important; }
+    .rz-notification-info .rz-notification-icon::before { content: "\f430" !important; }
+
+    .rz-notification-item-wrapper .rz-notification-close {
+        flex: 0 0 auto;
+        width: 26px;
+        height: 26px;
+        font-size: 0 !important;
+        border-radius: 6px;
+        opacity: .6;
+        color: inherit;
+    }
+
+        .rz-notification-item-wrapper .rz-notification-close:hover {
+            opacity: 1;
+            background: rgba(128, 128, 128, .18);
+        }
+
+        .rz-notification-item-wrapper .rz-notification-close::before {
+            font-family: "bootstrap-icons" !important;
+            font-size: .95rem;
+            content: "\f659" !important;
+        }
+
+    .rz-notification-item-wrapper > .rz-progressbar {
+        position: absolute !important;
+        inset-inline: 0 !important;
+        inset-block-end: 0 !important;
+        height: 3px !important;
+        border-radius: 0 !important;
+        background: rgba(128, 128, 128, .15) !important;
+    }
+
+    .rz-notification-item-wrapper .rz-progressbar-value {
+        background: var(--toast-accent) !important;
+    }
+
+    @@keyframes finama-toast-in {
+        from { opacity: 0; transform: translateX(28px); }
+        to { opacity: 1; transform: none; }
+    }
+
+    @@media (max-width: 575px) {
+        .rz-notification {
+            top: 64px !important;
+            left: 8px !important;
+            right: 8px !important;
+            width: auto;
+        }
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .rz-notification-item-wrapper { animation: none; }
     }
 
     .btn-logout {
@@ -310,15 +788,136 @@
     private List<DeviseDto>? _listeDevises;
     private string _deviseActiveCode = "XOF";
     private bool _dropdownOpen = false;
+    private bool _moduleDropdownOpen = false;
+
+    private string _moduleActif = "COMPTA";
+
+    // Interop JS : module dédié (wwwroot/js/finama-menus.js), sans eval.
+    private DotNetObjectReference<MainLayout>? _reference;
+    private IJSObjectReference? _moduleMenus;
+    private IJSObjectReference? _abonnementMenus;
+    private bool _detruit;
+
+    // Informations d'affichage d'un module (une seule source pour le sélecteur, le badge et le titre).
+    private static (string Titre, string Description, string Icone, string Fond) InfoModule(string code) => code switch
+    {
+        "COMPTA" => ("Finance & Compta", "Écritures, factures, balance, tiers", "bi-wallet2", "bg-primary bg-opacity-25 text-primary"),
+        "COMMERCE" => ("Commerce & Ventes", "Caisse, articles, stock, clients", "bi-cart3", "bg-success bg-opacity-25 text-success"),
+        "VENTES" => ("Ventes & Devis", "Devis, pipeline, clients, factures", "bi-file-earmark-check", "bg-info bg-opacity-25 text-info"),
+        "ADMIN" => ("Administration", "Utilisateurs, entreprise, paramètres", "bi-gear", "bg-warning bg-opacity-25 text-warning"),
+        _ => ("Choisir un module", "Accueil des modules", "bi-grid-3x3-gap", "bg-secondary bg-opacity-25 text-light")
+    };
+
+    private RenderFragment ItemModule(string code) => __builder =>
+    {
+        var info = InfoModule(code);
+        <button type="button" role="menuitem" class="module-item @(_moduleActif == code ? "actif" : "")" @onclick="() => SelectionnerModuleAsync(code)">
+            <span class="module-icone @info.Fond"><i class="bi @info.Icone"></i></span>
+            <span class="module-texte">
+                <span class="d-block fw-bold small">@info.Titre</span>
+                <span class="module-desc">@info.Description</span>
+            </span>
+            @if (_moduleActif == code) { <i class="bi bi-check2 module-coche"></i> }
+        </button>
+    };
 
     protected override async Task OnInitializedAsync()
     {
+        Nav.LocationChanged += SurNavigation;
+        DetecterModuleActifDepuisUrl();
         await SecuriserAccesAsync();
+
+        // Redirection automatique vers la grille des modules si on est à la racine
+        var uriRelative = Nav.ToBaseRelativePath(Nav.Uri).ToLower();
+        if (string.IsNullOrEmpty(uriRelative) || uriRelative == "/")
+        {
+            Nav.NavigateTo("/modules");
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // 1. Chargement du module JS et abonnement aux clics extérieurs / touche Échap
+        try
+        {
+            _reference = DotNetObjectReference.Create(this);
+            _moduleMenus = await JS.InvokeAsync<IJSObjectReference>("import", "./js/finama-menus.js");
+            _abonnementMenus = await _moduleMenus.InvokeAsync<IJSObjectReference>("enregistrerMenus", _reference);
+        }
+        catch { /* JS indisponible : les menus se referment au prochain clic sur leur bouton */ }
+
+        // 2. Sur téléphone/tablette, la sidebar est un tiroir : elle démarre fermée
+        if (await EstEcranEtroitAsync())
+        {
+            _sidebarOpen = false;
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public void FermerMenus()
+    {
+        if (_detruit || (!_moduleDropdownOpen && !_dropdownOpen)) return;
+        _moduleDropdownOpen = false;
+        _dropdownOpen = false;
+        InvokeAsync(StateHasChanged);
+    }
+
+    // Mémorise la dernière page visitée (globalement et par module) pour « Reprendre » et pour le retour dans un module.
+    private void SurNavigation(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        // Un changement de page referme toujours les menus ouverts
+        if (_moduleDropdownOpen || _dropdownOpen)
+        {
+            _moduleDropdownOpen = false;
+            _dropdownOpen = false;
+            InvokeAsync(StateHasChanged);
+        }
+
+        _ = MemoriserPageAsync();
+    }
+
+    private async Task MemoriserPageAsync()
+    {
+        if (_detruit) return;
+        try
+        {
+            var relatif = Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].TrimEnd('/').ToLower();
+            if (relatif is "" or "modules" || EstPagePublique(relatif)) return;
+
+            var chemin = "/" + relatif;
+            await JS.InvokeVoidAsync("localStorage.setItem", "finama_derniere_page", chemin);
+            await JS.InvokeVoidAsync("localStorage.setItem", $"finama_page_{ModuleDepuisUrl(relatif)}", chemin);
+        }
+        catch { /* stockage indisponible : sans conséquence */ }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _detruit = true;
+        Nav.LocationChanged -= SurNavigation;
+
+        try
+        {
+            if (_abonnementMenus is not null)
+            {
+                await _abonnementMenus.InvokeVoidAsync("dispose");   // retire les écouteurs AVANT de libérer la référence .NET
+                await _abonnementMenus.DisposeAsync();
+            }
+            if (_moduleMenus is not null)
+                await _moduleMenus.DisposeAsync();
+        }
+        catch { /* runtime JS déjà arrêté (rechargement de page) */ }
+
+        _reference?.Dispose();
     }
 
     protected override async Task OnParametersSetAsync()
     {
-        // Ne réexécute la vérification complète que si le composant n'était pas encore initialisé
+        DetecterModuleActifDepuisUrl();
+
         if (_isInitialized)
         {
             var uriRelative = Nav.ToBaseRelativePath(Nav.Uri).ToLower();
@@ -336,24 +935,85 @@
         await SecuriserAccesAsync();
     }
 
+    private async Task<bool> EstEcranEtroitAsync()
+    {
+        try
+        {
+            return _moduleMenus is not null && await _moduleMenus.InvokeAsync<bool>("estEcranEtroit");
+        }
+        catch { return false; }
+    }
+
+    private void DetecterModuleActifDepuisUrl()
+    {
+        var relatif = Nav.ToBaseRelativePath(Nav.Uri).ToLower();
+        _moduleActif = ModuleDepuisUrl(relatif);
+
+        // Factures et clients sont partagés : sans la comptabilité, on reste dans Ventes & Devis
+        if (_moduleActif == "COMPTA" && !Modules.Actuels.Comptabilite && Modules.Actuels.GestionCommerciale
+            && (relatif.StartsWith("factures") || relatif.StartsWith("referentiel/tiers")))
+            _moduleActif = "VENTES";
+    }
+
+    private static string ModuleDepuisUrl(string relatif)
+    {
+        if (relatif.StartsWith("commerce")) return "COMMERCE";
+        if (relatif.StartsWith("ventes") || relatif.StartsWith("commercial")) return "VENTES";
+        if (relatif.StartsWith("configuration") || relatif.StartsWith("administration") || relatif.StartsWith("utilisateurs") || relatif.StartsWith("entreprise") || relatif.StartsWith("superadmin")) return "ADMIN";
+        if (relatif.StartsWith("modules")) return "MODULES";   // Hub global des modules
+        return "COMPTA";
+    }
+
+    private void ToggleModuleDropdown()
+    {
+        _moduleDropdownOpen = !_moduleDropdownOpen;
+        _dropdownOpen = false;
+    }
+
+    private void AllerAuxModules()
+    {
+        _moduleDropdownOpen = false;
+        Nav.NavigateTo("/modules");
+    }
+
+    private async Task SelectionnerModuleAsync(string module)
+    {
+        _moduleActif = module;
+        _moduleDropdownOpen = false;
+
+        var defaut = module switch
+        {
+            "COMMERCE" => "/commerce/produits",
+            "ADMIN" => "/entreprise",
+            "VENTES" => "/ventes",
+            _ => "/"
+        };
+
+        string? derniere = null;
+        try { derniere = await JS.InvokeAsync<string?>("localStorage.getItem", $"finama_page_{module}"); }
+        catch { /* stockage indisponible */ }
+
+        Nav.NavigateTo(!string.IsNullOrWhiteSpace(derniere) && derniere.StartsWith('/') ? derniere : defaut);
+    }
+
     private async Task SecuriserAccesAsync()
     {
         var uriRelative = Nav.ToBaseRelativePath(Nav.Uri).ToLower();
 
-        if (uriRelative.StartsWith("connexion") || uriRelative.StartsWith("register"))
+        if (EstPagePublique(uriRelative))
         {
             _verificationEnCours = false;
             _isInitialized = true;
             return;
         }
 
-        var estConnecte = await Api.EstConnecteAsync();
+        var etat = await EtatSessionAsync();
 
-        if (!estConnecte)
+        if (etat != "valide")
         {
             _verificationEnCours = false;
             _isInitialized = true;
-            Nav.NavigateTo("/connexion", forceLoad: false);
+            Nav.NavigateTo(etat == "expiree" ? "/connexion?expire=1" : "/connexion");
         }
         else
         {
@@ -361,6 +1021,7 @@
             {
                 await ChargerDonneesSessionAsync();
             }
+            await Modules.ChargerAsync();   // menus selon l'abonnement de l'entreprise
             _verificationEnCours = false;
             _isInitialized = true;
             StateHasChanged();
@@ -399,27 +1060,51 @@
         }
     }
 
+    /// <summary>
+    /// "absente" : jamais connecté ; "expiree" : jeton expiré ET pas de renouvellement possible ;
+    /// "valide" : jeton valide, ou expiré mais renouvelable (AuthHeaderHandler le renouvelle au premier appel).
+    /// Lecture locale uniquement : aucun appel réseau, donc aucun écran de chargement en plus.
+    /// </summary>
+    private async Task<string> EtatSessionAsync()
+    {
+        var token = await Api.GetTokenAsync();
+        if (string.IsNullOrEmpty(token)) return "absente";
+        if (!JwtOutils.EstExpire(token)) return "valide";
+
+        string? refresh = null;
+        try { refresh = await JS.InvokeAsync<string?>("localStorage.getItem", "finama_refresh"); } catch { }
+        return string.IsNullOrEmpty(refresh) ? "expiree" : "valide";
+    }
+
+    /// <summary>Pages accessibles sans être connecté (jamais redirigées vers la connexion).</summary>
+    private static bool EstPagePublique(string relatif) =>
+        relatif.StartsWith("connexion") || relatif.StartsWith("login") || relatif.StartsWith("register")
+        || relatif.StartsWith("inscription") || relatif.StartsWith("mot-de-passe-oublie");
+
     private void ToggleSidebar()
     {
         _sidebarOpen = !_sidebarOpen;
     }
 
-    private void GererClicNav()
+    // Sur petit écran, on referme le tiroir après le choix d'une page.
+    private async Task GererClicNav()
     {
-        // En écran mobile, on replie la sidebar automatiquement lors du clic sur un lien
-        // Optionnel : décommentez si vous souhaitez ce comportement sur mobile
-        // _sidebarOpen = false;
+        if (_sidebarOpen && await EstEcranEtroitAsync())
+            _sidebarOpen = false;
     }
 
     private async Task Deconnecter()
     {
+        _moduleDropdownOpen = false;
+        _dropdownOpen = false;
         await Api.LogoutAsync();
-        Nav.NavigateTo("/connexion");
+        Nav.NavigateTo("/connexion", forceLoad: true);   // repart de zéro : aucun droit ni menu du compte précédent
     }
 
     private void ToggleDropdown()
     {
         _dropdownOpen = !_dropdownOpen;
+        _moduleDropdownOpen = false;
     }
 
     private void ClicDevise(string code, string symbole)

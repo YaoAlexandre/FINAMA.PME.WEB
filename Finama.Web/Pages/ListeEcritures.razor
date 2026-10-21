@@ -12,9 +12,13 @@
             <h2 class="page-title"><i class="bi bi-book-half me-2"></i>Journal des Écritures</h2>
             <p class="page-subtitle text-muted">Gestion et suivi des flux comptables</p>
         </div>
-        <button class="btn btn-primary shadow-sm px-4" @onclick="OuvrirNouvelleSaisie">
-            <i class="bi bi-plus-circle-fill me-2"></i>Nouvelle Saisie
-        </button>
+        <div class="d-flex gap-2">
+            <BoutonExportExcel Url="@($"api/exports/journal?journal={_filtre.Journal}&inclureBrouillons={(_filtre.Statut == "Brouillon" || string.IsNullOrEmpty(_filtre.Statut)).ToString().ToLower()}")"
+                               NomFichier="Journal.xlsx" Libelle="Journal Excel" Classe="btn-outline-success shadow-sm" />
+            <button class="btn btn-primary shadow-sm px-4" @onclick="OuvrirNouvelleSaisie">
+                <i class="bi bi-plus-circle-fill me-2"></i>Nouvelle Saisie
+            </button>
+        </div>
     </div>
 
     <div class="card border-0 shadow-sm">

@@ -1,0 +1,241 @@
+@page "/commerce/inventaires/{Id:guid}"
+@using Finama.Web
+@using Finama.Web.Services
+@inject CommerceApiService CommerceApi
+@inject NavigationManager Nav
+@inject Radzen.NotificationService NotificationService
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold text-dark mb-1">
+            <i class="bi bi-journal-check text-success me-2"></i>Feuille de Comptage - @_inventaire?.Numero
+        </h3>
+        <p class="text-muted small mb-0">@_inventaire?.Libelle | Ouverte le @_inventaire?.DateOuverture.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        @if (_inventaire?.Statut == StatutInventaire.Ouvert)
+        {
+            <button class="btn btn-outline-success fw-bold px-3 py-2 rounded-3 shadow-sm" @onclick="() => _scanner.OuvrirAsync()"
+                    title="Chaque article scanné ajoute 1 à sa quantité comptée">
+                <i class="bi bi-camera me-1"></i> Compter au scan
+            </button>
+        }
+        <BoutonExportExcel Url="@($"api/exports/inventaires/{Id}")" NomFichier="@($"Inventaire_{_inventaire?.Numero}.xlsx")"
+                           Classe="btn-outline-success fw-bold px-3 py-2 rounded-3 shadow-sm" Desactive="@(_inventaire is null)" />
+        <button class="btn btn-outline-secondary fw-bold px-3 py-2 rounded-3 shadow-sm" @onclick='() => Nav.NavigateTo("/commerce/inventaires")'>
+            <i class="bi bi-arrow-left me-1"></i> Retour
+        </button>
+        @if (_inventaire?.Statut == StatutInventaire.Ouvert)
+        {
+            <button class="btn btn-success fw-bold px-3 py-2 rounded-3 shadow-sm d-flex align-items-center gap-2" @onclick="CloturerInventaire" disabled="@_enCoursAction">
+                <i class="bi bi-check2-all fs-6"></i>
+                <span>Valider & Clôturer l'inventaire</span>
+            </button>
+        }
+    </div>
+</div>
+
+@if (_chargement)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-success mb-2" role="status"></div>
+        <div class="text-muted small">Chargement de la feuille de rapprochement...</div>
+    </div>
+}
+else if (_inventaire == null)
+{
+    <div class="alert alert-danger shadow-sm">Impossible de charger les détails de cet inventaire.</div>
+}
+else
+{
+    <div class="card border-0 shadow-sm rounded-3">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light font-monospace small text-uppercase">
+                        <tr>
+                            <th class="ps-4">Article</th>
+                            <th>Lot</th>
+                            <th class="text-center">Quantité Théorique</th>
+                            <th class="text-center" style="width: 200px;">Quantité Comptée (Physique)</th>
+                            <th class="text-center">Écart</th>
+                            <th class="text-end pe-4">Statut Ligne</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var ligne in _inventaire.Lignes)
+                        {
+                            var ecart = ligne.QuantiteComptee.HasValue ? ligne.QuantiteComptee.Value - ligne.QuantiteTheorique : (decimal?)null;
+                            <tr @key="ligne.LigneId" class="@(_derniereLigneScannee == ligne.LigneId ? "ligne-scannee" : "")">
+                                <td class="ps-4 fw-bold text-dark">@ligne.ProduitLibelle</td>
+                                <td class="font-monospace small">@(string.IsNullOrWhiteSpace(ligne.NumeroLot) ? "—" : ligne.NumeroLot)</td>
+                                <td class="text-center font-monospace text-muted">@ligne.QuantiteTheorique?.ToString("0.###")</td>
+                                <td class="text-center">
+                                    @if (_inventaire.Statut == StatutInventaire.Ouvert)
+                                    {
+                                        <input type="number" class="form-control form-control-sm font-monospace text-center fw-bold"
+                                               value="@ligne.QuantiteComptee"
+                                               @onchange="@(e => MettreAJourComptageLigne(ligne, e.Value))"
+                                               min="0" />
+                                    }
+                                    else
+                                    {
+                                        <span class="font-monospace fw-bold">@ligne.QuantiteComptee?.ToString("0.###")</span>
+                                    }
+                                </td>
+                                <td class="text-center font-monospace fw-bold">
+                                    @if (ecart.HasValue)
+                                    {
+                                        <span class="@(ecart == 0 ? "text-success" : ecart > 0 ? "text-primary" : "text-danger")">
+                                            @(ecart > 0 ? $"+{ecart:0.###}" : ecart.Value.ToString("0.###"))
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted fst-italic small">Non compté</span>
+                                    }
+                                </td>
+                                <td class="text-end pe-4">
+                                    @if (ligne.QuantiteComptee.HasValue)
+                                    {
+                                        <span class="badge bg-success bg-opacity-10 text-success font-monospace">Saisi</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning bg-opacity-10 text-dark font-monospace">En attente</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .ligne-scannee { animation: flash-scan 1.2s ease-out; }
+    @@keyframes flash-scan { from { background: rgba(25, 135, 84, .25); } to { background: transparent; } }
+</style>
+
+<ConfirmDialog @ref="_confirm" />
+<ScannerCamera @ref="_scanner" OnCode="SurCodeCamera" Continu="true" Titre="Compter au scan" />
+
+@code {
+    private ConfirmDialog _confirm = default!;
+    private ScannerCamera _scanner = default!;
+    [Parameter] public Guid Id { get; set; }
+
+    private InventaireDto? _inventaire;
+    private List<ProduitCommerceDto> _produits = new();
+    private Guid? _derniereLigneScannee;
+    private bool _chargement = true;
+    private bool _enCoursAction = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ChargerDetails();
+        _produits = await CommerceApi.GetProduitsAsync();   // pour retrouver l'article à partir du code scanné
+    }
+
+    private async Task ChargerDetails()
+    {
+        _chargement = true;
+        _inventaire = await CommerceApi.GetInventaireDetailsAsync(Id);
+        _chargement = false;
+    }
+
+    // Chaque scan ajoute 1 au comptage de l'article (lot unique ou article sans lot)
+    private async Task SurCodeCamera(string code)
+    {
+        if (_inventaire is null || _inventaire.Statut != StatutInventaire.Ouvert) return;
+
+        var produit = _produits.FirstOrDefault(p =>
+            string.Equals(p.CodeBarres, code, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.Isbn, code, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.Reference, code, StringComparison.OrdinalIgnoreCase));
+
+        if (produit is null)
+        {
+            NotificationService.Avertir($"Aucun article pour le code {code}.", "Code inconnu");
+            return;
+        }
+
+        var lignes = _inventaire.Lignes.Where(l => l.ProduitId == produit.Id).ToList();
+        if (lignes.Count == 0)
+        {
+            NotificationService.Avertir($"« {produit.Libelle} » ne fait pas partie de cet inventaire.", "Hors inventaire");
+            return;
+        }
+        if (lignes.Count > 1)
+        {
+            NotificationService.Avertir($"« {produit.Libelle} » a plusieurs lots : saisissez la quantité sur la ligne du bon lot.", "Plusieurs lots");
+            return;
+        }
+
+        var ligne = lignes[0];
+        await MettreAJourComptageLigne(ligne, ((ligne.QuantiteComptee ?? 0) + 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        _derniereLigneScannee = ligne.LigneId;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task MettreAJourComptageLigne(InventaireLigneDto ligne, object? valeurObj)
+    {
+        var texte = valeurObj?.ToString()?.Replace(',', '.');
+        if (!decimal.TryParse(texte, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var qteComptee) || qteComptee < 0)
+        {
+            NotificationService.Avertir("Saisissez une quantité positive ou nulle.", "Quantité invalide");
+            return;
+        }
+
+        var ancienne = ligne.QuantiteComptee;
+        ligne.QuantiteComptee = qteComptee;
+
+        var request = new ComptageRequest(new List<SaisieLigneComptage> { new SaisieLigneComptage(ligne.LigneId, qteComptee) });
+        if (!await CommerceApi.CompterInventaireAsync(Id, request))
+        {
+            ligne.QuantiteComptee = ancienne;   // l'écran ne ment jamais : la valeur affichée est celle qui est enregistrée
+            NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Le comptage n'a pas été enregistré.", "Comptage non enregistré");
+        }
+        // Pas de notification de succès à chaque ligne : le badge « Saisi » suffit et ne gêne pas la saisie rapide.
+    }
+
+    private async Task CloturerInventaire()
+    {
+        if (_inventaire == null) return;
+
+        var nonComptees = _inventaire.Lignes.Count(l => !l.QuantiteComptee.HasValue);
+        var avecEcart = _inventaire.Lignes.Count(l => l.QuantiteComptee.HasValue && l.QuantiteComptee != l.QuantiteTheorique);
+        var traiterCommeZero = false;
+
+        if (nonComptees > 0)
+        {
+            if (!await _confirm.DemanderAsync(
+                    $"{nonComptees} article(s) n'ont pas été comptés.\nSi vous continuez, ils seront considérés comme absents : leur stock sera remis à 0.",
+                    "Des articles ne sont pas comptés", "Mettre à 0 et clôturer", "Revenir au comptage", ConfirmationType.Danger)) return;
+            traiterCommeZero = true;
+        }
+        else if (!await _confirm.DemanderAsync(
+                    $"{avecEcart} écart(s) seront appliqués au stock. Cette opération est définitive.",
+                    "Clôturer l'inventaire ?", "Clôturer et régulariser",
+                    type: avecEcart > 0 ? ConfirmationType.Avertissement : ConfirmationType.Question)) return;
+
+        _enCoursAction = true;
+        try
+        {
+            if (!await CommerceApi.CloturerInventaireAsync(Id, new ClotureInventaireRequest(traiterCommeZero)))
+            {
+                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "L'inventaire n'a pas pu être clôturé.", "Clôture impossible");
+                return;
+            }
+
+            NotificationService.Succes("Inventaire clôturé : les stocks ont été régularisés.", "Clôture réussie");
+            Nav.NavigateTo("/commerce/inventaires");
+        }
+        finally
+        {
+            _enCoursAction = false;
+        }
+    }
+}

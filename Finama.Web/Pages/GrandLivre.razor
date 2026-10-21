@@ -10,9 +10,14 @@
         <h1 class="page-title mb-1"><i class="bi bi-journal-text text-primary me-2"></i>Grand Livre</h1>
         <p class="text-muted small mb-0">Mouvements chronologiques détaillés et soldes cumulés par compte comptable</p>
     </div>
-    <button class="btn btn-sm btn-outline-secondary shadow-sm" @onclick="ActualiserAsync" disabled="@_chargement">
-        <i class="bi bi-arrow-clockwise me-1"></i> Actualiser
-    </button>
+    <div class="d-flex gap-2">
+        <BoutonExportExcel Url="@($"api/exports/grand-livre?exerciceId={_exerciceCourant?.Id}&compteNumero={Uri.EscapeDataString(_compteNumero ?? "")}")"
+                           NomFichier="GrandLivre.xlsx" Classe="btn-sm btn-outline-success shadow-sm"
+                           Desactive="@(_chargement || _exerciceCourant is null)" />
+        <button class="btn btn-sm btn-outline-secondary shadow-sm" @onclick="ActualiserAsync" disabled="@_chargement">
+            <i class="bi bi-arrow-clockwise me-1"></i> Actualiser
+        </button>
+    </div>
 </div>
 
 <div class="card shadow-sm border-0 mb-4 bg-light">

@@ -1,0 +1,82 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@* Bandeau « Installer l'application Finama » : Android et ordinateur (bouton), iPhone (instructions). Masqué si déjà installée ou refusé. *@
+@if (_afficher)
+{
+    <div class="installer-app d-flex align-items-center gap-3 px-3 py-2">
+        <img src="icons/icon-192.png" alt="" width="40" height="40" class="rounded-3" />
+        <div class="flex-grow-1 small">
+            <div class="fw-bold">Installez Finama sur votre téléphone</div>
+            @if (_etat?.Ios == true)
+            {
+                <div>Touchez <i class="bi bi-box-arrow-up"></i> <strong>Partager</strong>, puis <strong>« Sur l'écran d'accueil »</strong>.</div>
+            }
+            else
+            {
+                <div>Une icône sur l'écran d'accueil, en plein écran, comme une application.</div>
+            }
+        </div>
+        @if (_etat?.Installable == true)
+        {
+            <button class="btn btn-sm btn-light fw-bold" @onclick="Installer">Installer</button>
+        }
+        <button class="btn-close btn-close-white" aria-label="Plus tard" @onclick="Masquer"></button>
+    </div>
+}
+
+<style>
+    .installer-app { background: #0F8873; color: #fff; position: sticky; top: 0; z-index: 1030; }
+</style>
+
+@code {
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<InstallerApp>? _ref;
+    private EtatPwa? _etat;
+    private bool _afficher;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/finama-pwa.js");
+            _ref = DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("enregistrer", _ref);
+            await MettreAJour();
+        }
+        catch { /* navigateur ancien : pas de bandeau */ }
+    }
+
+    [JSInvokable]
+    public async Task MettreAJour()
+    {
+        if (_module is null) return;
+        _etat = await _module.InvokeAsync<EtatPwa>("etat");
+        var refuse = await JS.InvokeAsync<string?>("localStorage.getItem", "finama_pwa_masque") == "1";
+        // Proposé sur iPhone (pas d'invitation automatique) ou quand le navigateur permet l'installation
+        _afficher = !_etat.Installee && !refuse && (_etat.Installable || _etat.Ios);
+        StateHasChanged();
+    }
+
+    private async Task Installer()
+    {
+        if (_module is null) return;
+        if (await _module.InvokeAsync<bool>("installer")) _afficher = false;
+        await MettreAJour();
+    }
+
+    private async Task Masquer()
+    {
+        _afficher = false;
+        try { await JS.InvokeVoidAsync("localStorage.setItem", "finama_pwa_masque", "1"); } catch { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { if (_module is not null) await _module.DisposeAsync(); } catch { }
+        _ref?.Dispose();
+    }
+
+    private sealed record EtatPwa(bool Installee, bool Ios, bool Installable);
+}

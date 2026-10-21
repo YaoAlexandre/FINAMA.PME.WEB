@@ -11,13 +11,19 @@
         <h1 class="page-title mb-1"><i class="bi bi-journal-check me-2 text-primary"></i>Balance des Comptes</h1>
         <p class="text-muted small mb-0">Exercice @_anneeSelectionnee — Vérification générale de la cohérence des livres.</p>
     </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 flex-wrap">
         @if (_loading == false && _estEquilibree == true)
         {
             <button class="btn btn-danger shadow-sm px-4 fw-bold" @onclick="OuvrirConfirmationCloture">
                 <i class="bi bi-lock-fill me-2"></i>Clôturer l'exercice @_anneeSelectionnee
             </button>
         }
+        <BoutonExportExcel Url="@($"api/exports/balance?exerciceId={_exerciceIdActuel}")"
+                           NomFichier="@($"Balance_{_anneeSelectionnee}.xlsx")" Libelle="Balance Excel"
+                           Classe="btn-outline-success shadow-sm px-3" Desactive="@(_loading || _exerciceIdActuel == Guid.Empty)" />
+        <BoutonExportExcel Url="@($"api/exports/etats-financiers?exerciceId={_exerciceIdActuel}")"
+                           NomFichier="@($"EtatsFinanciers_{_anneeSelectionnee}.xlsx")" Libelle="Bilan & résultat"
+                           Classe="btn-success shadow-sm px-3" Desactive="@(_loading || _exerciceIdActuel == Guid.Empty)" />
         <button class="btn btn-light border shadow-sm px-3 py-2 d-flex align-items-center gap-2 text-secondary" @onclick="Rafraichir" disabled="@_loading">
             <i class="bi bi-arrow-clockwise @(_loading ? "spin-animation" : "")"></i> Actualiser
         </button>
@@ -46,7 +52,7 @@ else if (_estEquilibree == true)
                 <i class="bi bi-check-circle-fill fs-5"></i>
             </div>
             <div class="flex-grow-1">
-                <h6 class="fw-bold mb-1" style="color: #0f5132;">Balance perfectly équilibrée</h6>
+                <h6 class="fw-bold mb-1" style="color: #0f5132;">Balance parfaitement équilibrée</h6>
                 <p class="mb-0 small opacity-90">Le total des mouvements et des soldes respecte le principe de la partie double.</p>
             </div>
         </div>

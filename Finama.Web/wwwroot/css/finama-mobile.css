@@ -1,0 +1,49 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   FINAMA — adaptations téléphone, communes à toutes les pages (≤ 767 px).
+   Chargée en DERNIER dans index.html. L'affichage ordinateur n'est pas modifié.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 767.98px) {
+
+    /* ── Saisie : pas de zoom automatique de l'iPhone (texte < 16 px = zoom) ── */
+    input.form-control, select.form-select, textarea.form-control,
+    .form-control-sm, .form-select-sm, .input-group-sm > .form-control, .input-group-sm > .form-select {
+        font-size: 16px !important;
+    }
+
+    /* ── Marges : plus de place pour le contenu ── */
+    .page-wrapper { padding: 12px !important; }
+    .card-body.p-4, .modal-body.p-4 { padding: 1rem !important; }
+    .container, .container-fluid { padding-left: 12px; padding-right: 12px; }
+
+    /* ── En-têtes de page : titre au-dessus, boutons en dessous, pleine largeur ── */
+    .page-header, .page-wrapper > .d-flex.justify-content-between,
+    .d-flex.justify-content-between.align-items-center.mb-4 { flex-wrap: wrap; gap: .75rem; }
+    .page-header > div:last-child:not(:first-child), .d-flex.justify-content-between.align-items-center.mb-4 > div.d-flex { width: 100%; }
+    .page-header .btn, .d-flex.justify-content-between.align-items-center.mb-4 > .btn { flex: 1 1 auto; }
+    h2, .h2, .page-title { font-size: 1.4rem; }
+    h3, .h3 { font-size: 1.25rem; }
+
+    /* ── Tableaux : défilement horizontal propre, lignes compactes ── */
+    .table-responsive { -webkit-overflow-scrolling: touch; }
+    .table-responsive > .table { font-size: .9rem; }
+    .table-responsive > .table th, .table-responsive > .table td { white-space: nowrap; padding: .55rem .6rem; }
+    .table-responsive > .table td.ps-4, .table-responsive > .table th.ps-4 { padding-left: .75rem !important; }
+    .table-responsive > .table td.pe-4, .table-responsive > .table th.pe-4 { padding-right: .75rem !important; }
+
+    /* ── Fenêtres (modales) : plein écran, faciles à remplir au pouce ── */
+    .modal-dialog { margin: 0; max-width: 100% !important; min-height: 100%; align-items: stretch; }
+    .modal-content { border-radius: 0 !important; min-height: 100dvh; }
+    .modal-body { max-height: none !important; }
+    .modal-footer { position: sticky; bottom: 0; background: inherit; padding-bottom: calc(.75rem + env(safe-area-inset-bottom)); }
+    .modal-footer .btn { flex: 1 1 auto; }
+    .finama-adjusted-modal { padding-left: 0 !important; }
+
+    /* ── Boutons et pagination ── */
+    .btn-group { flex-wrap: wrap; }
+    .pagination { flex-wrap: wrap; justify-content: center; }
+    .btn-lg { font-size: 1rem; }
+
+    /* ── Badges et textes longs : pas de débordement ── */
+    .badge { white-space: normal; }
+    .text-truncate-mobile { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}

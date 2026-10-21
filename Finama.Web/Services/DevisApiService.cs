@@ -1,4 +1,4 @@
-﻿using Finama.Web.Models;
+using Finama.Web.Models;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using System.Net.Http.Headers;
@@ -142,20 +142,8 @@ public class DevisApiService
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
-    private async Task SetAuthHeaderAsync()
-    {
-        var deviceId = await GetDeviceIdAsync();
-
-        if (!_http.DefaultRequestHeaders.Contains("X-Device-Id"))
-            _http.DefaultRequestHeaders.Add("X-Device-Id", deviceId);
-
-        if (!_http.DefaultRequestHeaders.Contains("ngrok-skip-browser-warning"))
-            _http.DefaultRequestHeaders.Add("ngrok-skip-browser-warning", "true");
-
-        var token = await _js.InvokeAsync<string?>("localStorage.getItem", "finama_token");
-        if (!string.IsNullOrEmpty(token))
-            _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-    }
+    // Jeton + X-Device-Id : ajoutés par AuthHeaderHandler (une seule source de vérité, refresh automatique).
+    private async Task SetAuthHeaderAsync() => await GetDeviceIdAsync();
 
     private async Task<string> GetDeviceIdAsync()
     {

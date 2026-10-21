@@ -1,0 +1,145 @@
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@*
+    Scanner de codes-barres / QR par la caméra du téléphone ou de la tablette.
+    Usage :
+        <ScannerCamera @ref="_scanner" OnCode="TraiterCode" Continu="true" Titre="Scanner des articles" />
+        <button @onclick="() => _scanner.OuvrirAsync()">📷</button>
+    Continu = true : la caméra reste ouverte (caisse, inventaire) ; false : elle se ferme au premier code lu.
+*@
+
+@if (_ouvert)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15,23,42,.75); z-index: 2100;" @onclick="FermerAsync">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg overflow-hidden">
+                <div class="modal-header bg-dark text-white py-2">
+                    <h6 class="modal-title fw-bold mb-0"><i class="bi bi-camera me-2"></i>@Titre</h6>
+                    <button type="button" class="btn-close btn-close-white" @onclick="FermerAsync" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body p-0 bg-black position-relative">
+                    <div id="@_idZone" class="scanner-zone"></div>
+                    @if (_demarrage)
+                    {
+                        <div class="scanner-message text-white"><div class="spinner-border spinner-border-sm me-2"></div>Ouverture de la caméra…</div>
+                    }
+                    @if (_erreur is not null)
+                    {
+                        <div class="scanner-message"><div class="alert alert-warning m-3 mb-0 small">@_erreur</div></div>
+                    }
+                </div>
+                <div class="modal-footer bg-light py-2 justify-content-between">
+                    <span class="small text-muted text-truncate">
+                        @if (_dernierCode is not null)
+                        {
+                            <i class="bi bi-check-circle-fill text-success me-1"></i>@_dernierCode
+                        }
+                        else
+                        {
+                            <span>Placez le code dans le cadre</span>
+                        }
+                    </span>
+                    <button class="btn btn-sm btn-dark" @onclick="FermerAsync">@(Continu ? "Terminer" : "Annuler")</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .scanner-zone { width: 100%; min-height: 280px; }
+    .scanner-zone video { width: 100% !important; height: auto !important; display: block; }
+    .scanner-message { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+</style>
+
+@code {
+    [Parameter] public EventCallback<string> OnCode { get; set; }
+    [Parameter] public bool Continu { get; set; }
+    [Parameter] public string Titre { get; set; } = "Scanner un code";
+
+    private readonly string _idZone = $"scan-{Guid.NewGuid():N}";
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<ScannerCamera>? _ref;
+    private bool _ouvert;
+    private bool _doitDemarrer;
+    private bool _demarrage;
+    private string? _erreur;
+    private string? _dernierCode;
+
+    public Task OuvrirAsync()
+    {
+        _ouvert = true;
+        _doitDemarrer = true;
+        _erreur = null;
+        _dernierCode = null;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    public async Task FermerAsync()
+    {
+        _ouvert = false;
+        try { if (_module is not null) await _module.InvokeVoidAsync("arreterScan"); }
+        catch { /* déjà arrêté */ }
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_doitDemarrer || !_ouvert) return;
+        _doitDemarrer = false;
+        _demarrage = true;
+        StateHasChanged();
+
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/finama-codes.js");
+            _ref ??= DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("demarrerScan", _idZone, _ref, Continu);
+        }
+        catch (JSException ex)
+        {
+            _erreur = ex.Message switch
+            {
+                var m when m.Contains("CAMERA_REFUSEE") => "Accès à la caméra refusé. Autorisez la caméra pour ce site (icône 🔒 dans la barre d'adresse), puis réessayez.",
+                var m when m.Contains("CAMERA_ABSENTE") => "Aucune caméra détectée sur cet appareil.",
+                var m when m.Contains("HTTPS_REQUIS") => "La caméra n'est disponible que sur une adresse sécurisée (https).",
+                _ => "La caméra n'a pas pu démarrer. Fermez les autres applications qui l'utilisent, puis réessayez."
+            };
+        }
+        finally
+        {
+            _demarrage = false;
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public async Task SurCodeLu(string code)
+    {
+        _dernierCode = code.Trim();
+        await InvokeAsync(StateHasChanged);
+        await OnCode.InvokeAsync(_dernierCode);
+        if (!Continu)
+        {
+            _ouvert = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_module is not null)
+            {
+                await _module.InvokeVoidAsync("arreterScan");
+                await _module.DisposeAsync();
+            }
+        }
+        catch { /* runtime arrêté */ }
+        _ref?.Dispose();
+    }
+}

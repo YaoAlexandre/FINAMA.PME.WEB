@@ -1,0 +1,68 @@
+@using Finama.Web.Services
+@inject ExportService Export
+@inject Radzen.NotificationService NotificationService
+
+@*
+    Boutons d'export Excel + PDF (même contenu, deux formats).
+    <BoutonExportExcel Url="api/exports/balance?exerciceId=..." NomFichier="Balance.xlsx" Libelle="Balance" />
+    AvecPdf="false" pour n'afficher que le bouton Excel.
+*@
+<div class="btn-group" role="group" aria-label="Exporter">
+    <button type="button" class="btn @Classe d-inline-flex align-items-center gap-2" @onclick="() => Exporter(false)"
+            disabled="@(_enCours != null || Desactive)" title="Télécharger au format Excel">
+        @if (_enCours == "xlsx")
+        {
+            <span class="spinner-border spinner-border-sm"></span>
+        }
+        else
+        {
+            <i class="bi bi-file-earmark-excel"></i>
+        }
+        <span>@Libelle</span>
+    </button>
+    @if (AvecPdf)
+    {
+        <button type="button" class="btn @Classe d-inline-flex align-items-center gap-1" @onclick="() => Exporter(true)"
+                disabled="@(_enCours != null || Desactive)" title="Télécharger au format PDF (prêt à imprimer ou à envoyer)">
+            @if (_enCours == "pdf")
+            {
+                <span class="spinner-border spinner-border-sm"></span>
+            }
+            else
+            {
+                <i class="bi bi-file-earmark-pdf text-danger"></i>
+            }
+            <span>PDF</span>
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Url { get; set; } = "";
+    [Parameter] public string NomFichier { get; set; } = "export.xlsx";
+    [Parameter] public string Libelle { get; set; } = "Excel";
+    [Parameter] public string Classe { get; set; } = "btn-outline-success";
+    [Parameter] public bool Desactive { get; set; }
+    [Parameter] public bool AvecPdf { get; set; } = true;
+
+    private string? _enCours;   // "xlsx" | "pdf" | null
+
+    private async Task Exporter(bool pdf)
+    {
+        if (_enCours != null || string.IsNullOrWhiteSpace(Url)) return;
+        _enCours = pdf ? "pdf" : "xlsx";
+        try
+        {
+            var url = pdf ? Url + (Url.Contains('?') ? "&" : "?") + "format=pdf" : Url;
+            var nom = pdf ? Path.ChangeExtension(NomFichier, ".pdf") : NomFichier;
+
+            var erreur = await Export.TelechargerAsync(url, nom);
+            if (erreur is not null)
+                NotificationService.Erreur(erreur, pdf ? "Export PDF" : "Export Excel");
+        }
+        finally
+        {
+            _enCours = null;
+        }
+    }
+}

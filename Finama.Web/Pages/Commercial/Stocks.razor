@@ -1,0 +1,605 @@
+@page "/commerce/stocks"
+@using Finama.Web
+@using Finama.Web.Services
+@inject CommerceApiService CommerceApi
+@inject Radzen.NotificationService NotificationService
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold text-dark mb-1"><i class="bi bi-boxes text-success me-2"></i>Logistique & Stocks (FEFO)</h3>
+        <p class="text-muted small mb-0">Niveaux de stock, traçabilité des lots et rotation par date de péremption</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-success fw-bold px-3 py-2 rounded-3 shadow-sm d-flex align-items-center gap-2" @onclick="OuvrirModalEntreeStock">
+            <i class="bi bi-plus-circle fs-6"></i>
+            <span>Entrée de stock</span>
+        </button>
+        <BoutonExportExcel Url="api/exports/stocks" NomFichier="@($"Stock_{DateTime.Today:yyyy-MM-dd}.xlsx")"
+                           Classe="btn-outline-success fw-bold px-3 py-2 rounded-3 shadow-sm" Desactive="@(_chargement || !_stocks.Any())" />
+        <button class="btn btn-outline-success fw-bold px-3 py-2 rounded-3 shadow-sm d-flex align-items-center gap-2" @onclick="ChargerStocks" disabled="@_chargement">
+            <i class="bi bi-arrow-clockwise fs-6"></i>
+            <span>Actualiser</span>
+        </button>
+    </div>
+</div>
+
+<!-- BARRE DE RECHERCHE ET FILTRES RAPIDES -->
+<div class="card border-0 shadow-sm rounded-3 mb-4">
+    <div class="card-body p-3">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" class="form-control bg-light border-start-0" placeholder="Filtrer par article ou numéro de lot..."
+                           @bind="_recherche" @bind:event="oninput" @onkeyup="SurFiltre" />
+                </div>
+            </div>
+            <div class="col-md-3">
+                <select class="form-select bg-light" @bind="_filtreStatut" @bind:after="SurFiltre">
+                    <option value="TOUS">Tous les états de stock</option>
+                    <option value="VALIDE">Lots valides</option>
+                    <option value="PROCHE">Proche expiration (&lt; 30 jours)</option>
+                    <option value="PERIME">Lots périmés</option>
+                </select>
+            </div>
+            <div class="col-md-3 text-end d-flex align-items-center justify-content-end gap-2">
+                <span class="badge bg-success bg-opacity-10 text-success fw-bold px-3 py-2 font-monospace">
+                    @_stocksFiltres.Count ligne(s) de stock
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TABLEAU DES STOCKS ET LOTS FEFO -->
+<div class="card border-0 shadow-sm rounded-3">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light font-monospace small text-uppercase">
+                    <tr>
+                        <th class="ps-4">Article</th>
+                        <th>Numéro de lot</th>
+                        <th class="text-center">Date d'expiration (FEFO)</th>
+                        <th class="text-end">Quantité disponible</th>
+                        <th class="text-end pe-4">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_chargement)
+                    {
+                        <tr>
+                            <td colspan="5" class="text-center py-5">
+                                <div class="spinner-border text-success mb-2" role="status"></div>
+                                <div class="text-muted small">Chargement des stocks...</div>
+                            </td>
+                        </tr>
+                    }
+                    else if (!_stocksFiltres.Any())
+                    {
+                        <tr>
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                <i class="bi bi-box-seam fs-1 d-block mb-2 opacity-50"></i>
+                                @(_stocks.Any() ? "Aucune ligne de stock ne correspond aux critères." : "Aucun stock enregistré. Commencez par une entrée de stock.")
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var s in _stocksFiltres.Page(_page, _taillePage))
+                        {
+                            var (estPerime, bientotExpire) = EtatPeremption(s);
+
+                            <tr @key="s.Id">
+                                <td class="ps-4 fw-bold text-dark">@s.DesignationProduit</td>
+                                <td class="font-monospace">
+                                    @if (string.IsNullOrWhiteSpace(s.NumeroLot))
+                                    {
+                                        <span class="text-muted small">Sans lot</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-light text-dark border">@s.NumeroLot</span>
+                                    }
+                                </td>
+                                <td class="text-center font-monospace">
+                                    @if (s.DateExpiration.HasValue)
+                                    {
+                                        <span class="badge @(estPerime ? "bg-danger" : bientotExpire ? "bg-warning text-dark" : "bg-success bg-opacity-10 text-success")">
+                                            @s.DateExpiration.Value.ToString("dd/MM/yyyy")
+                                            @if (estPerime)
+                                            {
+                                                <text> (Périmé)</text>
+                                            }
+                                            else if (bientotExpire)
+                                            {
+                                                <text> (J-@((s.DateExpiration.Value.Date - DateTime.Today).Days))</text>
+                                            }
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">Non périssable</span>
+                                    }
+                                </td>
+                                <td class="text-end font-monospace fw-bold fs-6 text-nowrap @(s.QuantiteDisponible <= 0 ? "text-danger" : "text-success")">
+                                    @Quantite(s.QuantiteDisponible, ProduitDe(s))
+                                </td>
+                                <td class="text-end pe-4">
+                                    <button class="btn btn-sm btn-outline-secondary" title="Ajuster le stock" @onclick="() => OuvrirModalAjustement(s)">
+                                        <i class="bi bi-sliders"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        <Pager @bind-Page="_page" @bind-PageSize="_taillePage" TotalItems="_stocksFiltres.Count" />
+    </div>
+</div>
+
+<!-- MODALE D'ENTRÉE DE STOCK -->
+@if (_afficherModalEntree)
+{
+    var art = ProduitChoisi;
+
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-box-arrow-in-down me-2"></i>@(art?.SuiviLots == true ? "Entrée de stock — nouveau lot" : "Entrée de stock")
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="FermerModalEntree"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Article *</label>
+                        <div class="input-group">
+                        <select class="form-select" @bind="_nouvelleEntree.ProduitId" @bind:after="SurChoixArticle">
+                            <option value="@Guid.Empty">-- Sélectionner un article --</option>
+                            @foreach (var p in _produitsDisponibles.OrderBy(p => p.Libelle))
+                            {
+                                <option value="@p.Id">@p.Libelle (@p.Reference)@(p.SuiviLots ? " — suivi par lots" : "")</option>
+                            }
+                        </select>
+                        <button class="btn btn-outline-success" type="button" title="Scanner l'article avec la caméra" @onclick="() => _scanner.OuvrirAsync()">
+                            <i class="bi bi-camera"></i>
+                        </button>
+                        </div>
+                        @if (!_produitsDisponibles.Any())
+                        {
+                            <div class="form-text text-warning">Aucun article géré en stock. Créez d'abord vos articles dans Catalogue → Articles & services.</div>
+                        }
+                    </div>
+
+                    @if (art is not null)
+                    {
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">Quantité entrante * <span class="text-muted fw-normal">(@UniteLibelle(art))</span></label>
+                                <input type="number" class="form-control font-monospace" @bind="_nouvelleEntree.Quantite"
+                                       min="0" step="@(art.EstVrac ? "0.001" : "1")" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">Coût unitaire (FCFA)</label>
+                                <input type="number" class="form-control font-monospace" min="0" @bind="_nouvelleEntree.CoutUnitaire" />
+                                <div class="form-text">Prix d'achat de la fiche article, modifiable.</div>
+                            </div>
+                        </div>
+
+                        @if (art.SuiviLots)
+                        {
+                            <div class="row g-3 mb-1">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small">Numéro de lot *</label>
+                                    <input type="text" class="form-control font-monospace saisie-majuscule" @bind="_nouvelleEntree.NumeroLot" placeholder="Inscrit sur le produit" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small">Date de péremption *</label>
+                                    <input type="date" class="form-control font-monospace" @bind="_datePeremption" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                                </div>
+                            </div>
+                            <div class="form-text mb-2"><i class="bi bi-info-circle me-1"></i>La caisse vendra d'abord le lot qui périme le plus tôt (FEFO).</div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-light border small mb-0">
+                                <i class="bi bi-info-circle me-1"></i>Article sans suivi par lots : seule la quantité est enregistrée.
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-light px-4" @onclick="FermerModalEntree">Annuler</button>
+                    <button type="button" class="btn btn-success px-4 fw-bold" @onclick="ValiderEntreeStock" disabled="@(_enCoursValidation || art is null)">
+                        @if (_enCoursValidation)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Valider l'entrée
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODALE D'AJUSTEMENT DE STOCK -->
+@if (_afficherModalAjustement && _lotAjustement != null)
+{
+    var artAjust = ProduitDe(_lotAjustement);
+    var nouveauSolde = _lotAjustement.QuantiteDisponible + _deltaAjustement;
+
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-sliders me-2"></i>Ajuster le stock</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="FermerModalAjustement"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="p-3 bg-light rounded-3 mb-3">
+                        <div class="fw-bold text-dark">@_lotAjustement.DesignationProduit</div>
+                        <div class="small text-muted font-monospace">
+                            @(string.IsNullOrWhiteSpace(_lotAjustement.NumeroLot) ? "Sans lot" : $"Lot : {_lotAjustement.NumeroLot}")
+                            | Disponible : @Quantite(_lotAjustement.QuantiteDisponible, artAjust)
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Ajustement (+ ou −) * <span class="text-muted fw-normal">(@UniteLibelle(artAjust))</span></label>
+                        <input type="number" class="form-control font-monospace" @bind="_deltaAjustement" @bind:event="oninput"
+                               step="@(artAjust?.EstVrac == true ? "0.001" : "1")" placeholder="Ex : 5 ou -2" />
+                        <div class="form-text">Positif pour ajouter, négatif pour retirer (casse, perte, vol…).</div>
+                    </div>
+
+                    @if (_deltaAjustement != 0)
+                    {
+                        <div class="small mb-3 font-monospace @(nouveauSolde < 0 ? "text-danger fw-bold" : "text-muted")">
+                            Nouveau solde : @Quantite(nouveauSolde, artAjust)@(nouveauSolde < 0 ? " — impossible" : "")
+                        </div>
+                    }
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Type d'ajustement</label>
+                        <select class="form-select" @bind="_motifAjustement">
+                            <option value="0">Correction</option>
+                            <option value="1">Casse / perte</option>
+                            <option value="2">Péremption</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Motif / commentaire *</label>
+                        <textarea class="form-control" rows="2" @bind="_commentaireAjustement" @bind:event="oninput"
+                                  placeholder="Ex : casse, perte, correction de saisie..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-light px-4" @onclick="FermerModalAjustement">Annuler</button>
+                    <button type="button" class="btn btn-dark px-4 fw-bold" @onclick="ValiderAjustementStock"
+                            disabled="@(_enCoursValidation || _deltaAjustement == 0 || nouveauSolde < 0 || string.IsNullOrWhiteSpace(_commentaireAjustement))">
+                        @if (_enCoursValidation)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Confirmer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .saisie-majuscule:not(:placeholder-shown) { text-transform: uppercase; }
+</style>
+
+<ScannerCamera @ref="_scanner" OnCode="SurCodeCamera" Titre="Scanner l'article reçu" />
+
+@code {
+    private ScannerCamera _scanner = default!;
+
+    // Le code lu sélectionne l'article (code-barres, ISBN ou référence)
+    private void SurCodeCamera(string code)
+    {
+        var article = _produitsDisponibles.FirstOrDefault(p =>
+            string.Equals(p.CodeBarres, code, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.Isbn, code, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.Reference, code, StringComparison.OrdinalIgnoreCase));
+
+        if (article is null)
+        {
+            NotificationService.Avertir($"Aucun article géré en stock pour le code {code}.", "Code inconnu");
+            return;
+        }
+
+        _nouvelleEntree.ProduitId = article.Id;
+        SurChoixArticle();
+    }
+
+    private int _page = 1;
+    private int _taillePage = 20;
+    private List<StockLotDto> _stocks = new();
+    private List<StockLotDto> _stocksFiltres = new();
+    private List<ProduitCommerceDto> _produitsDisponibles = new();
+    private Dictionary<Guid, ProduitCommerceDto> _produitsParId = new();
+
+    private bool _chargement = true;
+    private bool _afficherModalEntree;
+    private bool _afficherModalAjustement;
+    private bool _enCoursValidation;
+
+    private string _recherche = "";
+    private string _filtreStatut = "TOUS";
+
+    // Formulaire d'entrée (aligné sur EntreeInitialeRequest du backend)
+    private EntreeInitialeRequestModel _nouvelleEntree = new();
+    private DateTime? _datePeremption;   // jamais pré-remplie : la vraie date doit être saisie
+
+    // Formulaire d'ajustement
+    private StockLotDto? _lotAjustement;
+    private decimal _deltaAjustement;
+    private string _commentaireAjustement = "";
+    private int _motifAjustement;
+
+    private ProduitCommerceDto? ProduitChoisi =>
+        _produitsParId.TryGetValue(_nouvelleEntree.ProduitId, out var p) ? p : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ChargerDonneesInitiales();
+    }
+
+    private async Task ChargerDonneesInitiales()
+    {
+        _chargement = true;
+        try
+        {
+            var produits = await CommerceApi.GetProduitsAsync();
+            _produitsParId = produits.ToDictionary(p => p.Id);
+            _produitsDisponibles = produits.Where(p => p.GereStock && p.EstActif).ToList();
+
+            _stocks = await CommerceApi.GetStocksLotsAsync();
+            FiltrerLots();
+        }
+        finally
+        {
+            _chargement = false;
+        }
+    }
+
+    private async Task ChargerStocks()
+    {
+        _chargement = true;
+        try
+        {
+            _stocks = await CommerceApi.GetStocksLotsAsync();
+            FiltrerLots();
+        }
+        finally
+        {
+            _chargement = false;
+        }
+    }
+
+    private void FiltrerLots()
+    {
+        _stocksFiltres = _stocks.Where(s =>
+        {
+            var matchTexte = string.IsNullOrEmpty(_recherche) ||
+                             s.DesignationProduit.Contains(_recherche, StringComparison.OrdinalIgnoreCase) ||
+                             (s.NumeroLot ?? "").Contains(_recherche, StringComparison.OrdinalIgnoreCase);
+
+            var (estPerime, bientotExpire) = EtatPeremption(s);
+
+            var matchStatut = _filtreStatut switch
+            {
+                "VALIDE" => s.DateExpiration.HasValue && !estPerime && !bientotExpire,
+                "PROCHE" => bientotExpire,
+                "PERIME" => estPerime,
+                _ => true
+            };
+
+            return matchTexte && matchStatut;
+        })
+        // FEFO : par article, le lot qui périme le plus tôt en premier
+        .OrderBy(s => s.DesignationProduit)
+        .ThenBy(s => s.DateExpiration ?? DateTime.MaxValue)
+        .ToList();
+
+        _page = PagingExtensions.PageValide(_page, _stocksFiltres.Count, _taillePage);
+    }
+
+    private void SurFiltre()
+    {
+        _page = 1;
+        FiltrerLots();
+    }
+
+    // ─── Entrée de stock ──────────────────────────────────────────────────────
+
+    private void OuvrirModalEntreeStock()
+    {
+        _nouvelleEntree = new EntreeInitialeRequestModel { MagasinId = Guid.Empty, Quantite = 0 };
+        _datePeremption = null;
+        _afficherModalEntree = true;
+    }
+
+    private void FermerModalEntree() => _afficherModalEntree = false;
+
+    // Choix de l'article : reprend son prix d'achat et prépare (ou retire) les champs de lot
+    private void SurChoixArticle()
+    {
+        var art = ProduitChoisi;
+        _nouvelleEntree.CoutUnitaire = art?.PrixAchat > 0 ? Math.Round(art.PrixAchat, 0, MidpointRounding.AwayFromZero) : null;
+
+        if (art?.SuiviLots == true)
+        {
+            _nouvelleEntree.NumeroLot ??= "";
+        }
+        else
+        {
+            _nouvelleEntree.NumeroLot = null;
+            _datePeremption = null;
+        }
+    }
+
+    private async Task ValiderEntreeStock()
+    {
+        var art = ProduitChoisi;
+        if (art is null) { NotificationService.Avertir("Sélectionnez un article."); return; }
+        if (_nouvelleEntree.Quantite <= 0) { NotificationService.Avertir("La quantité doit être supérieure à zéro."); return; }
+        if (!art.EstVrac && _nouvelleEntree.Quantite != Math.Floor(_nouvelleEntree.Quantite))
+        {
+            NotificationService.Avertir("Cet article se vend à l'unité : saisissez une quantité entière.");
+            return;
+        }
+        if (_nouvelleEntree.CoutUnitaire < 0) { NotificationService.Avertir("Le coût unitaire ne peut pas être négatif."); return; }
+
+        if (art.SuiviLots)
+        {
+            if (string.IsNullOrWhiteSpace(_nouvelleEntree.NumeroLot)) { NotificationService.Avertir("Saisissez le numéro de lot inscrit sur le produit."); return; }
+            if (_datePeremption is null) { NotificationService.Avertir("Saisissez la date de péremption du lot."); return; }
+            if (_datePeremption.Value.Date < DateTime.Today) { NotificationService.Avertir("Ce lot est déjà périmé : entrée refusée."); return; }
+
+            _nouvelleEntree.NumeroLot = _nouvelleEntree.NumeroLot.Trim().ToUpperInvariant();
+            _nouvelleEntree.DatePeremption = DateOnly.FromDateTime(_datePeremption.Value);
+        }
+        else
+        {
+            _nouvelleEntree.NumeroLot = null;
+            _nouvelleEntree.DatePeremption = null;
+        }
+
+        _enCoursValidation = true;
+        try
+        {
+            var (succes, messageErreur) = await CommerceApi.EnregistrerEntreeInitialeAsync(_nouvelleEntree);
+
+            if (succes)
+            {
+                NotificationService.Succes($"{Quantite(_nouvelleEntree.Quantite, art)} de « {art.Libelle} » ajouté(s) au stock.");
+                _afficherModalEntree = false;
+                await ChargerStocks();
+            }
+            else
+            {
+                NotificationService.Erreur(messageErreur, "Entrée de stock refusée");
+            }
+        }
+        catch (Exception)
+        {
+            NotificationService.ErreurServeur();
+        }
+        finally
+        {
+            _enCoursValidation = false;
+        }
+    }
+
+    // ─── Ajustement ───────────────────────────────────────────────────────────
+
+    private void OuvrirModalAjustement(StockLotDto lot)
+    {
+        _lotAjustement = lot;
+        _deltaAjustement = 0;
+        _commentaireAjustement = "";
+        _motifAjustement = 0;
+        _afficherModalAjustement = true;
+    }
+
+    private void FermerModalAjustement() => _afficherModalAjustement = false;
+
+    private async Task ValiderAjustementStock()
+    {
+        if (_lotAjustement == null) return;
+
+        var art = ProduitDe(_lotAjustement);
+
+        if (_deltaAjustement == 0) { NotificationService.Avertir("Indiquez une quantité à ajouter ou à retirer."); return; }
+        if (art?.EstVrac != true && _deltaAjustement != Math.Floor(_deltaAjustement))
+        {
+            NotificationService.Avertir("Cet article se gère à l'unité : saisissez un nombre entier.");
+            return;
+        }
+        if (_lotAjustement.QuantiteDisponible + _deltaAjustement < 0)
+        {
+            NotificationService.Avertir($"Impossible de retirer plus que le disponible ({Quantite(_lotAjustement.QuantiteDisponible, art)}).");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_commentaireAjustement)) { NotificationService.Avertir("Le motif est obligatoire : il apparaît dans l'historique."); return; }
+
+        _enCoursValidation = true;
+        try
+        {
+            var request = new
+            {
+                MagasinId = Guid.Empty,
+                ProduitId = _lotAjustement.ProduitId,
+                LotId = string.IsNullOrWhiteSpace(_lotAjustement.NumeroLot) ? null : (Guid?)_lotAjustement.Id,   // ligne "Sans lot" → pas de lot
+                Delta = _deltaAjustement,
+                Motif = _motifAjustement,   // 0 Correction, 1 Casse, 2 Péremption
+                Commentaire = _commentaireAjustement.Trim()
+            };
+
+            var succes = await CommerceApi.AjusterStockAsync(request);
+            if (succes)
+            {
+                NotificationService.Succes($"Stock de « {_lotAjustement.DesignationProduit} » ajusté de {(_deltaAjustement > 0 ? "+" : "")}{Quantite(_deltaAjustement, art)}.");
+                _afficherModalAjustement = false;
+                await ChargerStocks();
+            }
+            else
+            {
+                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Impossible d'ajuster le stock.", "Ajustement refusé");
+            }
+        }
+        catch (Exception)
+        {
+            NotificationService.ErreurServeur();
+        }
+        finally
+        {
+            _enCoursValidation = false;
+        }
+    }
+
+    // ─── Utilitaires ──────────────────────────────────────────────────────────
+
+    private ProduitCommerceDto? ProduitDe(StockLotDto s) =>
+        _produitsParId.TryGetValue(s.ProduitId, out var p) ? p : null;
+
+    private static (bool EstPerime, bool BientotExpire) EtatPeremption(StockLotDto s)
+    {
+        if (!s.DateExpiration.HasValue) return (false, false);
+        var date = s.DateExpiration.Value.Date;
+        var perime = date < DateTime.Today;
+        return (perime, !perime && date <= DateTime.Today.AddDays(30));
+    }
+
+    private static string UniteLibelle(ProduitCommerceDto? p) => (p?.Unite ?? 0) switch
+    {
+        1 => "kg",
+        2 => "g",
+        3 => "L",
+        4 => "m",
+        5 => "h",
+        _ => "unité(s)"
+    };
+
+    private static string Quantite(decimal q, ProduitCommerceDto? p) => $"{q:0.###} {UniteLibelle(p)}";
+
+    public class EntreeInitialeRequestModel
+    {
+        public Guid MagasinId { get; set; } = Guid.Empty;
+        public Guid ProduitId { get; set; }
+        public decimal Quantite { get; set; }
+        public decimal? CoutUnitaire { get; set; }
+        public string? NumeroLot { get; set; }
+        public DateOnly? DatePeremption { get; set; }
+    }
+}

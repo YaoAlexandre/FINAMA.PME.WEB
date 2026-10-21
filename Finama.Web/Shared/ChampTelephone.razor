@@ -1,0 +1,27 @@
+@using Finama.Web.Services
+@* Téléphone : seuls chiffres, espaces et « + » initial peuvent être tapés (touches bloquées), 17 caractères max.
+   Un copier-coller incorrect est signalé en rouge, et le serveur refuse de toute façon. *@
+<input type="tel" inputmode="tel" autocomplete="tel" maxlength="@ControlesSaisie.TelephoneSaisieMax"
+       class="form-control font-monospace @Classe @(Erreur is null ? "" : "is-invalid")"
+       placeholder="@Placeholder" value="@Value"
+       onkeydown="return event.key.length > 1 || event.ctrlKey || event.metaKey || /[0-9 ]/.test(event.key) || (event.key === '+' && this.selectionStart === 0 && !this.value.includes('+'))"
+       @oninput="SurChangement" />
+@if (Erreur is not null)
+{
+    <div class="invalid-feedback d-block small">@Erreur</div>
+}
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "+228 90 00 00 00";
+    [Parameter] public string Classe { get; set; } = "";
+
+    private string? Erreur => ControlesSaisie.Telephone(Value);
+
+    private async Task SurChangement(ChangeEventArgs e)
+    {
+        Value = e.Value?.ToString();
+        await ValueChanged.InvokeAsync(Value);
+    }
+}

@@ -1,0 +1,433 @@
+@page "/commerce/categories"
+@using Finama.Web
+@using Finama.Web.Services
+@inject CommerceApiService CommerceApi
+@inject Radzen.NotificationService NotificationService
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold text-dark mb-1"><i class="bi bi-tags text-success me-2"></i>Catégories@(_parametres.UtiliseLivres ? " & Éditeurs" : "")</h3>
+        <p class="text-muted small mb-0">Organisez votre catalogue et définissez, pour chaque catégorie, les caractéristiques à renseigner (taille, marque, dosage...)@(_parametres.UtiliseLivres ? " ; référencez vos maisons d'édition" : "")</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- ───────── CATÉGORIES ───────── -->
+    <div class="col-lg-@(_parametres.UtiliseLivres ? "6" : "12")">
+        <div class="card border-0 shadow-sm rounded-3 h-100">
+            <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0"><i class="bi bi-diagram-3 me-2 text-primary"></i>Catégories
+                    <span class="badge bg-primary bg-opacity-10 text-primary font-monospace ms-1">@_categories.Count</span>
+                </h5>
+                <button class="btn btn-success btn-sm fw-bold" @onclick="() => OuvrirCategorie(null, null)">
+                    <i class="bi bi-plus-circle me-1"></i> Nouvelle catégorie
+                </button>
+            </div>
+            <div class="card-body p-0">
+                @if (_chargement)
+                {
+                    <div class="text-center py-5"><div class="spinner-border text-success"></div></div>
+                }
+                else if (!_arbre.Any())
+                {
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-tags fs-1 d-block mb-2 opacity-50"></i>
+                        Aucune catégorie. <a href="/commerce/parametres" @onclick:preventDefault @onclick='() => Nav.NavigateTo("/commerce/parametres")'>Choisissez votre activité</a> pour obtenir des catégories types, ou créez la vôtre.
+                    </div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var (cat, niveau) in _arbre)
+                        {
+                            <div class="list-group-item d-flex justify-content-between align-items-center py-2 pe-3" style="padding-left: @(16 + niveau * 24)px;" @key="cat.Id">
+                                <div>
+                                    @if (niveau > 0) { <i class="bi bi-arrow-return-right text-muted me-1"></i> }
+                                    <span class="fw-bold text-dark">@cat.Libelle</span>
+                                    <span class="badge bg-light text-dark border font-monospace ms-1">@cat.NbProduits article(s)</span>
+                                    @if (cat.Champs.Any())
+                                    {
+                                        <div class="small text-muted mt-1"><i class="bi bi-input-cursor-text me-1"></i>@string.Join(", ", cat.Champs.Select(c => c.Nom + (c.Obligatoire ? "*" : "")))</div>
+                                    }
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-secondary" title="Ajouter une sous-catégorie" @onclick="() => OuvrirCategorie(null, cat.Id)"><i class="bi bi-node-plus"></i></button>
+                                    <button class="btn btn-outline-success" title="Modifier" @onclick="() => OuvrirCategorie(cat, null)"><i class="bi bi-pencil"></i></button>
+                                    <button class="btn btn-outline-danger" title="Supprimer" @onclick="() => SupprimerCategorie(cat)"><i class="bi bi-trash"></i></button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- ───────── ÉDITEURS (module Livres) ───────── -->
+    @if (_parametres.UtiliseLivres)
+    {
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm rounded-3 h-100">
+            <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0"><i class="bi bi-book-half me-2 text-info"></i>Maisons d'édition
+                    <span class="badge bg-info bg-opacity-10 text-info font-monospace ms-1">@_editeurs.Count</span>
+                </h5>
+                <button class="btn btn-success btn-sm fw-bold" @onclick="() => OuvrirEditeur(null)">
+                    <i class="bi bi-plus-circle me-1"></i> Nouvel éditeur
+                </button>
+            </div>
+            <div class="card-body p-0">
+                @if (_chargement)
+                {
+                    <div class="text-center py-5"><div class="spinner-border text-success"></div></div>
+                }
+                else if (!_editeurs.Any())
+                {
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-book fs-1 d-block mb-2 opacity-50"></i>
+                        Aucun éditeur. Utile uniquement si vous vendez des livres.
+                    </div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var e in _editeurs)
+                        {
+                            <div class="list-group-item d-flex justify-content-between align-items-center py-2 pe-3 @(e.EstActif ? "" : "text-muted")" @key="e.Id">
+                                <div>
+                                    <span class="fw-bold">@e.Nom</span>
+                                    @if (!e.EstActif) { <span class="badge bg-secondary ms-1">Inactif</span> }
+                                    <span class="badge bg-light text-dark border font-monospace ms-1">@e.NbTitres titre(s)</span>
+                                    @if (!string.IsNullOrWhiteSpace(e.Contact))
+                                    {
+                                        <div class="small text-muted"><i class="bi bi-telephone me-1"></i>@e.Contact</div>
+                                    }
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-success" title="Modifier" @onclick="() => OuvrirEditeur(e)"><i class="bi bi-pencil"></i></button>
+                                    <button class="btn btn-outline-@(e.EstActif ? "danger" : "primary")" title="@(e.EstActif ? "Désactiver" : "Réactiver")" @onclick="() => BasculerEditeur(e)">
+                                        <i class="bi @(e.EstActif ? "bi-slash-circle" : "bi-check-circle")"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    }
+</div>
+
+<!-- MODALE CATÉGORIE -->
+@if (_afficherModalCategorie)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px);">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title fw-bold">@(_categorieEditionId == null ? "Nouvelle catégorie" : "Modifier la catégorie")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => _afficherModalCategorie = false"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <label class="form-label fw-bold small">Libellé *</label>
+                    <input type="text" class="form-control mb-3" @bind="_formCategorie.Libelle" placeholder="Ex: Épicerie, Cahiers, Chemises homme..." />
+
+                    <label class="form-label fw-bold small">Catégorie parente</label>
+                    <select class="form-select" @bind="_formCategorie.ParentId">
+                        <option value="">— Aucune (rayon principal) —</option>
+                        @foreach (var (cat, niveau) in _arbre.Where(a => !_exclusParent.Contains(a.Cat.Id)))
+                        {
+                            <option value="@cat.Id">@(new string('\u00A0', niveau * 3))@cat.Libelle</option>
+                        }
+                    </select>
+
+                    <hr />
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <div class="fw-bold small">Caractéristiques à renseigner pour les articles de cette catégorie</div>
+                            <div class="text-muted small">Ex. Taille, Couleur, Marque, Garantie, Dosage... Les sous-catégories les héritent.</div>
+                        </div>
+                        <button class="btn btn-sm btn-outline-success" @onclick="AjouterChamp"><i class="bi bi-plus-circle me-1"></i>Ajouter un champ</button>
+                    </div>
+
+                    @if (!_formCategorie.Champs.Any())
+                    {
+                        <div class="text-muted small fst-italic">Aucun champ : les articles n'auront que les informations de base.</div>
+                    }
+
+                    @foreach (var champ in _formCategorie.Champs)
+                    {
+                        <div class="row g-2 align-items-center mb-2" @key="champ">
+                            <div class="col-md-4">
+                                <input type="text" class="form-control form-control-sm" placeholder="Nom du champ" @bind="champ.Nom" />
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select form-select-sm" @bind="champ.Type">
+                                    <option value="texte">Texte</option>
+                                    <option value="nombre">Nombre</option>
+                                    <option value="liste">Liste de choix</option>
+                                    <option value="date">Date</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 form-check ps-5">
+                                <input class="form-check-input" type="checkbox" @bind="champ.Obligatoire" />
+                                <label class="form-check-label small">Obligatoire</label>
+                            </div>
+                            <div class="col-md-2 text-end">
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => _formCategorie.Champs.Remove(champ)"><i class="bi bi-x"></i></button>
+                            </div>
+                            @if (champ.Type == "liste")
+                            {
+                                <div class="col-12">
+                                    <input type="text" class="form-control form-control-sm" placeholder="Choix séparés par des virgules : S, M, L, XL"
+                                           value="@OptionsTexte(champ)" @onchange="e => DefinirOptions(champ, e.Value?.ToString())" />
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer bg-light">
+                    <button class="btn btn-light" @onclick="() => _afficherModalCategorie = false">Annuler</button>
+                    <button class="btn btn-success fw-bold px-4" @onclick="EnregistrerCategorie" disabled="@_enCours">
+                        @if (_enCours) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Enregistrer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODALE ÉDITEUR -->
+@if (_afficherModalEditeur)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title fw-bold">@(_editeurEditionId == null ? "Nouvel éditeur" : "Modifier l'éditeur")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => _afficherModalEditeur = false"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <label class="form-label fw-bold small">Nom de la maison d'édition *</label>
+                    <input type="text" class="form-control mb-3" @bind="_formEditeur.Nom" />
+                    <label class="form-label fw-bold small">Contact (téléphone / email)</label>
+                    <input type="text" class="form-control" @bind="_formEditeur.Contact" />
+                </div>
+                <div class="modal-footer bg-light">
+                    <button class="btn btn-light" @onclick="() => _afficherModalEditeur = false">Annuler</button>
+                    <button class="btn btn-success fw-bold px-4" @onclick="EnregistrerEditeur" disabled="@_enCours">
+                        @if (_enCours) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Enregistrer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<ConfirmDialog @ref="_confirm" />
+
+@code {
+    private ConfirmDialog _confirm = default!;
+    private ParametresCommerceDto _parametres = new();
+    private List<CategorieCommerceDto> _categories = new();
+    private List<(CategorieCommerceDto Cat, int Niveau)> _arbre = new();
+    private List<EditeurCommerceDto> _editeurs = new();
+    private bool _chargement = true;
+    private bool _enCours;
+
+    private bool _afficherModalCategorie;
+    private Guid? _categorieEditionId;
+    private SaveCategorieCommerceRequest _formCategorie = new();
+    private HashSet<Guid> _exclusParent = new();
+
+    private bool _afficherModalEditeur;
+    private Guid? _editeurEditionId;
+    private SaveEditeurCommerceRequest _formEditeur = new();
+
+    protected override async Task OnInitializedAsync() => await Charger();
+
+    private async Task Charger()
+    {
+        _chargement = true;
+        _parametres = await CommerceApi.GetParametresAsync() ?? new ParametresCommerceDto();
+        _categories = await CommerceApi.GetCategoriesAsync();
+        if (CommerceApi.DerniereErreur != null) NotificationService.Erreur(CommerceApi.DerniereErreur, "Chargement");
+        _editeurs = _parametres.UtiliseLivres ? await CommerceApi.GetEditeursAsync() : new();
+        ConstruireArbre();
+        _chargement = false;
+    }
+
+    // ── Catégories ──
+    private void ConstruireArbre()
+    {
+        _arbre = new();
+        var ids = _categories.Select(c => c.Id).ToHashSet();
+        var vus = new HashSet<Guid>();
+
+        void Ajouter(Guid? parentId, int niveau)
+        {
+            var enfants = _categories
+                .Where(x => parentId == null
+                    ? (x.ParentId == null || !ids.Contains(x.ParentId.Value))
+                    : x.ParentId == parentId)
+                .OrderBy(x => x.Libelle);
+
+            foreach (var c in enfants)
+            {
+                if (!vus.Add(c.Id)) continue;
+                _arbre.Add((c, niveau));
+                Ajouter(c.Id, niveau + 1);
+            }
+        }
+
+        Ajouter(null, 0);
+    }
+
+    private HashSet<Guid> Descendants(Guid id)
+    {
+        var resultat = new HashSet<Guid>();
+        var file = new Queue<Guid>();
+        file.Enqueue(id);
+        while (file.Count > 0)
+        {
+            var courant = file.Dequeue();
+            foreach (var enfant in _categories.Where(c => c.ParentId == courant))
+                if (resultat.Add(enfant.Id)) file.Enqueue(enfant.Id);
+        }
+        return resultat;
+    }
+
+    private void OuvrirCategorie(CategorieCommerceDto? aModifier, Guid? parentId)
+    {
+        if (aModifier == null)
+        {
+            _categorieEditionId = null;
+            _formCategorie = new SaveCategorieCommerceRequest { ParentId = parentId };
+            _exclusParent = new();
+        }
+        else
+        {
+            _categorieEditionId = aModifier.Id;
+            _formCategorie = new SaveCategorieCommerceRequest
+            {
+                Libelle = aModifier.Libelle,
+                ParentId = aModifier.ParentId,
+                Champs = aModifier.Champs.Select(c => new ChampPersonnaliseDto
+                {
+                    Nom = c.Nom, Type = c.Type, Obligatoire = c.Obligatoire,
+                    Options = c.Options == null ? null : new List<string>(c.Options)
+                }).ToList()
+            };
+            _exclusParent = Descendants(aModifier.Id);
+            _exclusParent.Add(aModifier.Id);   // ni elle-même ni ses descendants comme parent
+        }
+        _afficherModalCategorie = true;
+    }
+
+    private void AjouterChamp() => _formCategorie.Champs.Add(new ChampPersonnaliseDto { Type = "texte" });
+
+    private static string OptionsTexte(ChampPersonnaliseDto champ) => string.Join(", ", champ.Options ?? new List<string>());
+
+    private static void DefinirOptions(ChampPersonnaliseDto champ, string? texte)
+        => champ.Options = (texte ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    private async Task EnregistrerCategorie()
+    {
+        if (string.IsNullOrWhiteSpace(_formCategorie.Libelle))
+        {
+            NotificationService.Avertir("Le libellé est obligatoire.", "Champ requis");
+            return;
+        }
+
+        _formCategorie.Champs = _formCategorie.Champs.Where(c => !string.IsNullOrWhiteSpace(c.Nom)).ToList();
+
+        _enCours = true;
+        try
+        {
+            var resultat = _categorieEditionId == null
+                ? await CommerceApi.CreerCategorieAsync(_formCategorie)
+                : await CommerceApi.ModifierCategorieAsync(_categorieEditionId.Value, _formCategorie);
+
+            if (resultat == null)
+            {
+                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Erreur inconnue.", "Enregistrement impossible");
+                return;
+            }
+
+            NotificationService.Succes(_categorieEditionId == null ? "Catégorie créée." : "Catégorie mise à jour.");
+            _afficherModalCategorie = false;
+            await Charger();
+        }
+        finally { _enCours = false; }
+    }
+
+    private async Task SupprimerCategorie(CategorieCommerceDto cat)
+    {
+        if (!await _confirm.DemanderAsync(
+                $"« {cat.Libelle} » sera définitivement supprimée.\nElle ne peut l'être que si elle ne contient aucun article ni sous-catégorie.",
+                "Supprimer cette catégorie ?", "Supprimer", type: ConfirmationType.Danger)) return;
+
+        if (!await CommerceApi.SupprimerCategorieAsync(cat.Id))
+        {
+            NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Erreur inconnue.", "Suppression impossible");
+            return;
+        }
+
+        NotificationService.Succes($"« {cat.Libelle} » a été supprimée.", "Supprimée");
+        await Charger();
+    }
+
+    // ── Éditeurs ──
+    private void OuvrirEditeur(EditeurCommerceDto? aModifier)
+    {
+        _editeurEditionId = aModifier?.Id;
+        _formEditeur = aModifier == null
+            ? new SaveEditeurCommerceRequest()
+            : new SaveEditeurCommerceRequest { Nom = aModifier.Nom, Contact = aModifier.Contact };
+        _afficherModalEditeur = true;
+    }
+
+    private async Task EnregistrerEditeur()
+    {
+        if (string.IsNullOrWhiteSpace(_formEditeur.Nom))
+        {
+            NotificationService.Avertir("Le nom de l'éditeur est obligatoire.", "Champ requis");
+            return;
+        }
+
+        _enCours = true;
+        try
+        {
+            var resultat = _editeurEditionId == null
+                ? await CommerceApi.CreerEditeurAsync(_formEditeur)
+                : await CommerceApi.ModifierEditeurAsync(_editeurEditionId.Value, _formEditeur);
+
+            if (resultat == null)
+            {
+                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Erreur inconnue.", "Enregistrement impossible");
+                return;
+            }
+
+            NotificationService.Succes(_editeurEditionId == null ? "Éditeur créé." : "Éditeur mis à jour.");
+            _afficherModalEditeur = false;
+            await Charger();
+        }
+        finally { _enCours = false; }
+    }
+
+    private async Task BasculerEditeur(EditeurCommerceDto e)
+    {
+        if (!await CommerceApi.DefinirEditeurActifAsync(e.Id, !e.EstActif))
+        {
+            NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Opération impossible.");
+            return;
+        }
+        await Charger();
+    }
+
+}

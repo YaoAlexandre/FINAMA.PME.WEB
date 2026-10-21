@@ -1,14 +1,14 @@
-﻿@page "/connexion"
+@page "/connexion"
 @page "/login"
-@using Blazored.LocalStorage
+@attribute [AllowAnonymous]
 @using Finama.Web.Models
 @using Finama.Web.Services
 @layout EmptyLayout
 @inject FinamaApiService Api
 @inject NavigationManager Nav
 @inject AppState State
+@inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthStateProvider
-@inject ILocalStorageService LocalStorage
 
 <div class="auth-container">
     <div class="auth-card">
@@ -24,11 +24,11 @@
             {
                 <div class="form-group">
                     <label>Email professionnel</label>
-                    <InputText @bind-Value="_model.Email" class="form-control" placeholder="nom@entreprise.com" />
+                    <InputText @bind-Value="_model.Email" class="form-control" placeholder="nom@entreprise.com" autocomplete="username" />
                 </div>
                 <div class="form-group">
                     <label>Mot de passe</label>
-                    <InputText @bind-Value="_model.MotDePasse" type="password" class="form-control" />
+                    <InputText @bind-Value="_model.MotDePasse" type="password" class="form-control" autocomplete="current-password" />
                 </div>
             }
             else
@@ -44,13 +44,24 @@
                                class="form-control"
                                placeholder="------"
                                maxlength="6"
-                               style="text-align: center; font-size: 24px; letter-spacing: 8px; font-weight: bold; text-transform: uppercase;" />
+                               inputmode="numeric"
+                               autocomplete="one-time-code"
+                               style="text-align: center; font-size: 24px; letter-spacing: 8px; font-weight: bold;" />
                 </div>
             }
 
-            @if (!string.IsNullOrEmpty(_errorMessage))
+            @if (!string.IsNullOrEmpty(_message))
             {
-                <p style="color:red; font-size: 13px; margin-bottom: 10px;">⚠️ @_errorMessage</p>
+                <div class="auth-message auth-message-@_typeMessage" role="alert">
+                    <span class="auth-message-icone">@(_typeMessage switch { "succes" => "✅", "info" => "ℹ️", _ => "⚠️" })</span>
+                    <div>
+                        <div>@_message</div>
+                        @if (!string.IsNullOrEmpty(_aide))
+                        {
+                            <div class="auth-message-aide">@_aide</div>
+                        }
+                    </div>
+                </div>
             }
 
             <button type="submit" class="btn-auth" disabled="@_isSubmitting">
@@ -83,77 +94,83 @@
         @if (!_enAttenteDeOtp)
         {
             <div class="auth-footer">
-                <p>Pas encore de compte ? <a href="/inscription" @onclick="Inscription" class="auth-link">Créer un compte</a></p>
+                <p>Pas encore de compte ? <a href="/inscription" class="auth-link">Créer un compte</a></p>
             </div>
         }
     </div>
 </div>
 
+<style>
+    .auth-message { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; font-size: 13.5px; margin-bottom: 12px; text-align: left; }
+    .auth-message-erreur { background: #fdecec; color: #a12622; border: 1px solid #f5c2c0; }
+    .auth-message-alerte { background: #fff6e5; color: #7a4b00; border: 1px solid #ffd99a; }
+    .auth-message-info { background: #e8f1fd; color: #144e8c; border: 1px solid #b9d4f5; }
+    .auth-message-succes { background: #e8f7ef; color: #0f6b3e; border: 1px solid #b7e4c9; }
+    .auth-message-icone { line-height: 1.3; }
+    .auth-message-aide { margin-top: 4px; opacity: .85; font-size: 12.5px; }
+</style>
+
 @code {
     private LoginModel _model = new();
     private string _codeOtp = string.Empty;
-    private bool _enAttenteDeOtp = false;
-    private bool _isSubmitting = false;
-    private string? _errorMessage;
-    private bool _isResending = false;
+    private bool _enAttenteDeOtp;
+    private bool _isSubmitting;
+    private bool _isResending;
+
+    // Message affiché : texte exact de l'API + une aide concrète selon le cas
+    private string? _message;
+    private string? _aide;
+    private string _typeMessage = "erreur";   // erreur | alerte | info | succes
+
+    protected override void OnInitialized()
+    {
+        // Redirection par AuthHeaderHandler quand la session n'a pas pu être renouvelée
+        var query = Nav.ToAbsoluteUri(Nav.Uri).Query;
+        if (query.Contains("expire=", StringComparison.OrdinalIgnoreCase))
+            Afficher("Votre session a expiré. Reconnectez-vous pour continuer.", type: "info");
+    }
 
     private async Task GererSoumissionGlobale()
     {
         _isSubmitting = true;
-        _errorMessage = null;
+        Effacer();
 
         try
         {
             if (!_enAttenteDeOtp)
             {
-                // ─── ÉTAPE 1 : Appel initial au Login ───
-                var resultatLogin = await Api.LoginAsync(_model.Email, _model.MotDePasse);
-
-                if (resultatLogin != null)
+                // ─── ÉTAPE 1 : identifiants ───
+                var resultat = await Api.LoginAsync(_model.Email, _model.MotDePasse);
+                if (resultat is null)
                 {
-                    // Si l'AccessToken est vide, le mot de passe est valide et l'OTP est requis
-                    if (string.IsNullOrEmpty(resultatLogin.AccessToken))
-                    {
-                        _enAttenteDeOtp = true;
-                    }
-                    else
-                    {
-                        // Connexion directe (si OTP désactivé ou appareil de confiance serveur)
-                        await TraiterConnexionReussie(resultatLogin);
-                    }
+                    Afficher("La connexion n'a pas abouti. Réessayez.");
+                }
+                else if (string.IsNullOrEmpty(resultat.AccessToken))
+                {
+                    _enAttenteDeOtp = true;   // appareil non reconnu : code envoyé par e-mail
                 }
                 else
                 {
-                    _errorMessage = "Identifiants invalides. Veuillez réessayer.";
+                    await TraiterConnexionReussie(resultat);
                 }
             }
             else
             {
-                // ─── ÉTAPE 2 : Vérification de l'OTP ───
+                // ─── ÉTAPE 2 : code OTP ───
                 if (string.IsNullOrWhiteSpace(_codeOtp) || _codeOtp.Length < 6)
                 {
-                    _errorMessage = "Veuillez saisir un code OTP valide à 6 chiffres.";
+                    Afficher("Saisissez le code à 6 chiffres reçu par e-mail.", type: "alerte");
                     return;
                 }
 
                 var authData = await Api.VerifyOtpAsync(_model.Email, _codeOtp);
-
-                if (authData != null)
-                {
-                    await TraiterConnexionReussie(authData);
-                }
-                else
-                {
-                    _errorMessage = "Code OTP incorrect ou expiré.";
-                }
+                if (authData is not null) await TraiterConnexionReussie(authData);
+                else Afficher("Code incorrect ou expiré.");
             }
         }
         catch (Exception ex)
         {
-            _errorMessage = ex.Message.Contains("401") || ex.Message.Contains("Unauthorized")
-                ? "Échec de l'authentification. Vérifiez vos informations."
-                : $"Erreur : {ex.Message}";
-            Console.WriteLine(ex.Message);
+            AfficherErreurApi(ex.Message);
         }
         finally
         {
@@ -161,55 +178,61 @@
         }
     }
 
+    /// <summary>Message exact de l'API, avec une aide adaptée (abonnement, entreprise suspendue, code déjà envoyé…).</summary>
+    private void AfficherErreurApi(string? message)
+    {
+        var m = string.IsNullOrWhiteSpace(message) ? "La connexion n'a pas abouti. Réessayez." : message;
+
+        if (m.Contains("abonnement", StringComparison.OrdinalIgnoreCase))
+            Afficher(m, "Pour réactiver l'accès, l'administrateur de votre entreprise doit renouveler l'abonnement auprès du support Finama.", "alerte");
+        else if (m.Contains("désactivé", StringComparison.OrdinalIgnoreCase) || m.Contains("suspendu", StringComparison.OrdinalIgnoreCase))
+            Afficher(m, "Contactez l'administrateur de votre entreprise ou le support Finama.", "alerte");
+        else if (m.Contains("Patientez", StringComparison.OrdinalIgnoreCase))
+        {
+            // Un code a déjà été envoyé : on passe directement à la saisie du code
+            _enAttenteDeOtp = true;
+            Afficher(m, "Saisissez le code reçu par e-mail ci-dessus (vérifiez aussi les courriers indésirables).", "info");
+        }
+        else if (m.Contains("Trop de", StringComparison.OrdinalIgnoreCase))
+            Afficher(m, "Patientez une minute avant de réessayer.", "alerte");
+        else
+            Afficher(m);
+    }
+
     private async Task TraiterConnexionReussie(AuthResponse authData)
     {
-        // 1. Mise à jour du State et du LocalStorage
+        // Le magasin mémorisé peut appartenir à un autre compte ou à des données supprimées
+        try { await JS.InvokeVoidAsync("localStorage.removeItem", "finama_magasin_id"); } catch { }
         State.Utilisateur = authData;
-        await LocalStorage.SetItemAsync("accessToken", authData.AccessToken);
-        await LocalStorage.SetItemAsync("device_trusted", "true");
-        await LocalStorage.SetItemAsync("device_expiry", DateTime.UtcNow.AddDays(30).ToString());
+        // Jetons (access + refresh) déjà enregistrés par FinamaApiService.SauvegarderSessionAsync
 
-        // 2. Notification de l'état d'authentification à Blazor
         if (AuthStateProvider is CustomAuthStateProvider customProvider)
-        {
             customProvider.NotifyUserAuthentication(authData.AccessToken);
-        }
 
-        // 3. Redirection conditionnelle selon l'obligation de changer le mot de passe
         if (authData.DoitChangerMotDePasse)
-        {
             Nav.NavigateTo("/changer-mot-de-passe");
-        }
         else
-        {
-            Nav.NavigateTo("/");
-        }
+            Nav.NavigateTo("/", forceLoad: true);   // démarre propre avec les droits du compte connecté
     }
 
     private async Task GererRenvoiOtp()
     {
         _isResending = true;
         _isSubmitting = true;
-        _errorMessage = null;
+        Effacer();
         _codeOtp = string.Empty;
 
         try
         {
-            var resultatLogin = await Api.LoginAsync(_model.Email, _model.MotDePasse);
-
-            if (resultatLogin != null && string.IsNullOrEmpty(resultatLogin.AccessToken))
-            {
-                _errorMessage = "✅ Un nouveau code OTP a été envoyé à votre adresse e-mail.";
-            }
+            var resultat = await Api.LoginAsync(_model.Email, _model.MotDePasse);
+            if (resultat is not null && string.IsNullOrEmpty(resultat.AccessToken))
+                Afficher("Un nouveau code a été envoyé à votre adresse e-mail.", type: "succes");
             else
-            {
-                _errorMessage = "Impossible de renvoyer le code. Veuillez réessayer ou revenir en arrière.";
-            }
+                Afficher("Impossible de renvoyer le code. Réessayez ou revenez en arrière.");
         }
         catch (Exception ex)
         {
-            _errorMessage = "Erreur lors du renvoi du code de sécurité.";
-            Console.WriteLine(ex.Message);
+            AfficherErreurApi(ex.Message);
         }
         finally
         {
@@ -221,21 +244,32 @@
     private async Task GererEntreeClavier(KeyboardEventArgs e)
     {
         if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_codeOtp))
-        {
             await GererSoumissionGlobale();
-        }
     }
 
     private void RetournerAuLogin()
     {
         _enAttenteDeOtp = false;
         _codeOtp = string.Empty;
-        _errorMessage = null;
+        Effacer();
     }
 
     private async Task Inscription()
     {
         await Api.LogoutAsync();
         Nav.NavigateTo("/inscription");
+    }
+
+    private void Afficher(string message, string? aide = null, string type = "erreur")
+    {
+        _message = message;
+        _aide = aide;
+        _typeMessage = type;
+    }
+
+    private void Effacer()
+    {
+        _message = null;
+        _aide = null;
     }
 }

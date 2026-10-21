@@ -1,0 +1,314 @@
+@page "/commerce/magasins"
+@using Finama.Web
+@using Finama.Web.Services
+@inject CommerceApiService CommerceApi
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject Radzen.NotificationService NotificationService
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold text-dark mb-1"><i class="bi bi-shop text-success me-2"></i>Réseau des Magasins & Entrepôts</h3>
+        <p class="text-muted small mb-0">Pilotage multi-sites, affectation des stocks et gestion des points de vente</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary fw-bold px-3 py-2 rounded-3 shadow-sm d-flex align-items-center gap-2" @onclick="ChargerMagasins">
+            <i class="bi bi-arrow-clockwise"></i> Actualiser
+        </button>
+        <button class="btn btn-success fw-bold px-3 py-2 rounded-3 shadow-sm d-flex align-items-center gap-2" @onclick="OuvrirModalNouveau">
+            <i class="bi bi-plus-circle fs-6"></i>
+            <span>Nouveau Magasin / Dépôt</span>
+        </button>
+    </div>
+</div>
+
+<!-- STATISTIQUES RAPIDES -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
+            <div class="text-muted small fw-bold uppercase font-monospace">Total Structures</div>
+            <div class="fs-3 fw-bold text-dark font-monospace">@_magasins.Count</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
+            <div class="text-muted small fw-bold uppercase font-monospace">Points de Vente Actifs</div>
+            <div class="fs-3 fw-bold text-success font-monospace">@_magasins.Count(m => m.Type == TypeMagasin.PointDeVente && m.EstActif)</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
+            <div class="text-muted small fw-bold uppercase font-monospace">Entrepôts Logistiques</div>
+            <div class="fs-3 fw-bold text-primary font-monospace">@_magasins.Count(m => m.Type == TypeMagasin.Entrepot)</div>
+        </div>
+    </div>
+</div>
+
+<!-- TABLEAU DE GESTION -->
+<div class="card border-0 shadow-sm rounded-3">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light font-monospace small text-uppercase">
+                    <tr>
+                        <th class="ps-4">Code / ID</th>
+                        <th>Désignation & Type</th>
+                        <th>Coordonnées (Adresse / Tél)</th>
+                        <th>Responsable</th>
+                        <th class="text-center">Rôle Principal</th>
+                        <th class="text-end pe-4">Actions de Gestion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_chargement)
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center py-5">
+                                <div class="spinner-border text-success mb-2" role="status"></div>
+                                <div class="text-muted small">Chargement du réseau commercial...</div>
+                            </td>
+                        </tr>
+                    }
+                    else if (!_magasins.Any())
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                <i class="bi bi-shop-window fs-1 d-block mb-2 opacity-50"></i>
+                                Aucun magasin configuré dans le système.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var m in _magasins)
+                        {
+                            var estActifSession = _magasinActifId == m.Id;
+                            <tr>
+                                <td class="ps-4 font-monospace fw-bold text-dark">
+                                    <span class="badge bg-light text-dark border p-2">@m.Code</span>
+                                </td>
+                                <td>
+                                    <div class="fw-bold text-dark fs-6">@m.Nom</div>
+                                    <span class="badge @(m.Type == TypeMagasin.PointDeVente ? "bg-success bg-opacity-10 text-success" : "bg-primary bg-opacity-10 text-primary") font-monospace small">
+                                        @(m.Type == TypeMagasin.PointDeVente ? "Point de Vente (POS)" : "Entrepôt / Dépôt")
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="small text-dark"><i class="bi bi-geo-alt me-1 text-muted"></i>@(string.IsNullOrEmpty(m.Adresse) ? "Non renseignée" : m.Adresse)</div>
+                                    <div class="small text-muted font-monospace"><i class="bi bi-telephone me-1"></i>@(string.IsNullOrEmpty(m.Telephone) ? "N/A" : m.Telephone)</div>
+                                </td>
+                                <td>
+                                    <span class="small text-dark fw-semibold"><i class="bi bi-person me-1 text-muted"></i>@(string.IsNullOrEmpty(m.Responsable) ? "Non assigné" : m.Responsable)</span>
+                                </td>
+                                <td class="text-center">
+                                    @if (m.EstPrincipal)
+                                    {
+                                        <span class="badge bg-success font-monospace px-3 py-2">Magasin Principal</span>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-secondary font-monospace" @onclick="() => DefinirPrincipal(m)">
+                                            Définir principal
+                                        </button>
+                                    }
+                                </td>
+                                <td class="text-end pe-4">
+                                    <button class="btn btn-sm @(estActifSession ? "btn-success" : "btn-outline-success") shadow-sm"
+                                            @onclick="() => SelectionnerMagasinActif(m)"
+                                            title="Basculer le contexte de travail sur ce magasin">
+                                        <i class="bi @(estActifSession ? "bi-check-circle-fill" : "bi-box-arrow-in-right") me-1"></i>
+                                        @(estActifSession ? "Actif en session" : "Sélectionner")
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- MODALE DE CRÉATION HAUTES PERFORMANCES -->
+@if (_afficherModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px);">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-shop me-2"></i>Configuration d'un nouveau point de stockage / vente</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="FermerModal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Code Unique *</label>
+                            <input type="text" class="form-control font-monospace" @bind="_nouveauRequest.Code" placeholder="Ex: MAG-02" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold small">Nom Commercial *</label>
+                            <input type="text" class="form-control" @bind="_nouveauRequest.Nom" placeholder="Ex: Boutique Agoè Minamadou" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Type de Structure</label>
+                            <select class="form-select" @bind="_nouveauRequest.Type">
+                                <option value="@TypeMagasin.PointDeVente">Point de Vente (Caisse / POS)</option>
+                                <option value="@TypeMagasin.Entrepot">Entrepôt / Réserve Centrale</option>
+                                <option value="@TypeMagasin.Transit">Zone de Transit</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Responsable / Gérant</label>
+                            <input type="text" class="form-control" @bind="_nouveauRequest.Responsable" placeholder="Nom du responsable..." />
+                        </div>
+
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold small">Adresse Géographique</label>
+                            <input type="text" class="form-control" @bind="_nouveauRequest.Adresse" placeholder="Quartier, Rue, Ville..." />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Téléphone</label>
+                            <input type="text" class="form-control font-monospace" @bind="_nouveauRequest.Telephone" placeholder="+228..." />
+                        </div>
+
+                        <div class="col-12 mt-3">
+                            <div class="form-check p-3 bg-light rounded-3 border">
+                                <input class="form-check-input ms-0 me-2" type="checkbox" id="principalCheck" @bind="_nouveauRequest.EstPrincipal">
+                                <label class="form-check-label fw-bold small text-dark" for="principalCheck">
+                                    Définir immédiatement comme magasin principal de référence pour l'entreprise
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-light px-4" @onclick="FermerModal">Annuler</button>
+                    <button type="button" class="btn btn-success px-4 fw-bold" @onclick="EnregistrerMagasin" disabled="@_enCours">
+                        @if (_enCours)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Valider l'enregistrement
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<ConfirmDialog @ref="_confirm" />
+
+@code {
+    private ConfirmDialog _confirm = default!;
+    private List<MagasinDto> _magasins = new();
+    private bool _chargement = true;
+    private bool _afficherModal = false;
+    private bool _enCours = false;
+    private Guid _magasinActifId;
+
+    private CreerMagasinRequest _nouveauRequest = new CreerMagasinRequest();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ChargerMagasins();
+        await RecupererMagasinActifSession();
+    }
+
+    private async Task ChargerMagasins()
+    {
+        _chargement = true;
+        _magasins = await CommerceApi.GetMagasinsAsync();
+        _chargement = false;
+    }
+
+    private async Task RecupererMagasinActifSession()
+    {
+        var stockId = await JS.InvokeAsync<string>("localStorage.getItem", "finama_magasin_id");
+        if (Guid.TryParse(stockId, out var id))
+        {
+            _magasinActifId = id;
+        }
+        else if (_magasins.Any())
+        {
+            // Par défaut, sélectionne le principal ou le premier
+            var principal = _magasins.FirstOrDefault(m => m.EstPrincipal) ?? _magasins.First();
+            await SelectionnerMagasinActif(principal);
+        }
+    }
+
+    private async Task SelectionnerMagasinActif(MagasinDto m)
+    {
+        _magasinActifId = m.Id;
+        await JS.InvokeVoidAsync("localStorage.setItem", "finama_magasin_id", m.Id.ToString());
+        await JS.InvokeVoidAsync("localStorage.setItem", "finama_magasin_nom", m.Nom);
+        NotificationService.Information($"Magasin actif : {m.Nom}", "Contexte Modifié");
+        StateHasChanged();
+    }
+
+    private void OuvrirModalNouveau()
+    {
+        _nouveauRequest = new CreerMagasinRequest
+        {
+            Code = $"MAG-{Random.Shared.Next(100, 999)}",
+            Nom = "",
+            Type = TypeMagasin.PointDeVente,
+            Adresse = "",
+            Telephone = "",
+            Responsable = "",
+            EstPrincipal = !_magasins.Any()
+        };
+        _afficherModal = true;
+    }
+
+    private void FermerModal() => _afficherModal = false;
+
+    private async Task EnregistrerMagasin()
+    {
+        if (string.IsNullOrWhiteSpace(_nouveauRequest.Code) || string.IsNullOrWhiteSpace(_nouveauRequest.Nom))
+        {
+            NotificationService.Avertir("Le code et le nom du magasin sont obligatoires.", "Champs requis");
+            return;
+        }
+
+        _enCours = true;
+        try
+        {
+            var succes = await CommerceApi.CreerMagasinAsync(_nouveauRequest);
+            if (succes)
+            {
+                NotificationService.Succes("Structure enregistrée avec succès.");
+                _afficherModal = false;
+                await ChargerMagasins();
+            }
+            else
+            {
+                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Impossible d'enregistrer le magasin.", "Magasin non enregistré");
+            }
+        }
+        catch (Exception)
+        {
+            NotificationService.ErreurServeur();
+        }
+        finally
+        {
+            _enCours = false;
+        }
+    }
+
+    private async Task DefinirPrincipal(MagasinDto m)
+    {
+        if (!await _confirm.DemanderAsync(
+                $"« {m.Nom} » deviendra le magasin par défaut pour le stock et la caisse.\nL'ancien magasin principal reste actif.",
+                "Changer de magasin principal ?", "Définir comme principal")) return;
+
+        if (!await CommerceApi.DefinirMagasinPrincipalAsync(m.Id))
+        {
+            NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Le magasin principal n'a pas été modifié.", "Changement refusé");
+            return;
+        }
+
+        NotificationService.Succes("Le magasin principal a été modifié.", "Mis à jour");
+        await ChargerMagasins();
+    }
+}

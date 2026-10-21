@@ -1,0 +1,27 @@
+@using Finama.Web.Services
+@* E-mail : contrôle de la forme nom@domaine.ext, 254 caractères max. Message affiché après la saisie. *@
+<input type="email" inputmode="email" autocomplete="email" maxlength="254"
+       class="form-control @Classe @(_touche && Erreur is not null ? "is-invalid" : "")"
+       placeholder="@Placeholder" value="@Value"
+       onkeydown="return event.key !== ' '"
+       @oninput="SurSaisie" @onblur="() => _touche = true" />
+@if (_touche && Erreur is not null)
+{
+    <div class="invalid-feedback d-block small">@Erreur</div>
+}
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "nom@domaine.com";
+    [Parameter] public string Classe { get; set; } = "";
+
+    private bool _touche;
+    private string? Erreur => ControlesSaisie.Email(Value);
+
+    private async Task SurSaisie(ChangeEventArgs e)
+    {
+        Value = e.Value?.ToString();
+        await ValueChanged.InvokeAsync(Value);
+    }
+}

@@ -5,6 +5,9 @@
 @attribute [Authorize(Roles = "SuperAdmin")]
 @inject ITenantAdminService TenantService
 @inject NotificationService Notif
+@inject HttpClient Http
+@inject SupportService Support
+@using System.Net.Http.Json
 
 <PageTitle>Entreprises | Administration Finama</PageTitle>
 
@@ -197,6 +200,114 @@
     </div>
 }
 
+@* ===== Fenêtre : accès support ===== *@
+@if (tenantSupport is not null)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-bold"><i class="bi bi-headset text-warning me-2"></i>Accéder en mode support</h5>
+                        <div class="text-muted small">@tenantSupport.Nom</div>
+                    </div>
+                    <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => tenantSupport = null" disabled="@supportBusy"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label small fw-bold">Motif de l'accès *</label>
+                    <textarea class="form-control mb-1" rows="2" @bind="supportMotif" @bind:event="oninput"
+                              placeholder="Ex. : Demande du client par WhatsApp — balance déséquilibrée"></textarea>
+                    <div class="form-text mb-3">Le motif est visible par l'administrateur de l'entreprise dans « Mon entreprise ».</div>
+
+                    <label class="form-label small fw-bold">Durée</label>
+                    <div class="btn-group w-100 mb-3" role="group">
+                        @foreach (var d in new[] { 30, 60, 120 })
+                        {
+                            <button type="button" class="btn btn-sm @(supportDuree == d ? "btn-warning" : "btn-outline-warning")" @onclick="() => supportDuree = d">
+                                @(d < 60 ? $"{d} min" : $"{d / 60} h")
+                            </button>
+                        }
+                    </div>
+
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" role="switch" id="support-ro" @bind="supportLectureSeule" />
+                        <label class="form-check-label" for="support-ro"><strong>Lecture seule</strong> (recommandé)</label>
+                    </div>
+                    @if (!supportLectureSeule)
+                    {
+                        <div class="alert alert-warning small py-2 mb-0">
+                            <i class="bi bi-exclamation-triangle me-1"></i>Vous pourrez modifier les données du client. Ne le faites qu'avec son accord explicite.
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button class="btn btn-light" @onclick="() => tenantSupport = null" disabled="@supportBusy">Annuler</button>
+                    <button class="btn btn-warning fw-bold" @onclick="DemarrerSupport" disabled="@(supportBusy || (supportMotif?.Trim().Length ?? 0) < 5)">
+                        @if (supportBusy) { <span class="spinner-border spinner-border-sm me-1" role="status"></span> }
+                        Accéder à l'entreprise
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ===== Fenêtre : modules ===== *@
+@if (tenantModules is not null)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-bold">Modules accessibles</h5>
+                        <div class="text-muted small">@tenantModules.Nom</div>
+                    </div>
+                    <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => tenantModules = null" disabled="@modulesBusy"></button>
+                </div>
+                <div class="modal-body">
+                    @if (modulesChargement)
+                    {
+                        <div class="text-center py-4"><div class="spinner-border text-success"></div></div>
+                    }
+                    else
+                    {
+                        @foreach (var m in ModulesDisponibles)
+                        {
+                            var actif = (modulesChoisis & m.Valeur) != 0;
+                            <div class="d-flex align-items-start gap-3 p-3 mb-2 rounded border @(actif ? "border-success bg-success-subtle" : "")" style="cursor:pointer;"
+                                 @onclick="() => BasculerModule(m.Valeur)">
+                                <i class="bi @m.Icone fs-4 @(actif ? "text-success" : "text-muted")"></i>
+                                <div class="flex-grow-1">
+                                    <div class="fw-bold">@m.Libelle</div>
+                                    <div class="small text-muted">@m.Description</div>
+                                </div>
+                                <div class="form-check form-switch m-0">
+                                    <input class="form-check-input" type="checkbox" role="switch" checked="@actif" @onclick:stopPropagation="true"
+                                           @onchange="() => BasculerModule(m.Valeur)" />
+                                </div>
+                            </div>
+                        }
+                        <div class="small text-muted mt-2">
+                            <i class="bi bi-info-circle me-1"></i>Effet immédiat : les menus et les accès de l'entreprise s'adaptent dès la prochaine page chargée.
+                            Les données d'un module désactivé sont conservées.
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button class="btn btn-light" @onclick="() => tenantModules = null" disabled="@modulesBusy">Annuler</button>
+                    <button class="btn btn-success" @onclick="EnregistrerModules" disabled="@(modulesBusy || modulesChargement || modulesChoisis == 0)">
+                        @if (modulesBusy) { <span class="spinner-border spinner-border-sm me-1" role="status"></span> }
+                        Enregistrer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @* ===== Fenêtre : utilisateurs ===== *@
 @if (tenantUsers is not null)
 {
@@ -258,7 +369,7 @@
     </div>
 }
 
-<ConfirmDialog Visible="@(confirmation is not null)"
+<ConfirmModal Visible="@(confirmation is not null)"
                Titre="@confirmation?.Titre"
                Message="@confirmation?.Message"
                LibelleConfirmer="@(confirmation?.Libelle ?? "Confirmer")"
@@ -285,6 +396,99 @@
     private int planChoisi = PlansAbonnement.Liste[0].Valeur;
     private int dureeJours = 30;
     private bool abonnementBusy;
+
+    // ─── Support ───
+    private TenantAdminDto? tenantSupport;
+    private string? supportMotif;
+    private int supportDuree = 60;
+    private bool supportLectureSeule = true;
+    private bool supportBusy;
+
+    private void OuvrirSupport(TenantAdminDto t)
+    {
+        tenantSupport = t;
+        supportMotif = null;
+        supportDuree = 60;
+        supportLectureSeule = true;
+    }
+
+    private async Task DemarrerSupport()
+    {
+        if (tenantSupport is null) return;
+        supportBusy = true;
+        var erreur = await Support.DemarrerAsync(tenantSupport.Id, supportMotif!.Trim(), supportDuree, supportLectureSeule);
+        if (erreur is not null)
+        {
+            Notif.Erreur(erreur);
+            supportBusy = false;
+        }
+        // succès : l'application se recharge dans l'espace du client
+    }
+
+    // ─── Modules ───
+    private TenantAdminDto? tenantModules;
+    private int modulesChoisis;
+    private bool modulesChargement;
+    private bool modulesBusy;
+
+    private static readonly (int Valeur, string Libelle, string Description, string Icone)[] ModulesDisponibles =
+    [
+        (1, "Finance & Compta", "Écritures, factures, tiers, balance, grand livre, états SYSCOHADA", "bi-wallet2"),
+        (2, "Ventes & Devis", "Devis, pipeline, clients, factures de vente", "bi-file-earmark-check"),
+        (4, "Commerce & Ventes", "Caisse, articles, stocks, inventaires, fidélité", "bi-cart3"),
+    ];
+
+    private async Task OuvrirModules(TenantAdminDto t)
+    {
+        tenantModules = t;
+        modulesChargement = true;
+        modulesChoisis = 7;
+        try
+        {
+            var r = await Http.GetFromJsonAsync<ModulesTenant>($"api/superadmin/tenants/{t.Id}/modules");
+            modulesChoisis = r?.Modules ?? 7;
+        }
+        catch
+        {
+            Notif.Erreur("Impossible de lire les modules de cette entreprise.");
+            tenantModules = null;
+        }
+        finally
+        {
+            modulesChargement = false;
+        }
+    }
+
+    private void BasculerModule(int valeur) => modulesChoisis ^= valeur;
+
+    private async Task EnregistrerModules()
+    {
+        if (tenantModules is null || modulesChoisis == 0) return;
+        modulesBusy = true;
+        try
+        {
+            using var r = await Http.PutAsJsonAsync($"api/superadmin/tenants/{tenantModules.Id}/modules", new { Modules = modulesChoisis });
+            var corps = await r.Content.ReadFromJsonAsync<ReponseModules>();
+            if (!r.IsSuccessStatusCode)
+            {
+                Notif.Erreur(corps?.Message ?? "Enregistrement impossible.");
+                return;
+            }
+            Notif.Succes(corps?.Message ?? "Modules mis à jour.");
+            tenantModules = null;
+        }
+        catch
+        {
+            Notif.Erreur("Serveur injoignable. Réessayez.");
+        }
+        finally
+        {
+            modulesBusy = false;
+        }
+    }
+
+    private sealed record ModulesTenant(int Modules);
+    private sealed record ReponseModules(string? Message, int Modules);
 
     private TenantAdminDto? tenantUsers;
     private List<UtilisateurAdminDto>? utilisateurs;
@@ -355,6 +559,12 @@
     private RenderFragment BoutonsActions(TenantAdminDto t) => @<div class="btn-group btn-group-sm">
         <button class="btn btn-outline-primary" title="Activer ou prolonger l'abonnement" @onclick="() => OuvrirAbonnement(t)">
             <i class="bi bi-calendar2-check"></i>
+        </button>
+        <button class="btn btn-outline-warning" title="Accéder en mode support" @onclick="() => OuvrirSupport(t)" disabled="@(!t.EstActif)">
+            <i class="bi bi-headset"></i>
+        </button>
+        <button class="btn btn-outline-success" title="Modules accessibles" @onclick="() => OuvrirModules(t)">
+            <i class="bi bi-grid-3x3-gap"></i>
         </button>
         <button class="btn btn-outline-secondary" title="Voir les utilisateurs" @onclick="() => OuvrirUtilisateurs(t)">
             <i class="bi bi-people"></i>

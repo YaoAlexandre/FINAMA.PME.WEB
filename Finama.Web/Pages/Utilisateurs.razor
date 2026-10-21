@@ -8,6 +8,8 @@
 @inject NavigationManager Nav
 @inject NotificationService NotificationService
 @inject IJSRuntime JS
+@inject HttpClient Http
+@using System.Net.Http.Json
 
 <div class="page-wrapper position-relative">
     <div class="page-header d-flex justify-content-between align-items-center mb-4">
@@ -63,7 +65,7 @@
                                     <td>@user.Email</td>
                                     <td>
                                         <span class="badge bg-light text-dark border">
-                                            <i class="bi bi-person-badge me-1"></i>@ConvertirRoleAffichage(user.Role)
+                                            <i class="bi bi-person-badge me-1"></i>@LibelleAcces(user)
                                         </span>
                                     </td>
                                     <td class="text-center">
@@ -152,10 +154,38 @@
                 <div class="p-3 bg-light rounded border">
                     <div class="d-flex align-items-center mb-2">
                         <i class="bi bi-shield-check text-primary me-2 fs-5"></i>
-                        <span class="fw-bold">@ConvertirRoleAffichage(u.Role)</span>
+                        <span class="fw-bold">@LibelleAcces(u)</span>
                     </div>
-                    <p class="small text-muted mb-0">@ObtenirDescriptionRole(u.Role)</p>
+                    <p class="small text-muted mb-0">@DescriptionAcces(u)</p>
                 </div>
+
+                @if (u.Role != "SuperAdmin")
+                {
+                    <div class="mt-3">
+                        <label class="form-label small fw-bold">Changer de profil</label>
+                        <div class="input-group input-group-sm">
+                            <select class="form-select" @bind="_nouvelAcces">
+                                <optgroup label="Profils prêts à l'emploi">
+                                    @foreach (var r in RolesFinama.Attribuables)
+                                    {
+                                        <option value="@($"r:{r.Valeur}")">@r.Libelle</option>
+                                    }
+                                </optgroup>
+                                @if (_profilsPerso.Any())
+                                {
+                                    <optgroup label="Profils de l'entreprise">
+                                        @foreach (var p in _profilsPerso)
+                                        {
+                                            <option value="@($"p:{p.Id}")">@p.Nom</option>
+                                        }
+                                    </optgroup>
+                                }
+                            </select>
+                            <button class="btn btn-primary" @onclick="() => ChangerAcces(u)" disabled="@(occupe || _nouvelAcces == AccesActuel(u))">Appliquer</button>
+                        </div>
+                        <div class="form-text">Droits appliqués immédiatement ; menus mis à jour à sa prochaine connexion. <a href="/administration/profils">Gérer les profils</a></div>
+                    </div>
+                }
             </div>
 
             <div class="d-grid gap-2 mt-5">
@@ -189,34 +219,50 @@
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label small fw-bold">Nom</label>
-                                <input class="form-control" @bind="_request.Nom" required />
+                                <input class="form-control" maxlength="150" @bind="_request.Nom" required />
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label small fw-bold">Prénom</label>
-                                <input class="form-control" @bind="_request.Prenom" required />
+                                <input class="form-control" maxlength="150" @bind="_request.Prenom" required />
                             </div>
                             <div class="col-12">
                                 <label class="form-label small fw-bold">Adresse email</label>
-                                <input type="email" class="form-control" @bind="_request.Email" required />
+                                <ChampEmail @bind-Value="_request.Email" />
                             </div>
                             <div class="col-12">
                                 <label class="form-label small fw-bold">Mot de passe temporaire</label>
-                                <input type="password" class="form-control" @bind="_request.MotDePasse" required />
-                                <div class="form-text">Le collaborateur devra le modifier à sa première connexion.</div>
+                                <input type="password" class="form-control" minlength="10" maxlength="128" autocomplete="new-password" @bind="_request.MotDePasse" @bind:event="oninput" required />
+                                <div class="form-text @(!string.IsNullOrEmpty(_request.MotDePasse) && _request.MotDePasse.Length < 10 ? "text-danger" : "")">
+                                    10 caractères minimum. Le collaborateur devra le modifier à sa première connexion.
+                                </div>
                             </div>
                             <div class="col-12">
-                                <label class="form-label small fw-bold">Rôle d'accès</label>
-                                <select class="form-select" @bind="_request.Role">
-                                    <option value="1">Comptable (Saisie et consultation)</option>
-                                    <option value="2">Lecture seule (Consultation seule)</option>
-                                    <option value="0">AdminTenant (Accès total entreprise)</option>
+                                <label class="form-label small fw-bold">Profil (ce que la personne pourra faire)</label>
+                                <select class="form-select" @bind="_accesCreation">
+                                    <optgroup label="Profils prêts à l'emploi">
+                                        @foreach (var r in RolesFinama.Attribuables)
+                                        {
+                                            <option value="@($"r:{r.Valeur}")">@r.Libelle — @r.Acces</option>
+                                        }
+                                    </optgroup>
+                                    @if (_profilsPerso.Any())
+                                    {
+                                        <optgroup label="Profils de l'entreprise">
+                                            @foreach (var p in _profilsPerso)
+                                            {
+                                                <option value="@($"p:{p.Id}")">@p.Nom</option>
+                                            }
+                                        </optgroup>
+                                    }
                                 </select>
+                                <div class="small text-muted mt-2 p-2 bg-light rounded border">@DescriptionChoix(_accesCreation)</div>
                             </div>
                         </div>
                     </div>
                     <div class="modal-footer border-0">
                         <button type="button" class="btn btn-light" @onclick="() => _afficherFormulaire = false">Annuler</button>
-                        <button type="submit" class="btn btn-primary px-4">Créer l'accès</button>
+                        <button type="submit" class="btn btn-primary px-4"
+                                disabled="@(string.IsNullOrWhiteSpace(_request.Nom) || string.IsNullOrWhiteSpace(_request.Prenom) || ControlesSaisie.Email(_request.Email) is not null || string.IsNullOrWhiteSpace(_request.Email) || (_request.MotDePasse?.Length ?? 0) < 10)">Créer l'accès</button>
                     </div>
                 </EditForm>
             </div>
@@ -252,7 +298,7 @@
     </div>
 }
 
-<ConfirmDialog Visible="@(_confirmation is not null)"
+<ConfirmModal Visible="@(_confirmation is not null)"
                Titre="@_confirmation?.Titre"
                Message="@_confirmation?.Message"
                LibelleConfirmer="@(_confirmation?.Libelle ?? "Confirmer")"
@@ -275,8 +321,6 @@
     private (string Utilisateur, string MotDePasse)? _motDePasseAffiche;
     private bool _copie;
 
-    protected override async Task OnInitializedAsync() => await ChargerUtilisateurs();
-
     private int _page = 1;
     private int _taille = 10;
 
@@ -288,7 +332,81 @@
 
     private void ChangerTaille(int taille) { _taille = taille; _page = 1; }
 
-    private void AfficherDetails(UtilisateurDto user) => _utilisateurSelectionne = user;
+    // ─── Accès : profil prédéfini (« r:5 ») ou personnalisé (« p:guid ») ───
+    private sealed record ProfilPerso(Guid Id, string Nom, string? Description, string[] Permissions, int NbUtilisateurs);
+    private sealed record AccesUtilisateur(Guid Id, int RoleValeur, Guid? ProfilId, string? ProfilNom);
+
+    private List<ProfilPerso> _profilsPerso = new();
+    private Dictionary<Guid, AccesUtilisateur> _acces = new();
+    private string _nouvelAcces = "r:1";
+    private string _accesCreation = "r:1";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ChargerUtilisateurs();
+        await ChargerAccesAsync();
+    }
+
+    private async Task ChargerAccesAsync()
+    {
+        try
+        {
+            _profilsPerso = await Http.GetFromJsonAsync<List<ProfilPerso>>("api/profils") ?? new();
+            _acces = (await Http.GetFromJsonAsync<List<AccesUtilisateur>>("api/Utilisateurs/acces") ?? new()).ToDictionary(a => a.Id);
+        }
+        catch { /* profils personnalisés indisponibles : profils prédéfinis seulement */ }
+    }
+
+    private string AccesActuel(UtilisateurDto u)
+        => _acces.TryGetValue(u.Id, out var a) && a.ProfilId is { } p ? $"p:{p}" : $"r:{RolesFinama.ParCode(u.Role)?.Valeur ?? 1}";
+
+    private string LibelleAcces(UtilisateurDto u)
+        => _acces.TryGetValue(u.Id, out var a) && a.ProfilNom is { } nom ? nom : ConvertirRoleAffichage(u.Role);
+
+    private string DescriptionAcces(UtilisateurDto u)
+        => _acces.TryGetValue(u.Id, out var a) && a.ProfilId is { } p
+            ? _profilsPerso.FirstOrDefault(x => x.Id == p)?.Description ?? "Profil personnalisé de l'entreprise."
+            : ObtenirDescriptionRole(u.Role);
+
+    private string DescriptionChoix(string choix)
+    {
+        var (role, profilId) = Decoder(choix);
+        return profilId is { } p
+            ? _profilsPerso.FirstOrDefault(x => x.Id == p)?.Description ?? "Profil personnalisé de l'entreprise."
+            : RolesFinama.Attribuables.FirstOrDefault(r => r.Valeur == role)?.Description ?? "";
+    }
+
+    private static (int Role, Guid? ProfilId) Decoder(string choix)
+        => choix.StartsWith("p:") && Guid.TryParse(choix[2..], out var g) ? (3, g)
+         : int.TryParse(choix.Length > 2 ? choix[2..] : "1", out var r) ? (r, null) : (1, null);
+
+    private void AfficherDetails(UtilisateurDto user)
+    {
+        _utilisateurSelectionne = user;
+        _nouvelAcces = AccesActuel(user);
+    }
+
+    private async Task ChangerAcces(UtilisateurDto u)
+    {
+        var (role, profilId) = Decoder(_nouvelAcces);
+        _enCours.Add(u.Id);
+        try
+        {
+            using var r = await Http.PutAsJsonAsync($"api/Utilisateurs/{u.Id}/acces", new { Role = role, ProfilId = profilId });
+            string? message = null;
+            try { message = (await r.Content.ReadFromJsonAsync<ReponseApi>())?.Message; } catch { }
+            Notifier(r.IsSuccessStatusCode, r.IsSuccessStatusCode ? "Accès modifié" : "Action impossible",
+                     message ?? (r.IsSuccessStatusCode ? "Accès modifié." : "L'accès n'a pas pu être modifié."));
+            if (r.IsSuccessStatusCode) { await ChargerUtilisateurs(); await ChargerAccesAsync(); SynchroniserSelection(u.Id); }
+        }
+        catch (Exception)
+        {
+            Notifier(false, "Erreur de communication", "Serveur injoignable.");
+        }
+        finally { _enCours.Remove(u.Id); }
+    }
+
+    private sealed record ReponseApi(string? Message);
     private void FermerDetails() => _utilisateurSelectionne = null;
 
     private static string Initiales(UtilisateurDto u)
@@ -300,13 +418,18 @@
 
     private async Task EnregistrerUtilisateur()
     {
+        var (role, profilId) = Decoder(_accesCreation);
+        _request.Role = role;
+        _request.ProfilId = profilId;
         var erreur = await Api.CreerCollaborateurAsync(_request);
         if (erreur == null)
         {
             NotificationService.Succes($"L'accès de {_request.Prenom} {_request.Nom} est créé. Il devra changer son mot de passe à sa première connexion.", "Collaborateur ajouté");
             _request = new();
+            _accesCreation = "r:1";
             _afficherFormulaire = false;
             await ChargerUtilisateurs();
+            await ChargerAccesAsync();
         }
         else
         {
@@ -389,20 +512,8 @@
         else NotificationService.Erreur(message, titre);
     }
 
-    private string ConvertirRoleAffichage(string roleBrut) => roleBrut switch
-    {
-        "AdminTenant" => "Administrateur Entreprise",
-        "Comptable" => "Comptable",
-        "Lecture" => "Lecture seule",
-        "SuperAdmin" => "Super Admin Plateforme",
-        _ => roleBrut
-    };
+    private static string ConvertirRoleAffichage(string roleBrut) => RolesFinama.Libelle(roleBrut);
 
-    private string ObtenirDescriptionRole(string roleBrut) => roleBrut switch
-    {
-        "AdminTenant" => "A accès à la configuration totale du compte, à la balance, aux écritures et à la création des accès utilisateurs pour l'entreprise.",
-        "Comptable" => "Peut saisir de nouvelles écritures comptables, consulter les journaux et éditer les états financiers (Balance, Grand Livre).",
-        "Lecture" => "Accès restreint à la consultation des journaux et des rapports de synthèse. Toute modification est bloquée.",
-        _ => "Droits standards du profil."
-    };
+    private static string ObtenirDescriptionRole(string roleBrut)
+        => roleBrut == "SuperAdmin" ? "Administrateur de la plateforme Finama." : RolesFinama.ParCode(roleBrut)?.Description ?? "Droits standards du profil.";
 }

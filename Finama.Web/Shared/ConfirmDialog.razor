@@ -1,0 +1,112 @@
+@implements IDisposable
+
+@* Boîte de confirmation unique pour toute l'application (remplace window.confirm).
+   Usage :  <ConfirmDialog @ref="_confirm" />
+            if (!await _confirm.DemanderAsync("Message", "Titre", "Supprimer", type: ConfirmationType.Danger)) return;
+   Règles UX : titre = la question, message = la conséquence, bouton d'action = un verbe précis (jamais « OK »),
+   Échap ou clic à l'extérieur = annuler, le focus démarre sur « Annuler » pour une action dangereuse. *@
+
+@if (_visible)
+{
+    <div class="modal fade show d-block" tabindex="-1" role="alertdialog" aria-modal="true"
+         aria-labelledby="confirm-titre" aria-describedby="confirm-message"
+         style="background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(3px); z-index: 2100;"
+         @onclick="() => Terminer(false)" @onkeydown="SurTouche">
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;" @onclick:stopPropagation>
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-body p-4 text-center">
+                    <div class="mx-auto mb-3 d-flex align-items-center justify-content-center rounded-circle @ClasseIcone" style="width: 56px; height: 56px;">
+                        <i class="bi @Icone fs-3"></i>
+                    </div>
+                    <h5 id="confirm-titre" class="fw-bold mb-2">@_titre</h5>
+                    <p id="confirm-message" class="text-muted mb-0" style="white-space: pre-line;">@_message</p>
+                </div>
+                <div class="modal-footer border-0 justify-content-center gap-2 pb-4 pt-0">
+                    <button type="button" class="btn btn-light px-4" @ref="_boutonAnnuler" @onclick="() => Terminer(false)">@_libelleAnnuler</button>
+                    <button type="button" class="btn @ClasseBoutonConfirmer px-4 fw-bold" @ref="_boutonConfirmer" @onclick="() => Terminer(true)">@_libelleConfirmer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _visible;
+    private bool _focusEnAttente;
+    private string _titre = "";
+    private string _message = "";
+    private string _libelleConfirmer = "Confirmer";
+    private string _libelleAnnuler = "Annuler";
+    private ConfirmationType _type;
+    private TaskCompletionSource<bool>? _resultat;
+    private ElementReference _boutonAnnuler;
+    private ElementReference _boutonConfirmer;
+
+    private string Icone => _type switch
+    {
+        ConfirmationType.Danger => "bi-exclamation-triangle-fill",
+        ConfirmationType.Avertissement => "bi-exclamation-circle-fill",
+        _ => "bi-question-circle-fill"
+    };
+
+    private string ClasseIcone => _type switch
+    {
+        ConfirmationType.Danger => "bg-danger bg-opacity-10 text-danger",
+        ConfirmationType.Avertissement => "bg-warning bg-opacity-25 text-warning",
+        _ => "bg-success bg-opacity-10 text-success"
+    };
+
+    private string ClasseBoutonConfirmer => _type switch
+    {
+        ConfirmationType.Danger => "btn-danger",
+        ConfirmationType.Avertissement => "btn-warning",
+        _ => "btn-success"
+    };
+
+    /// <summary>Affiche la confirmation. Retourne true si l'utilisateur confirme, false s'il annule (bouton, Échap ou clic à l'extérieur).</summary>
+    public Task<bool> DemanderAsync(
+        string message,
+        string titre = "Confirmer cette action ?",
+        string libelleConfirmer = "Confirmer",
+        string libelleAnnuler = "Annuler",
+        ConfirmationType type = ConfirmationType.Question)
+    {
+        _resultat?.TrySetResult(false);   // une seule confirmation à la fois
+
+        _message = message;
+        _titre = titre;
+        _libelleConfirmer = libelleConfirmer;
+        _libelleAnnuler = libelleAnnuler;
+        _type = type;
+        _visible = true;
+        _focusEnAttente = true;
+        _resultat = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        StateHasChanged();
+        return _resultat.Task;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_visible && _focusEnAttente)
+        {
+            _focusEnAttente = false;
+            // Action dangereuse : le focus (et donc la touche Entrée) tombe sur « Annuler ».
+            await (_type == ConfirmationType.Danger ? _boutonAnnuler : _boutonConfirmer).FocusAsync();
+        }
+    }
+
+    private void SurTouche(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") Terminer(false);
+    }
+
+    private void Terminer(bool confirme)
+    {
+        _visible = false;
+        _resultat?.TrySetResult(confirme);
+        _resultat = null;
+    }
+
+    public void Dispose() => _resultat?.TrySetResult(false);
+}

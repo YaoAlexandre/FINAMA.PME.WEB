@@ -1,4 +1,4 @@
-﻿namespace Finama.Web.Models
+namespace Finama.Web.Models
 {
     // DTOs locaux ou à déplacer dans ton fichier global
     public class CreerCollaborateurRequest
@@ -9,6 +9,7 @@
         public string Email { get; set; } = string.Empty;
         public string MotDePasse { get; set; } = string.Empty;
         public int Role { get; set; } = 1; // 1 = Comptable par défaut
+        public Guid? ProfilId { get; set; }  // profil personnalisé (sinon : profil prédéfini du rôle)
     }
 
     public class UtilisateurDto

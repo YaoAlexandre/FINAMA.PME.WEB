@@ -131,7 +131,7 @@
     }
 </div>
 
-<ConfirmDialog Visible="@(confirmation is not null)"
+<ConfirmModal Visible="@(confirmation is not null)"
                Titre="@confirmation?.Titre"
                Message="@confirmation?.Message"
                LibelleConfirmer="@(confirmation?.Libelle ?? "Confirmer")"

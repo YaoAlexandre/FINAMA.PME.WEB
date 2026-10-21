@@ -1,0 +1,63 @@
+@using Finama.Web.Services
+@implements IDisposable
+@inject SupportService Support
+
+@* Bandeau permanent pendant une session support : on ne peut pas oublier qu'on est chez un client. *@
+@if (_session is { } s)
+{
+    <div class="bandeau-support d-flex align-items-center justify-content-between flex-wrap gap-2 px-4 py-2">
+        <span>
+            <i class="bi bi-headset me-2"></i><strong>Mode support</strong> — @s.Entreprise
+            @if (s.LectureSeule)
+            {
+                <span class="badge bg-dark bg-opacity-25 ms-2">Lecture seule</span>
+            }
+            <span class="ms-2 small">· fin dans @Restant(s)</span>
+        </span>
+        <button class="btn btn-sm btn-dark fw-bold" @onclick="Quitter" disabled="@_sortie">
+            @if (_sortie) { <span class="spinner-border spinner-border-sm me-1"></span> }
+            Quitter le mode support
+        </button>
+    </div>
+}
+
+<style>
+    .bandeau-support { background: #f59f00; color: #1f1300; position: sticky; top: 0; z-index: 1035; font-size: .9rem; }
+</style>
+
+@code {
+    private SessionSupport? _session;
+    private Timer? _minuteur;
+    private bool _sortie;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _session = await Support.LireAsync();
+        if (_session is not null)
+            _minuteur = new Timer(_ => InvokeAsync(Verifier), null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+    }
+
+    private async Task Verifier()
+    {
+        if (_session is null || _sortie) return;
+        if (DateTime.Now >= _session.Expiration)
+            await Quitter();   // expiration : retour automatique à la session SuperAdmin
+        else
+            StateHasChanged();
+    }
+
+    private async Task Quitter()
+    {
+        if (_sortie) return;
+        _sortie = true;
+        await Support.QuitterAsync();
+    }
+
+    private static string Restant(SessionSupport s)
+    {
+        var r = s.Expiration - DateTime.Now;
+        return r <= TimeSpan.Zero ? "quelques secondes" : r.TotalMinutes >= 60 ? $"{(int)r.TotalHours} h {r.Minutes:00}" : $"{Math.Max(1, (int)r.TotalMinutes)} min";
+    }
+
+    public void Dispose() => _minuteur?.Dispose();
+}

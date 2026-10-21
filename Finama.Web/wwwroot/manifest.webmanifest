@@ -1,0 +1,24 @@
+{
+  "name": "Finama — Gestion des PME",
+  "short_name": "Finama",
+  "description": "Caisse, stock, devis et comptabilité SYSCOHADA pour les commerces d'Afrique de l'Ouest.",
+  "id": "/",
+  "start_url": "/modules",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#0F8873",
+  "lang": "fr",
+  "categories": ["business", "finance", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Ouvrir la caisse", "url": "/commerce/caisse", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Nouveau devis", "url": "/ventes/devis/nouveau", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

@@ -1,0 +1,39 @@
+@using Finama.Web.Services
+<span class="badge rounded-pill px-3 py-2 @Classe" title="@Aide">@Libelle</span>
+
+@code {
+    [Parameter] public StatutDevisVm Statut { get; set; }
+
+    private string Libelle => Statut switch
+    {
+        StatutDevisVm.Brouillon => "Brouillon",
+        StatutDevisVm.Envoye => "Envoyé",
+        StatutDevisVm.Accepte => "Accepté",
+        StatutDevisVm.Refuse => "Refusé",
+        StatutDevisVm.Expire => "Expiré",
+        StatutDevisVm.Converti => "Facturé",
+        _ => "?"
+    };
+
+    private string Classe => Statut switch
+    {
+        StatutDevisVm.Brouillon => "bg-secondary bg-opacity-10 text-secondary",
+        StatutDevisVm.Envoye => "bg-primary bg-opacity-10 text-primary",
+        StatutDevisVm.Accepte => "bg-success bg-opacity-10 text-success",
+        StatutDevisVm.Refuse => "bg-danger bg-opacity-10 text-danger",
+        StatutDevisVm.Expire => "bg-warning bg-opacity-25 text-dark",
+        StatutDevisVm.Converti => "bg-dark text-white",
+        _ => "bg-light text-dark"
+    };
+
+    private string Aide => Statut switch
+    {
+        StatutDevisVm.Brouillon => "En préparation : modifiable",
+        StatutDevisVm.Envoye => "Envoyé au client : en attente de réponse",
+        StatutDevisVm.Accepte => "Le client a accepté : prêt à facturer",
+        StatutDevisVm.Refuse => "Le client a refusé",
+        StatutDevisVm.Expire => "Date de validité dépassée sans réponse",
+        StatutDevisVm.Converti => "Facture créée",
+        _ => ""
+    };
+}

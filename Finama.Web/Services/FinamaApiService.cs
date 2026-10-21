@@ -48,15 +48,15 @@ public class FinamaApiService
 
         var response = await _http.SendAsync(request);
 
-        if (!response.IsSuccessStatusCode) return null;
+        if (!response.IsSuccessStatusCode)
+            throw new UnauthorizedAccessException(await LireMessageErreurAsync(response, "Email ou mot de passe incorrect."));
 
         var result = await response.Content.ReadFromJsonAsync<AuthResponse>();
 
         // Si RequiresOtp est faux, on est reconnu et connecté immédiatement
         if (result is not null && !string.IsNullOrEmpty(result.AccessToken))
         {
-            await SauvegarderTokenAsync(result.AccessToken, result.NomUtilisateur,
-                                        result.NomEntreprise, result.DeviseSymbole);
+            await SauvegarderSessionAsync(result);
         }
 
         return result;
@@ -68,7 +68,7 @@ public class FinamaApiService
         await SetAuthHeaderAsync();
         var request = new HttpRequestMessage(HttpMethod.Post, "api/auth/changer-mot-de-passe");
 
-        
+
 
         request.Content = JsonContent.Create(new
         {
@@ -80,11 +80,20 @@ public class FinamaApiService
 
         if (response.IsSuccessStatusCode)
         {
-            return await response.Content.ReadFromJsonAsync<AuthResult>();
+            var ok = await response.Content.ReadFromJsonAsync<AuthResult>();
+            // Nouvelle session émise par l'API (sans le verrou "mot de passe temporaire")
+            if (ok?.Session is { AccessToken.Length: > 0 } session)
+                await SauvegarderSessionAsync(session);
+            return ok;
         }
 
-        var error = await response.Content.ReadFromJsonAsync<AuthResult>();
-        return error ?? AuthResult.Failure("Une erreur est survenue lors du changement de mot de passe.");
+        try
+        {
+            var error = await response.Content.ReadFromJsonAsync<AuthResult>();
+            if (!string.IsNullOrWhiteSpace(error?.Message)) return error;
+        }
+        catch { /* corps non conforme */ }
+        return AuthResult.Failure("Une erreur est survenue lors du changement de mot de passe.");
     }
     public async Task<AuthResponse?> VerifyOtpAsync(string email, string codeOtp)
     {
@@ -98,17 +107,15 @@ public class FinamaApiService
 
         if (!response.IsSuccessStatusCode)
         {
-            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                throw new UnauthorizedAccessException("Code OTP invalide ou expiré.");
-            return null;
+            // Message exact de l'API : "Code incorrect. 3 tentative(s) restante(s).", "Trop de tentatives…", 429…
+            throw new UnauthorizedAccessException(await LireMessageErreurAsync(response, "Code OTP invalide ou expiré."));
         }
 
         var result = await response.Content.ReadFromJsonAsync<AuthResponse>();
 
         if (result is not null)
         {
-            await SauvegarderTokenAsync(result.AccessToken, result.NomUtilisateur,
-                                        result.NomEntreprise, result.DeviseSymbole);
+            await SauvegarderSessionAsync(result);
         }
 
         return result;
@@ -118,9 +125,10 @@ public class FinamaApiService
 
     public async Task LogoutAsync()
     {
-        await SetAuthHeaderAsync();
-        await _http.PostAsync("api/auth/logout", null);
+        try { await _http.PostAsync("api/auth/logout", null); }
+        catch { /* hors ligne : la session locale est quand même détruite */ }
         await _js.InvokeVoidAsync("localStorage.removeItem", "finama_token");
+        await _js.InvokeVoidAsync("localStorage.removeItem", "finama_refresh");
         await _js.InvokeVoidAsync("localStorage.removeItem", "finama_user");
         await _js.InvokeVoidAsync("localStorage.removeItem", "finama_entreprise");
         await _js.InvokeVoidAsync("localStorage.removeItem", "finama_devise");
@@ -128,41 +136,74 @@ public class FinamaApiService
     }
 
     // ─── Tableau de bord ──────────────────────────────────────────────────────
+    /// <summary>Compatibilité (Modules.razor…) : null si indisponible.</summary>
     public async Task<TableauBordDto?> GetTableauBordAsync()
+        => (await ChargerTableauBordAsync()).Donnees;
+
+    /// <summary>
+    /// Tableau de bord avec la raison d'un échec : "SANS_TENANT", "AUCUN_EXERCICE", "EXERCICE_INTROUVABLE", "RESEAU", "ERREUR".
+    /// La session expirée (401) est gérée par AuthHeaderHandler (refresh ou redirection unique) : rien à faire ici.
+    /// </summary>
+    public async Task<ResultatTableauBord> ChargerTableauBordAsync(Guid? exerciceId = null)
     {
         try
         {
-            // 1. Attacher le jeton d'authentification local
-            await SetAuthHeaderAsync();
+            var url = exerciceId is { } id ? $"api/TableauBord?exerciceId={id}" : "api/TableauBord";
+            using var response = await _http.GetAsync(url);
 
-            // 2. Envoyer la requête HTTP GET brute
-            var response = await _http.GetAsync("api/TableauBord");
+            if (response.IsSuccessStatusCode)
+                return new(await response.Content.ReadFromJsonAsync<TableauBordDto>(), null, null);
 
-            // 3. 🌟 INTERCEPTION : Si le JWT est expiré ou invalide (Erreur 401)
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-            {
-                // Déconnexion forcée (vide le localStorage)
-                await LogoutAsync();
+                return new(null, "SESSION", "Session expirée.");
 
-                // Redirection immédiate vers la page de connexion
-                _nav.NavigateTo("/connexion", forceLoad: true);
-                return null;
-            }
-
-            // 4. Si la requête a échoué pour une autre raison
-            if (!response.IsSuccessStatusCode)
-                return null;
-
-            // 5. Tout est OK
-            return await response.Content.ReadFromJsonAsync<TableauBordDto>();
+            var (code, message) = await LireCodeErreurAsync(response);
+            return new(null, code ?? "ERREUR", message ?? "Impossible de charger le tableau de bord.");
+        }
+        catch (HttpRequestException)
+        {
+            return new(null, "RESEAU", "Serveur injoignable. Vérifiez votre connexion.");
         }
         catch (Exception)
         {
-            return null;
+            return new(null, "ERREUR", "Impossible de charger le tableau de bord.");
         }
     }
 
+    /// <summary>Ouvre un exercice (AdminTenant). Renvoie null si OK, sinon le message d'erreur de l'API.</summary>
+    public async Task<string?> OuvrirExerciceAsync(int annee)
+    {
+        try
+        {
+            using var response = await _http.PostAsJsonAsync("api/Exercices", new { Annee = annee });
+            if (response.IsSuccessStatusCode) return null;
+            return (await LireCodeErreurAsync(response)).Message ?? "Ouverture de l'exercice impossible.";
+        }
+        catch
+        {
+            return "Serveur injoignable. Réessayez.";
+        }
+    }
 
+    private static async Task<(string? Code, string? Message)> LireCodeErreurAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            string? Lire(params string[] noms)
+            {
+                foreach (var n in noms)
+                    if (doc.RootElement.TryGetProperty(n, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String)
+                        return v.GetString();
+                return null;
+            }
+            return (Lire("code", "Code"), Lire("message", "Message"));
+        }
+        catch
+        {
+            return (null, null);
+        }
+    }
 
     // ─── Exercices ────────────────────────────────────────────────────────────
     public async Task<List<ExerciceDto>> GetExercicesAsync()
@@ -196,7 +237,8 @@ public class FinamaApiService
     {
         await SetAuthHeaderAsync();
         var r = await _http.PostAsJsonAsync("api/factures", request);
-        r.EnsureSuccessStatusCode();
+        if (!r.IsSuccessStatusCode)
+            throw new InvalidOperationException(await LireMessageErreurAsync(r, "La facture n'a pas pu être créée."));
         return await r.Content.ReadFromJsonAsync<FactureDto>();
     }
 
@@ -560,38 +602,50 @@ public class FinamaApiService
     public async Task<string?> GetEntrepriseNomAsync() => await _js.InvokeAsync<string?>("localStorage.getItem", "finama_entreprise");
     public async Task<string?> GetDeviseSymboleAsync() => await _js.InvokeAsync<string?>("localStorage.getItem", "finama_devise");
 
+    /// <summary>
+    /// Connecté = access token encore valide, OU refresh token présent (AuthHeaderHandler renouvellera la session au premier appel).
+    /// </summary>
     public async Task<bool> EstConnecteAsync()
     {
         var token = await GetTokenAsync();
-        return !string.IsNullOrEmpty(token);
+        if (string.IsNullOrEmpty(token)) return false;
+        if (!JwtOutils.EstExpire(token)) return true;
+
+        var refresh = await _js.InvokeAsync<string?>("localStorage.getItem", "finama_refresh");
+        return !string.IsNullOrEmpty(refresh);
     }
 
     // ─── Helpers de configuration ──────────────────────────────────────────
-    private async Task SetAuthHeaderAsync()
+    /// <summary>
+    /// Conservé pour compatibilité : jeton et X-Device-Id sont désormais ajoutés par AuthHeaderHandler.
+    /// On garantit seulement l'existence du DeviceId.
+    /// </summary>
+    private async Task SetAuthHeaderAsync() => await GetDeviceIdAsync();
+
+    /// <summary>Message exact renvoyé par l'API ({ "message": "…" }), ou le message par défaut.</summary>
+    private static async Task<string> LireMessageErreurAsync(HttpResponseMessage reponse, string parDefaut)
     {
-        // Ajout du header de confiance (pour le backend) à chaque appel
-        var deviceId = await GetDeviceIdAsync();
-
-        if (!_http.DefaultRequestHeaders.Contains("X-Device-Id"))
-            _http.DefaultRequestHeaders.Add("X-Device-Id", deviceId);
-
-        //if (!_http.DefaultRequestHeaders.Contains("ngrok-skip-browser-warning"))
-        //    _http.DefaultRequestHeaders.Add("ngrok-skip-browser-warning", "true");
-
-        var token = await GetTokenAsync();
-        if (!string.IsNullOrEmpty(token))
+        if ((int)reponse.StatusCode >= 500) return "Erreur du serveur. Réessayez dans un instant.";
+        if (reponse.StatusCode == System.Net.HttpStatusCode.TooManyRequests) return "Trop de tentatives. Patientez une minute.";
+        try
         {
-            _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            var corps = await reponse.Content.ReadFromJsonAsync<ReponseMessage>();
+            if (!string.IsNullOrWhiteSpace(corps?.Message)) return corps.Message;
         }
+        catch { /* corps non JSON */ }
+        return parDefaut;
     }
 
-    private async Task SauvegarderTokenAsync(string token, string nom, string entreprise, string devise)
+    private async Task SauvegarderSessionAsync(AuthResponse r)
     {
-        await _js.InvokeVoidAsync("localStorage.setItem", "finama_token", token);
-        await _js.InvokeVoidAsync("localStorage.setItem", "finama_user", nom);
-        await _js.InvokeVoidAsync("localStorage.setItem", "finama_entreprise", entreprise);
-        await _js.InvokeVoidAsync("localStorage.setItem", "finama_devise", devise);
-        _authProvider.NotifyUserAuthentication(token);
+        AuthHeaderHandler.ReinitialiserSession(); // nouvelle session : le verrou "session perdue" est levé
+        await _js.InvokeVoidAsync("localStorage.setItem", "finama_token", r.AccessToken);
+        if (!string.IsNullOrEmpty(r.RefreshToken))
+            await _js.InvokeVoidAsync("localStorage.setItem", "finama_refresh", r.RefreshToken);
+        await _js.InvokeVoidAsync("localStorage.setItem", "finama_user", r.NomUtilisateur);
+        await _js.InvokeVoidAsync("localStorage.setItem", "finama_entreprise", r.NomEntreprise);
+        await _js.InvokeVoidAsync("localStorage.setItem", "finama_devise", r.DeviseSymbole);
+        _authProvider.NotifyUserAuthentication(r.AccessToken);
     }
 
     public async Task<bool> RegisterAsync(RegisterModel model)
@@ -656,3 +710,6 @@ public class FinamaApiService
     private record ReponseMessage(string? Message);
     private record ReponseReset(string? Message, string? MotDePasseTemporaire);
 }
+
+/// <summary>Résultat du chargement du tableau de bord : données, ou code + message d'échec.</summary>
+public record ResultatTableauBord(TableauBordDto? Donnees, string? Code, string? Message);

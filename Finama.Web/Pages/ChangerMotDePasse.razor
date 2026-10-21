@@ -1,4 +1,4 @@
-﻿@page "/changer-mot-de-passe"
+@page "/changer-mot-de-passe"
 @using Finama.Web.Models
 @using Finama.Web.Services
 @layout EmptyLayout
@@ -86,8 +86,10 @@
                     State.Utilisateur = State.Utilisateur with { DoitChangerMotDePasse = false };
                 }
 
-                await Task.Delay(1500);
-                Nav.NavigateTo("/");
+                // La nouvelle session (sans verrou "mot de passe temporaire") est déjà enregistrée par FinamaApiService.
+                // Rechargement complet : le menu et les droits sont relus depuis le nouveau jeton.
+                await Task.Delay(800);
+                Nav.NavigateTo("/modules", forceLoad: true);
             }
             else
             {
