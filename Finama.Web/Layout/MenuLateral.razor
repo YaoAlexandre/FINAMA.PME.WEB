@@ -1,0 +1,219 @@
+@* Menu latéral : liens du module actif, filtrés selon les permissions de l'utilisateur. *@
+
+@if (Module == "COMPTA")
+{
+    <!-- ESPACE COMPTABILITÉ & FINANCE -->
+    <div class="nav-section">
+        <span class="nav-section-label">Tableau de bord</span>
+        <NavLink href="/" class="nav-item" Match="NavLinkMatch.All">
+            <i class="bi bi-speedometer2 nav-icon"></i>
+            <span>Vue d'ensemble</span>
+        </NavLink>
+
+        <AuthorizeView Policy="Saisie">
+            <Authorized>
+                <span class="nav-section-label mt-3">Opérations</span>
+                <NavLink href="/comptabilite/ecritures" class="nav-item">
+                    <i class="bi bi-pencil-square nav-icon"></i>
+                    <span>Écritures</span>
+                </NavLink>
+                <NavLink href="/factures" class="nav-item">
+                    <i class="bi bi-file-earmark-text nav-icon"></i>
+                    <span>Factures</span>
+                </NavLink>
+                <NavLink href="/referentiel/tiers" class="nav-item">
+                    <i class="bi bi-people-fill nav-icon"></i>
+                    <span>Tiers</span>
+                </NavLink>
+            </Authorized>
+        </AuthorizeView>
+        <AuthorizeView Policy="AdminTenant" Context="liaison">
+            <Authorized>
+                <NavLink href="/comptabilite/liaison" class="nav-item">
+                    <i class="bi bi-link-45deg nav-icon"></i>
+                    <span>Liaison comptable</span>
+                </NavLink>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+
+    <div class="nav-section">
+        <span class="nav-section-label">Reporting Financier</span>
+        <AuthorizeView Policy="Saisie">
+            <Authorized>
+                <NavLink href="/balance" class="nav-item">
+                    <i class="bi bi-journal-check nav-icon"></i>
+                    <span>Balance</span>
+                </NavLink>
+                <NavLink href="/grand-livre" class="nav-item">
+                    <i class="bi bi-journal-text nav-icon"></i>
+                    <span>Grand Livre</span>
+                </NavLink>
+                <NavLink href="/plan-comptable" class="nav-item">
+                    <i class="bi bi-book-half nav-icon"></i>
+                    <span>Plan comptable</span>
+                </NavLink>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+
+}
+else if (Module == "VENTES")
+{
+    <!-- ESPACE VENTES & DEVIS -->
+    <div class="nav-section">
+        <span class="nav-section-label text-info fw-bold">Ventes</span>
+        <NavLink href="/ventes" class="nav-item" Match="NavLinkMatch.All">
+            <i class="bi bi-speedometer2 nav-icon"></i>
+            <span>Tableau de bord</span>
+        </NavLink>
+        <NavLink href="/ventes/devis" class="nav-item">
+            <i class="bi bi-file-earmark-text nav-icon"></i>
+            <span>Devis</span>
+        </NavLink>
+        <NavLink href="/ventes/pipeline" class="nav-item">
+            <i class="bi bi-kanban nav-icon"></i>
+            <span>Pipeline</span>
+        </NavLink>
+        <NavLink href="/ventes/clients" class="nav-item">
+            <i class="bi bi-person-lines-fill nav-icon"></i>
+            <span>Clients</span>
+        </NavLink>
+        <NavLink href="/factures" class="nav-item">
+            <i class="bi bi-receipt nav-icon"></i>
+            <span>Factures</span>
+        </NavLink>
+    </div>
+}
+else if (Module == "COMMERCE")
+{
+    <!-- ESPACE COMMERCE & VENTES : menus selon le métier (Caissier : vente ; Magasinier : stock) -->
+    <AuthorizeView Policy="Caisse">
+        <Authorized>
+    <div class="nav-section">
+        <span class="nav-section-label text-success fw-bold">Vente</span>
+        <NavLink href="/commerce/caisse" class="nav-item">
+            <i class="bi bi-receipt nav-icon"></i>
+            <span>Ouvrir la caisse</span>
+            <span class="badge badge-pos ms-auto">POS</span>
+        </NavLink>
+        <NavLink href="/commerce/clients" class="nav-item">
+            <i class="bi bi-people nav-icon"></i>
+            <span>Clients & fidélité</span>
+        </NavLink>
+        <AuthorizeView Policy="FinJournee" Context="finJournee">
+            <Authorized>
+                <NavLink href="/commerce/fin-journee" class="nav-item">
+                    <i class="bi bi-calendar-check nav-icon"></i>
+                    <span>Fin de journée</span>
+                </NavLink>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Policy="Stock">
+        <Authorized>
+    <div class="nav-section mt-3">
+        <span class="nav-section-label">Catalogue</span>
+        <NavLink href="/commerce/produits" class="nav-item">
+            <i class="bi bi-box-seam nav-icon"></i>
+            <span>Articles & services</span>
+        </NavLink>
+        <NavLink href="/commerce/categories" class="nav-item">
+            <i class="bi bi-tags nav-icon"></i>
+            <span>Catégories</span>
+        </NavLink>
+        <NavLink href="/commerce/etiquettes" class="nav-item">
+            <i class="bi bi-upc-scan nav-icon"></i>
+            <span>Étiquettes</span>
+        </NavLink>
+    </div>
+
+    <div class="nav-section">
+        <span class="nav-section-label">Stock</span>
+        <NavLink href="/commerce/magasins" class="nav-item">
+            <i class="bi bi-shop nav-icon"></i>
+            <span>Magasins & dépôts</span>
+        </NavLink>
+        <NavLink href="/commerce/stocks" class="nav-item">
+            <i class="bi bi-boxes nav-icon"></i>
+            <span>Niveaux de stock</span>
+        </NavLink>
+        <NavLink href="/commerce/inventaires" class="nav-item">
+            <i class="bi bi-clipboard-check nav-icon"></i>
+            <span>Inventaires</span>
+        </NavLink>
+    </div>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Policy="AdminTenant">
+        <Authorized>
+            <div class="nav-section">
+                <span class="nav-section-label">Configuration</span>
+                <NavLink href="/commerce/parametres" class="nav-item">
+                    <i class="bi bi-sliders nav-icon"></i>
+                    <span>Mon activité & options</span>
+                </NavLink>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+}
+else if (Module == "ADMIN")
+{
+    <!-- ESPACE PARAMÈTRES & ADMINISTRATION -->
+    <div class="nav-section">
+        <span class="nav-section-label">Configuration Entreprise</span>
+        <AuthorizeView Policy="AdminTenant">
+            <Authorized>
+                <NavLink href="/configuration/classes-comptables" class="nav-item">
+                    <i class="bi bi-gear-wide-connected nav-icon"></i>
+                    <span>Classes OHADA</span>
+                </NavLink>
+            </Authorized>
+        </AuthorizeView>
+        <AuthorizeView Policy="Utilisateurs">
+            <Authorized>
+                <NavLink href="/utilisateurs" class="nav-item">
+                    <i class="bi bi-people nav-icon"></i>
+                    <span>Utilisateurs</span>
+                </NavLink>
+                <NavLink href="/administration/profils" class="nav-item">
+                    <i class="bi bi-ui-checks-grid nav-icon"></i>
+                    <span>Profils & permissions</span>
+                </NavLink>
+            </Authorized>
+        </AuthorizeView>
+        <AuthorizeView Policy="AdminTenant">
+            <Authorized>
+                <NavLink href="/entreprise" class="nav-item">
+                    <i class="bi bi-building nav-icon"></i>
+                    <span>Mon entreprise</span>
+                </NavLink>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+
+    <AuthorizeView Roles="SuperAdmin">
+        <Authorized>
+            <div class="nav-section mt-3 pt-3 border-top border-secondary border-opacity-25">
+                <span class="nav-section-label text-warning fw-bold">Administration SaaS</span>
+                <NavLink href="/superadmin/tenants" class="nav-item">
+                    <i class="bi bi-building-gear nav-icon text-warning"></i>
+                    <span>Gestion des PME</span>
+                </NavLink>
+                <NavLink href="/superadmin/demandes-acces" class="nav-item">
+                    <i class="bi bi-person-check nav-icon text-warning"></i>
+                    <span>Demandes d'accès</span>
+                </NavLink>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+}
+
+@code {
+    /// <summary>Code du module affiché : COMPTA, VENTES, COMMERCE ou ADMIN.</summary>
+    [Parameter, EditorRequired] public string Module { get; set; } = "";
+}

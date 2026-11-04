@@ -1,0 +1,401 @@
+@* Styles de la mise en page principale (barre latérale, en-tête, sélecteur de module). Rendus par MainLayout uniquement. *@
+
+<style>
+    :root {
+        --sidebar-w: 260px;
+        --bleu: #198754 !important;
+    }
+
+    @@media (min-width: 992px) {
+        .sidebar {
+            position: fixed !important;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: var(--sidebar-w);
+            z-index: 1040;
+            transform: translateX(0) !important;
+            transition: transform .25s ease !important;
+        }
+
+            .sidebar:not(.open) {
+                transform: translateX(-100%) !important;
+            }
+
+        .main-content {
+            margin-left: var(--sidebar-w) !important;
+            width: calc(100% - var(--sidebar-w)) !important;
+            transition: margin-left .25s ease, width .25s ease;
+        }
+
+        .sidebar:not(.open) + .main-content {
+            margin-left: 0 !important;
+            width: 100% !important;
+        }
+    }
+
+    @@media (max-width: 991px) {
+        .sidebar {
+            position: fixed !important;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: var(--sidebar-w);
+            z-index: 1050;
+            transform: translateX(-100%) !important;
+            transition: transform .25s ease-in-out !important;
+        }
+
+            .sidebar.open {
+                transform: translateX(0) !important;
+            }
+
+        .main-content {
+            margin-left: 0 !important;
+            width: 100% !important;
+            min-width: 0;
+        }
+
+        .page-wrapper {
+            padding: 16px !important;
+        }
+
+        .topbar {
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+        }
+    }
+
+    .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
+        text-decoration: none;
+        color: #ced4da;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+    }
+
+        .nav-item:hover {
+            background: rgba(25, 135, 84, 0.15) !important; /* Fond vert subtil au survol */
+            color: #28a745 !important; /* Texte vert */
+        }
+
+        .nav-item.active {
+            background: var(--bleu) !important;
+            color: #fff !important;
+        }
+
+    .nav-item.active .badge-pos {
+        background: rgba(255, 255, 255, 0.25) !important;
+        color: #fff !important;
+    }
+
+    .badge-pos {
+        background: rgba(25, 135, 84, 0.25) !important;
+        color: #28a745 !important;
+        font-weight: 600;
+        font-size: 0.65rem;
+    }
+
+    /* ───────── Sélecteur de module ───────── */
+    .module-switch {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        transition: background .15s ease;
+    }
+
+        .module-switch:hover,
+        .module-switch[aria-expanded="true"] {
+            background: rgba(255, 255, 255, 0.09);
+        }
+
+    .module-icone {
+        width: 32px;
+        height: 32px;
+        flex: 0 0 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        font-size: 1rem;
+    }
+
+    /* Bloc texte d'une ligne : min-width:0 autorise le rétrécissement (sinon le texte déborde du menu) */
+    .module-texte {
+        flex: 1 1 auto;
+        min-width: 0;
+        text-align: left;
+    }
+
+    /* Sous-titre du bouton : une ligne avec "…" */
+    .module-sous-titre {
+        display: block;
+        font-size: .7rem;
+        color: #8b95a5;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Description dans le menu : jusqu'à 2 lignes, lisible en entier */
+    .module-desc {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
+        font-size: .72rem;
+        line-height: 1.3;
+        color: #8b95a5;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .module-coche {
+        flex: 0 0 auto;
+        color: #10b981;
+        font-size: 1rem;
+    }
+
+    .module-menu {
+        display: none;
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        z-index: 1060;
+        padding: 6px;
+        background: #1b2330;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 12px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+        max-height: calc(100vh - 170px);   /* petits écrans : le menu défile, pas la page */
+        overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
+    }
+
+        .module-menu.show {
+            display: block;
+            animation: module-menu-in .12s ease-out;
+        }
+
+    @@keyframes module-menu-in {
+        from { opacity: 0; transform: translateY(-4px); }
+        to { opacity: 1; transform: none; }
+    }
+
+    .module-item {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 8px;
+        background: none;
+        border: 0;
+        border-radius: 8px;
+        color: #e9ecef;
+        text-align: left;
+        transition: background .12s ease;
+    }
+
+        .module-item:hover,
+        .module-item:focus-visible {
+            background: rgba(255, 255, 255, 0.08);
+            outline: none;
+        }
+
+        .module-item.actif {
+            background: rgba(16, 185, 129, 0.14);
+            box-shadow: inset 3px 0 0 #10b981;   /* repère vert sur le module courant */
+        }
+
+    .module-separateur {
+        height: 1px;
+        margin: 6px 4px;
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Barre de défilement discrète (navigation latérale et menu des modules) */
+    .sidebar-nav,
+    .module-menu {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, .18) transparent;
+    }
+
+        .sidebar-nav::-webkit-scrollbar,
+        .module-menu::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar-nav::-webkit-scrollbar-thumb,
+        .module-menu::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, .18);
+            border-radius: 3px;
+        }
+
+        .sidebar-nav::-webkit-scrollbar-track,
+        .module-menu::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .module-menu.show { animation: none; }
+    }
+
+    .nav-icon {
+        font-size: 1.1rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* ───────── Notifications (Radzen) : carte flottante en haut à droite, au-dessus de la sidebar et des modales ───────── */
+    .rz-notification {
+        position: fixed !important;
+        inset: auto !important;
+        top: 76px !important;
+        right: 16px !important;
+        z-index: 3000 !important;
+        width: min(400px, calc(100vw - 32px));
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        pointer-events: none;
+    }
+
+        .rz-notification > div {
+            pointer-events: auto;
+        }
+
+    .rz-notification-item-wrapper {
+        --toast-accent: #0d6efd;
+        position: relative;
+        width: 100% !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+        overflow: hidden;
+        border-radius: 12px;
+        background: var(--bs-body-bg, #fff) !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, .22), 0 2px 6px rgba(0, 0, 0, .12);
+        animation: finama-toast-in .22s ease-out;
+    }
+
+    .rz-notification-success { --toast-accent: #198754; }
+    .rz-notification-error { --toast-accent: #dc3545; }
+    .rz-notification-warn { --toast-accent: #f59f00; }
+    .rz-notification-info { --toast-accent: #0d6efd; }
+
+    .rz-notification-item-wrapper .rz-notification-item {
+        background: transparent !important;
+        color: var(--bs-body-color, #212529) !important;
+        border-left: 5px solid var(--toast-accent);
+        border-radius: 0;
+        padding: 14px 12px 16px 14px;
+        box-shadow: none !important;
+    }
+
+    .rz-notification-title {
+        font-weight: 700;
+        font-size: .95rem;
+    }
+
+    .rz-notification-content {
+        font-size: .875rem;
+        opacity: .85;
+        line-height: 1.35;
+        white-space: pre-line;
+        word-break: break-word;
+    }
+
+    /* Icônes : Bootstrap Icons (déjà chargé) plutôt que la police Radzen, dont la ligature s'affichait en texte brut si absente */
+    .rz-notification-item-wrapper .rz-notification-icon {
+        flex: 0 0 auto;
+        width: 22px;
+        height: 22px;
+        font-size: 0 !important;
+        color: var(--toast-accent) !important;
+    }
+
+        .rz-notification-item-wrapper .rz-notification-icon::before {
+            font-family: "bootstrap-icons" !important;
+            font-style: normal;
+            font-size: 1.35rem;
+            line-height: 1;
+            content: "\f430" !important;
+        }
+
+    .rz-notification-success .rz-notification-icon::before { content: "\f26a" !important; }
+    .rz-notification-error .rz-notification-icon::before { content: "\f622" !important; }
+    .rz-notification-warn .rz-notification-icon::before { content: "\f33a" !important; }
+    .rz-notification-info .rz-notification-icon::before { content: "\f430" !important; }
+
+    .rz-notification-item-wrapper .rz-notification-close {
+        flex: 0 0 auto;
+        width: 26px;
+        height: 26px;
+        font-size: 0 !important;
+        border-radius: 6px;
+        opacity: .6;
+        color: inherit;
+    }
+
+        .rz-notification-item-wrapper .rz-notification-close:hover {
+            opacity: 1;
+            background: rgba(128, 128, 128, .18);
+        }
+
+        .rz-notification-item-wrapper .rz-notification-close::before {
+            font-family: "bootstrap-icons" !important;
+            font-size: .95rem;
+            content: "\f659" !important;
+        }
+
+    .rz-notification-item-wrapper > .rz-progressbar {
+        position: absolute !important;
+        inset-inline: 0 !important;
+        inset-block-end: 0 !important;
+        height: 3px !important;
+        border-radius: 0 !important;
+        background: rgba(128, 128, 128, .15) !important;
+    }
+
+    .rz-notification-item-wrapper .rz-progressbar-value {
+        background: var(--toast-accent) !important;
+    }
+
+    @@keyframes finama-toast-in {
+        from { opacity: 0; transform: translateX(28px); }
+        to { opacity: 1; transform: none; }
+    }
+
+    @@media (max-width: 575px) {
+        .rz-notification {
+            top: 64px !important;
+            left: 8px !important;
+            right: 8px !important;
+            width: auto;
+        }
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .rz-notification-item-wrapper { animation: none; }
+    }
+
+    .btn-logout {
+        background: none;
+        border: none;
+        color: #dc3545;
+        transition: transform 0.2s;
+    }
+
+        .btn-logout:hover {
+            transform: scale(1.1);
+        }
+</style>
