@@ -2,6 +2,7 @@
 @using Finama.Web.Services
 @inherits LayoutComponentBase
 @implements IAsyncDisposable
+@inject ILocalStorage Stockage
 @inject FinamaApiService Api
 @inject NavigationManager Nav
 @inject IJSRuntime JS
@@ -898,12 +899,12 @@
             if (relatif is "" or "modules" || EstPagePublique(relatif)) return;
 
             var chemin = "/" + relatif;
-            await JS.InvokeVoidAsync("localStorage.setItem", "finama_derniere_page", chemin);
+            await Stockage.EcrireAsync(ClesStockage.DernierePage, chemin);
 
             // Pages communes (accueil, notifications…) : jamais retenues comme « dernière page » d'un module
             var module = ModuleDepuisUrl(relatif);
             if (module != "MODULES")
-                await JS.InvokeVoidAsync("localStorage.setItem", $"finama_page_{module}", chemin);
+                await Stockage.EcrireAsync(ClesStockage.PageModule(module), chemin);
         }
         catch { /* stockage indisponible : sans conséquence */ }
     }
@@ -1004,7 +1005,7 @@
         };
 
         string? derniere = null;
-        try { derniere = await JS.InvokeAsync<string?>("localStorage.getItem", $"finama_page_{module}"); }
+        try { derniere = await Stockage.LireAsync(ClesStockage.PageModule(module)); }
         catch { /* stockage indisponible */ }
 
         // Une valeur mémorisée d'un autre module (ou d'une ancienne version) est ignorée
@@ -1089,7 +1090,7 @@
         if (!JwtOutils.EstExpire(token)) return "valide";
 
         string? refresh = null;
-        try { refresh = await JS.InvokeAsync<string?>("localStorage.getItem", "finama_refresh"); } catch { }
+        refresh = await Stockage.LireAsync(ClesStockage.Refresh);
         return string.IsNullOrEmpty(refresh) ? "expiree" : "valide";
     }
 

@@ -28,6 +28,10 @@ builder.Services.AddScoped(sp =>
     return new HttpClient(handler) { BaseAddress = new Uri(baseUrl) };
 });
 
+// ─── Core : stockage navigateur et client API (erreurs et réseau gérés au même endroit) ───
+builder.Services.AddScoped<ILocalStorage, LocalStorage>();
+builder.Services.AddScoped<ApiClient>();
+
 // ─── Services API ─────────────────────────────────────────────────────────────
 builder.Services.AddScoped<FinamaApiService>();
 builder.Services.AddScoped<DevisApiService>();

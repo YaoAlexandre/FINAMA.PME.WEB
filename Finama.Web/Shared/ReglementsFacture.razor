@@ -1,5 +1,4 @@
-@using System.Net.Http.Json
-@inject HttpClient Http
+@inject ApiClient Api
 @inject NotificationService Notif
 
 @* Règlements d'une facture : liste + saisie d'un encaissement (vente) ou d'un paiement (achat). *@
@@ -69,7 +68,7 @@
     [Parameter] public EventCallback OnChange { get; set; }
 
     private sealed record Reglement(Guid Id, DateTime DateReglement, decimal Montant, System.Text.Json.JsonElement Mode, string? Reference, string? Ecriture);
-    private sealed record ReponseApi(string? Message, decimal? Solde);
+    private sealed record ReponseReglement(decimal? Solde);
 
     private List<Reglement> _liste = new();
     private DateTime _date = DateTime.Today;
@@ -89,8 +88,7 @@
 
     private async Task Charger()
     {
-        try { _liste = await Http.GetFromJsonAsync<List<Reglement>>($"api/factures/{FactureId}/reglements") ?? new(); }
-        catch { _liste = new(); }
+        _liste = (await Api.GetAsync<List<Reglement>>($"api/factures/{FactureId}/reglements")).Donnees ?? new();
     }
 
     private async Task Enregistrer()
@@ -98,13 +96,12 @@
         _enCours = true;
         try
         {
-            using var r = await Http.PostAsJsonAsync($"api/factures/{FactureId}/reglements",
-                new { DateReglement = _date, Montant = _montant, Mode = _mode, Reference = _reference });
-            ReponseApi? m = null;
-            try { m = await r.Content.ReadFromJsonAsync<ReponseApi>(); } catch { }
-            if (!r.IsSuccessStatusCode) { Notif.Erreur(m?.Message ?? "Règlement refusé.", "Règlement"); return; }
-            Notif.Succes(m?.Message ?? "Règlement enregistré.", "Règlement");
-            Solde = m?.Solde ?? Solde - _montant;
+            var r = await Api.PostAsync<ReponseReglement>($"api/factures/{FactureId}/reglements",
+                new { DateReglement = _date, Montant = _montant, Mode = _mode, Reference = _reference },
+                "Règlement refusé.", "Règlement enregistré.");
+            if (!r.Succes) { Notif.Erreur(r.Message, "Règlement"); return; }
+            Notif.Succes(r.Message, "Règlement");
+            Solde = r.Donnees?.Solde ?? Solde - _montant;
             _montant = Solde; _reference = null;
             await Charger();
             await OnChange.InvokeAsync();

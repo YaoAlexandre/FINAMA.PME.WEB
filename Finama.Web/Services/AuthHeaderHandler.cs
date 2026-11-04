@@ -17,9 +17,6 @@ namespace Finama.Web.Services;
 /// </summary>
 public class AuthHeaderHandler : DelegatingHandler
 {
-    private const string CleToken = "finama_token";
-    private const string CleRefresh = "finama_refresh";
-    private const string CleDevice = "finama_device_id";
 
     // Partagé entre toutes les instances : un seul refresh à la fois, même si 10 appels échouent ensemble.
     private static readonly SemaphoreSlim VerrouRefresh = new(1, 1);
@@ -35,13 +32,13 @@ public class AuthHeaderHandler : DelegatingHandler
         Interlocked.Exchange(ref _redirectionEnCours, 0);
     }
 
-    private readonly IJSRuntime _js;
+    private readonly ILocalStorage _stockage;
     private readonly NavigationManager _nav;
     private readonly CustomAuthStateProvider _authProvider;
 
-    public AuthHeaderHandler(IJSRuntime js, NavigationManager nav, CustomAuthStateProvider authProvider)
+    public AuthHeaderHandler(ILocalStorage stockage, NavigationManager nav, CustomAuthStateProvider authProvider)
     {
-        _js = js;
+        _stockage = stockage;
         _nav = nav;
         _authProvider = authProvider;
     }
@@ -57,13 +54,13 @@ public class AuthHeaderHandler : DelegatingHandler
             return new HttpResponseMessage(HttpStatusCode.Unauthorized) { RequestMessage = request };
         }
 
-        var token = await LireAsync(CleToken);
+        var token = await LireAsync(ClesStockage.Jeton);
 
         // Renouvellement préventif : évite un aller-retour 401 inutile
         if (!estAppelAuth && !string.IsNullOrEmpty(token) && JwtOutils.EstExpire(token))
         {
             if (await RenouvelerAsync(request.RequestUri!, token, ct))
-                token = await LireAsync(CleToken);
+                token = await LireAsync(ClesStockage.Jeton);
         }
 
         await AttacherAsync(request, token);
@@ -82,7 +79,7 @@ public class AuthHeaderHandler : DelegatingHandler
         if (!string.IsNullOrEmpty(token) && await RenouvelerAsync(request.RequestUri!, token, ct))
         {
             using var rejeu = await ClonerAsync(request);
-            await AttacherAsync(rejeu, await LireAsync(CleToken));
+            await AttacherAsync(rejeu, await LireAsync(ClesStockage.Jeton));
             reponse.Dispose();
             return await base.SendAsync(rejeu, ct);
         }
@@ -110,7 +107,7 @@ public class AuthHeaderHandler : DelegatingHandler
         await VerrouRefresh.WaitAsync(ct);
         try
         {
-            var tokenActuel = await LireAsync(CleToken);
+            var tokenActuel = await LireAsync(ClesStockage.Jeton);
 
             // Un autre appel a déjà renouvelé la session pendant l'attente du verrou
             if (!string.IsNullOrEmpty(tokenActuel) && tokenActuel != tokenUtilise && !JwtOutils.EstExpire(tokenActuel))
@@ -118,7 +115,7 @@ public class AuthHeaderHandler : DelegatingHandler
 
             if (_sessionPerdue) return false;
 
-            var refresh = await LireAsync(CleRefresh);
+            var refresh = await LireAsync(ClesStockage.Refresh);
             if (string.IsNullOrEmpty(tokenActuel) || string.IsNullOrEmpty(refresh))
                 return false;
 
@@ -140,8 +137,8 @@ public class AuthHeaderHandler : DelegatingHandler
             var session = await reponse.Content.ReadFromJsonAsync<AuthResponse>(cancellationToken: ct);
             if (session is null || string.IsNullOrEmpty(session.AccessToken)) return false;
 
-            await _js.InvokeVoidAsync("localStorage.setItem", CleToken, session.AccessToken);
-            await _js.InvokeVoidAsync("localStorage.setItem", CleRefresh, session.RefreshToken);
+            await _stockage.EcrireAsync(ClesStockage.Jeton, session.AccessToken);
+            await _stockage.EcrireAsync(ClesStockage.Refresh, session.RefreshToken);
             return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -162,7 +159,7 @@ public class AuthHeaderHandler : DelegatingHandler
 
     private async Task AjouterDeviceAsync(HttpRequestMessage request)
     {
-        var device = await LireAsync(CleDevice);
+        var device = await LireAsync(ClesStockage.Appareil);
         request.Headers.Remove("X-Device-Id");
         if (!string.IsNullOrEmpty(device))
             request.Headers.TryAddWithoutValidation("X-Device-Id", device);
@@ -181,17 +178,9 @@ public class AuthHeaderHandler : DelegatingHandler
         }
     }
 
-    private async Task PurgerSessionAsync()
-    {
-        foreach (var cle in new[] { CleToken, CleRefresh, "finama_user", "finama_entreprise", "finama_devise" })
-            await _js.InvokeVoidAsync("localStorage.removeItem", cle);
-    }
+    private Task PurgerSessionAsync() => _stockage.SupprimerAsync(ClesStockage.Session);
 
-    private async Task<string?> LireAsync(string cle)
-    {
-        try { return await _js.InvokeAsync<string?>("localStorage.getItem", cle); }
-        catch { return null; }
-    }
+    private Task<string?> LireAsync(string cle) => _stockage.LireAsync(cle);
 
     private static async Task<HttpRequestMessage> ClonerAsync(HttpRequestMessage source)
     {

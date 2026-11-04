@@ -1,6 +1,7 @@
 @page "/commerce/magasins"
 @using Finama.Web
 @using Finama.Web.Services
+@inject ILocalStorage Stockage
 @inject CommerceApiService CommerceApi
 @inject NavigationManager Nav
 @inject IJSRuntime JS
@@ -224,7 +225,7 @@
 
     private async Task RecupererMagasinActifSession()
     {
-        var stockId = await JS.InvokeAsync<string>("localStorage.getItem", "finama_magasin_id");
+        var stockId = await Stockage.LireAsync(ClesStockage.MagasinId);
         if (Guid.TryParse(stockId, out var id))
         {
             _magasinActifId = id;
@@ -240,8 +241,8 @@
     private async Task SelectionnerMagasinActif(MagasinDto m)
     {
         _magasinActifId = m.Id;
-        await JS.InvokeVoidAsync("localStorage.setItem", "finama_magasin_id", m.Id.ToString());
-        await JS.InvokeVoidAsync("localStorage.setItem", "finama_magasin_nom", m.Nom);
+        await Stockage.EcrireAsync(ClesStockage.MagasinId, m.Id.ToString());
+        await Stockage.EcrireAsync(ClesStockage.MagasinNom, m.Nom);
         NotificationService.Information($"Magasin actif : {m.Nom}", "Contexte Modifié");
         StateHasChanged();
     }

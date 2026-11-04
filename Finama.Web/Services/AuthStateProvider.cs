@@ -6,7 +6,7 @@ using System.Text.Json;
 namespace Finama.Web.Services;
 
 /// <summary>
-/// État d'authentification Blazor construit depuis le JWT stocké ("finama_token").
+/// État d'authentification Blazor construit depuis le JWT stocké (ClesStockage.Jeton).
 /// Jeton expiré SANS refresh token → anonyme (redirection connexion).
 /// Jeton expiré AVEC refresh token → reste connecté : AuthHeaderHandler renouvelle au premier appel API.
 /// </summary>
@@ -14,11 +14,11 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
 {
     private static readonly AuthenticationState Anonyme = new(new ClaimsPrincipal(new ClaimsIdentity()));
 
-    private readonly IJSRuntime _js;
+    private readonly ILocalStorage _stockage;
 
-    public CustomAuthStateProvider(IJSRuntime js)
+    public CustomAuthStateProvider(ILocalStorage stockage)
     {
-        _js = js;
+        _stockage = stockage;
     }
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
@@ -26,8 +26,8 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
         string? token, refresh;
         try
         {
-            token = await _js.InvokeAsync<string?>("localStorage.getItem", "finama_token");
-            refresh = await _js.InvokeAsync<string?>("localStorage.getItem", "finama_refresh");
+            token = await _stockage.LireAsync(ClesStockage.Jeton);
+            refresh = await _stockage.LireAsync(ClesStockage.Refresh);
         }
         catch
         {

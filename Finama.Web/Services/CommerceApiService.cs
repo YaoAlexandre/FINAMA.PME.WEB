@@ -13,13 +13,13 @@ namespace Finama.Web.Services;
 public class CommerceApiService
 {
     private readonly HttpClient _http;
-    private readonly IJSRuntime _js;
+    private readonly ILocalStorage _stockage;
     private readonly NavigationManager _nav;
 
-    public CommerceApiService(HttpClient http, IJSRuntime js, NavigationManager nav)
+    public CommerceApiService(HttpClient http, ILocalStorage stockage, NavigationManager nav)
     {
         _http = http;
-        _js = js;
+        _stockage = stockage;
         _nav = nav;
     }
 
@@ -28,12 +28,12 @@ public class CommerceApiService
 
     // ─── Infrastructure ──────────────────────────────────────────────────────
 
-    private async Task<string?> GetDeviceIdAsync() => await _js.InvokeAsync<string?>("localStorage.getItem", "finama_device_id");
-    private async Task<string?> GetTokenAsync() => await _js.InvokeAsync<string?>("localStorage.getItem", "finama_token");
+    private async Task<string?> GetDeviceIdAsync() => await _stockage.LireAsync(ClesStockage.Appareil);
+    private async Task<string?> GetTokenAsync() => await _stockage.LireAsync(ClesStockage.Jeton);
 
     public async Task<Guid?> GetMagasinActifIdAsync()
     {
-        var valeur = await _js.InvokeAsync<string?>("localStorage.getItem", "finama_magasin_id");
+        var valeur = await _stockage.LireAsync(ClesStockage.MagasinId);
         return Guid.TryParse(valeur, out var id) && id != Guid.Empty ? id : null;
     }
 

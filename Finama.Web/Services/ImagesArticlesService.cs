@@ -12,16 +12,16 @@ namespace Finama.Web.Services;
 /// </summary>
 public class ImagesArticlesService
 {
-    private const string CleCache = "finama_images_articles";
+    private const string CleCache = ClesStockage.ImagesArticles;
     private readonly HttpClient _http;
-    private readonly IJSRuntime _js;
+    private readonly ILocalStorage _stockage;
     private Dictionary<Guid, string>? _urls;
     private Task? _chargement;
 
-    public ImagesArticlesService(HttpClient http, IJSRuntime js)
+    public ImagesArticlesService(HttpClient http, ILocalStorage stockage)
     {
         _http = http;
-        _js = js;
+        _stockage = stockage;
     }
 
     public sealed record ImageArticle(Guid ProduitId, string Url);
@@ -45,7 +45,7 @@ public class ImagesArticlesService
             // Hors connexion : dernière liste connue (les photos elles-mêmes sont gardées par le service worker)
             try
             {
-                var brut = await _js.InvokeAsync<string?>("localStorage.getItem", CleCache);
+                var brut = await _stockage.LireAsync(CleCache);
                 _urls = string.IsNullOrEmpty(brut) ? new() : JsonSerializer.Deserialize<Dictionary<Guid, string>>(brut) ?? new();
             }
             catch { _urls = new(); }
@@ -96,7 +96,7 @@ public class ImagesArticlesService
 
     private async Task MemoriserAsync()
     {
-        try { await _js.InvokeVoidAsync("localStorage.setItem", CleCache, JsonSerializer.Serialize(_urls ?? new())); } catch { }
+        await _stockage.EcrireAsync(CleCache, JsonSerializer.Serialize(_urls ?? new()));
     }
 
     private sealed record Reponse(string? Message);

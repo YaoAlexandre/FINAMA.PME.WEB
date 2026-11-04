@@ -4,6 +4,7 @@
 @using Finama.Web.Models
 @using Finama.Web.Services
 @layout EmptyLayout
+@inject ILocalStorage Stockage
 @inject FinamaApiService Api
 @inject NavigationManager Nav
 @inject AppState State
@@ -202,7 +203,7 @@
     private async Task TraiterConnexionReussie(AuthResponse authData)
     {
         // Le magasin mémorisé peut appartenir à un autre compte ou à des données supprimées
-        try { await JS.InvokeVoidAsync("localStorage.removeItem", "finama_magasin_id"); } catch { }
+        await Stockage.SupprimerAsync(ClesStockage.MagasinId);
         State.Utilisateur = authData;
         // Jetons (access + refresh) déjà enregistrés par FinamaApiService.SauvegarderSessionAsync
 

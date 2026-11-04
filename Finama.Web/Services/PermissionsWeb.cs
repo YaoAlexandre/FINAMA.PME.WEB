@@ -11,15 +11,15 @@ namespace Finama.Web.Services;
 /// </summary>
 public class PermissionsWeb
 {
-    private const string CleCache = "finama_permissions";
+    private const string CleCache = ClesStockage.Permissions;
     private readonly HttpClient _http;
-    private readonly IJSRuntime _js;
+    private readonly ILocalStorage _stockage;
     private Task<HashSet<string>>? _chargement;
 
-    public PermissionsWeb(HttpClient http, AuthenticationStateProvider auth, IJSRuntime js)
+    public PermissionsWeb(HttpClient http, AuthenticationStateProvider auth, ILocalStorage stockage)
     {
         _http = http;
-        _js = js;
+        _stockage = stockage;
         // Connexion, déconnexion, changement de compte : les droits du compte précédent sont oubliés
         auth.AuthenticationStateChanged += _ => Reinitialiser();
     }
@@ -52,7 +52,7 @@ public class PermissionsWeb
             var droits = r?.Permissions?.ToHashSet() ?? new HashSet<string>();
             // Copie locale : la caisse reste utilisable hors connexion avec les droits de CET utilisateur
             if (utilisateur is not null)
-                try { await _js.InvokeVoidAsync("localStorage.setItem", CleCache, JsonSerializer.Serialize(new Cache(utilisateur, droits.ToArray()))); } catch { }
+                await _stockage.EcrireAsync(CleCache, JsonSerializer.Serialize(new Cache(utilisateur, droits.ToArray())));
             return droits;
         }
         catch
@@ -61,7 +61,7 @@ public class PermissionsWeb
             // Hors connexion : derniers droits connus, uniquement s'ils appartiennent au même utilisateur
             try
             {
-                var brut = await _js.InvokeAsync<string?>("localStorage.getItem", CleCache);
+                var brut = await _stockage.LireAsync(CleCache);
                 var cache = string.IsNullOrEmpty(brut) ? null : JsonSerializer.Deserialize<Cache>(brut);
                 if (cache is not null && utilisateur is not null && cache.Utilisateur == utilisateur) return cache.Droits.ToHashSet();
             }
@@ -74,7 +74,7 @@ public class PermissionsWeb
     {
         try
         {
-            var jeton = await _js.InvokeAsync<string?>("localStorage.getItem", "finama_token");
+            var jeton = await _stockage.LireAsync(ClesStockage.Jeton);
             if (string.IsNullOrEmpty(jeton)) return null;
             var charge = JwtOutils.LirePayload(jeton);
             return charge.TryGetValue("sub", out var sub) ? sub.GetString() : null;

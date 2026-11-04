@@ -13,13 +13,13 @@ namespace Finama.Web.Services;
 public class SupportService
 {
     private readonly HttpClient _http;
-    private readonly IJSRuntime _js;
+    private readonly ILocalStorage _stockage;
     private readonly NavigationManager _nav;
 
-    public SupportService(HttpClient http, IJSRuntime js, NavigationManager nav)
+    public SupportService(HttpClient http, ILocalStorage stockage, NavigationManager nav)
     {
         _http = http;
-        _js = js;
+        _stockage = stockage;
         _nav = nav;
     }
 
@@ -27,7 +27,7 @@ public class SupportService
     public async Task<SessionSupport?> LireAsync()
     {
         string? jeton;
-        try { jeton = await _js.InvokeAsync<string?>("localStorage.getItem", "finama_token"); }
+        try { jeton = await _stockage.LireAsync(ClesStockage.Jeton); }
         catch { return null; }
         if (string.IsNullOrEmpty(jeton)) return null;
 
@@ -55,10 +55,10 @@ public class SupportService
             if (!r.IsSuccessStatusCode || corps?.AccessToken is null)
                 return corps?.Message ?? "Accès support refusé.";
 
-            await _js.InvokeVoidAsync("localStorage.setItem", "finama_token", corps.AccessToken);
-            await _js.InvokeVoidAsync("localStorage.setItem", "finama_entreprise", corps.TenantNom ?? "");
-            await _js.InvokeVoidAsync("localStorage.setItem", "finama_devise", corps.DeviseSymbole ?? "FCFA");
-            await _js.InvokeVoidAsync("localStorage.removeItem", "finama_magasin_id");   // le magasin d'une autre entreprise
+            await _stockage.EcrireAsync(ClesStockage.Jeton, corps.AccessToken);
+            await _stockage.EcrireAsync(ClesStockage.Entreprise, corps.TenantNom ?? "");
+            await _stockage.EcrireAsync(ClesStockage.Devise, corps.DeviseSymbole ?? "FCFA");
+            await _stockage.SupprimerAsync(ClesStockage.MagasinId);   // le magasin d'une autre entreprise
             _nav.NavigateTo("/modules", forceLoad: true);
             return null;
         }
@@ -76,25 +76,24 @@ public class SupportService
 
         try
         {
-            var jeton = await _js.InvokeAsync<string?>("localStorage.getItem", "finama_token");
-            var refresh = await _js.InvokeAsync<string?>("localStorage.getItem", "finama_refresh");
+            var jeton = await _stockage.LireAsync(ClesStockage.Jeton);
+            var refresh = await _stockage.LireAsync(ClesStockage.Refresh);
 
             using var r = await _http.PostAsJsonAsync("api/auth/refresh", new { AccessToken = jeton, RefreshToken = refresh });
             if (r.IsSuccessStatusCode && await r.Content.ReadFromJsonAsync<AuthResponse>() is { } session)
             {
-                await _js.InvokeVoidAsync("localStorage.setItem", "finama_token", session.AccessToken);
-                await _js.InvokeVoidAsync("localStorage.setItem", "finama_refresh", session.RefreshToken);
-                await _js.InvokeVoidAsync("localStorage.setItem", "finama_entreprise", session.NomEntreprise);
-                await _js.InvokeVoidAsync("localStorage.setItem", "finama_devise", session.DeviseSymbole);
-                await _js.InvokeVoidAsync("localStorage.removeItem", "finama_magasin_id");
+                await _stockage.EcrireAsync(ClesStockage.Jeton, session.AccessToken);
+                await _stockage.EcrireAsync(ClesStockage.Refresh, session.RefreshToken);
+                await _stockage.EcrireAsync(ClesStockage.Entreprise, session.NomEntreprise);
+                await _stockage.EcrireAsync(ClesStockage.Devise, session.DeviseSymbole);
+                await _stockage.SupprimerAsync(ClesStockage.MagasinId);
                 _nav.NavigateTo("/superadmin/tenants", forceLoad: true);
                 return;
             }
         }
         catch { /* on tombe sur la reconnexion */ }
 
-        foreach (var cle in new[] { "finama_token", "finama_refresh", "finama_magasin_id" })
-            await _js.InvokeVoidAsync("localStorage.removeItem", cle);
+        await _stockage.SupprimerAsync(ClesStockage.Jeton, ClesStockage.Refresh, ClesStockage.MagasinId);
         _nav.NavigateTo("/connexion?expire=1", forceLoad: true);
     }
 

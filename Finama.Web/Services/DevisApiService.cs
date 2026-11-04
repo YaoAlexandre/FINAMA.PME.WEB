@@ -9,13 +9,13 @@ namespace Finama.Web.Services;
 public class DevisApiService
 {
     private readonly HttpClient _http;
-    private readonly IJSRuntime _js;
+    private readonly ILocalStorage _stockage;
     private readonly NavigationManager _nav;
 
-    public DevisApiService(HttpClient http, IJSRuntime js, NavigationManager nav)
+    public DevisApiService(HttpClient http, ILocalStorage stockage, NavigationManager nav)
     {
         _http = http;
-        _js = js;
+        _stockage = stockage;
         _nav = nav;
     }
 
@@ -147,11 +147,11 @@ public class DevisApiService
 
     private async Task<string> GetDeviceIdAsync()
     {
-        var id = await _js.InvokeAsync<string?>("localStorage.getItem", "finama_device_id");
+        var id = await _stockage.LireAsync(ClesStockage.Appareil);
         if (string.IsNullOrEmpty(id))
         {
             id = Guid.NewGuid().ToString();
-            await _js.InvokeVoidAsync("localStorage.setItem", "finama_device_id", id);
+            await _stockage.EcrireAsync(ClesStockage.Appareil, id);
         }
         return id;
     }

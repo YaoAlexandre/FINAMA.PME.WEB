@@ -1,10 +1,9 @@
 @page "/commerce/etiquettes"
-@using System.Net.Http.Json
 @using Finama.Web.Services
 @attribute [Authorize(Policy = "Commercial")]
 @implements IAsyncDisposable
 @inject CommerceApiService CommerceApi
-@inject HttpClient Http
+@inject ApiClient Api
 @inject IJSRuntime JS
 @inject NotificationService NotificationService
 
@@ -286,16 +285,16 @@
         _enCours = true;
         try
         {
-            using var reponse = await Http.PostAsJsonAsync("api/commerce/produits/codes-internes", new { ProduitIds = ids });
-            var resultat = await reponse.Content.ReadFromJsonAsync<ReponseCodes>();
+            var reponse = await Api.PostAsync("api/commerce/produits/codes-internes", new { ProduitIds = ids },
+                "Génération impossible.", "Codes générés.");
 
-            if (!reponse.IsSuccessStatusCode)
+            if (!reponse.Succes)
             {
-                NotificationService.Erreur(resultat?.Message ?? "Génération impossible.", "Codes-barres");
+                NotificationService.Erreur(reponse.Message, "Codes-barres");
                 return;
             }
 
-            NotificationService.Succes(resultat?.Message ?? "Codes générés.", "Codes-barres");
+            NotificationService.Succes(reponse.Message, "Codes-barres");
             await Charger();   // les nouveaux codes apparaissent ; la sélection est conservée
         }
         catch (Exception)
@@ -355,5 +354,4 @@
         catch { /* runtime arrêté */ }
     }
 
-    private sealed record ReponseCodes(string? Message, int NbGeneres);
 }

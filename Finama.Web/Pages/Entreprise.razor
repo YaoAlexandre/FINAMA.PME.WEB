@@ -4,6 +4,7 @@
 @using Radzen
 @using System.Text.Json
 @layout MainLayout
+@inject ILocalStorage Stockage
 @inject IJSRuntime JS
 @inject FinamaApiService Api
 @inject NotificationService NotificationService
@@ -284,7 +285,7 @@ else
             await Api.UpdateEntrepriseAsync(_edition);
 
             // Le menu (en bas à gauche) affiche le nom gardé à la connexion : on le met à jour tout de suite
-            try { await JS.InvokeVoidAsync("localStorage.setItem", "finama_entreprise", _edition.Nom); } catch { }
+            await Stockage.EcrireAsync(ClesStockage.Entreprise, _edition.Nom);
 
             NotificationService.Notify(NotificationSeverity.Success, "Succès", "Les informations de l'entreprise ont été mises à jour.");
             FermerModal();

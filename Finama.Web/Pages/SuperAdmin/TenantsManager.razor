@@ -5,9 +5,8 @@
 @attribute [Authorize(Roles = "SuperAdmin")]
 @inject ITenantAdminService TenantService
 @inject NotificationService Notif
-@inject HttpClient Http
+@inject ApiClient Api
 @inject SupportService Support
-@using System.Net.Http.Json
 
 <PageTitle>Entreprises | Administration Finama</PageTitle>
 
@@ -475,39 +474,30 @@
         renommerBusy = true;
         try
         {
-            using var r = await Http.PutAsJsonAsync($"api/superadmin/tenants/{tenantRenommer.Id}/nom", new { Nom = nouveauNom.Trim() });
-            string? message = null;
-            try { message = (await r.Content.ReadFromJsonAsync<MessageApi>())?.Message; } catch { }
-            if (!r.IsSuccessStatusCode) { Notif.Erreur(message ?? "Renommage impossible."); return; }
-            Notif.Succes(message ?? "Entreprise renommée.");
+            var r = await Api.PutAsync($"api/superadmin/tenants/{tenantRenommer.Id}/nom", new { Nom = nouveauNom.Trim() },
+                "Renommage impossible.", "Entreprise renommée.");
+            if (!r.Succes) { Notif.Erreur(r.Message); return; }
+            Notif.Succes(r.Message);
             tenantRenommer = null;
             await ChargerDonnees();
         }
-        catch { Notif.ErreurServeur(); }
         finally { renommerBusy = false; }
     }
-
-    private sealed record MessageApi(string? Message);
 
     private async Task OuvrirModules(TenantAdminDto t)
     {
         tenantModules = t;
         modulesChargement = true;
         modulesChoisis = 7;
-        try
+        var r = await Api.GetAsync<ModulesTenant>($"api/superadmin/tenants/{t.Id}/modules",
+            "Impossible de lire les modules de cette entreprise.");
+        if (r.Succes) modulesChoisis = r.Donnees?.Modules ?? 7;
+        else
         {
-            var r = await Http.GetFromJsonAsync<ModulesTenant>($"api/superadmin/tenants/{t.Id}/modules");
-            modulesChoisis = r?.Modules ?? 7;
-        }
-        catch
-        {
-            Notif.Erreur("Impossible de lire les modules de cette entreprise.");
+            Notif.Erreur(r.Message);
             tenantModules = null;
         }
-        finally
-        {
-            modulesChargement = false;
-        }
+        modulesChargement = false;
     }
 
     private void BasculerModule(int valeur) => modulesChoisis ^= valeur;
@@ -518,19 +508,15 @@
         modulesBusy = true;
         try
         {
-            using var r = await Http.PutAsJsonAsync($"api/superadmin/tenants/{tenantModules.Id}/modules", new { Modules = modulesChoisis });
-            var corps = await r.Content.ReadFromJsonAsync<ReponseModules>();
-            if (!r.IsSuccessStatusCode)
+            var r = await Api.PutAsync($"api/superadmin/tenants/{tenantModules.Id}/modules", new { Modules = modulesChoisis },
+                succes: "Modules mis à jour.");
+            if (!r.Succes)
             {
-                Notif.Erreur(corps?.Message ?? "Enregistrement impossible.");
+                Notif.Erreur(r.Message);
                 return;
             }
-            Notif.Succes(corps?.Message ?? "Modules mis à jour.");
+            Notif.Succes(r.Message);
             tenantModules = null;
-        }
-        catch
-        {
-            Notif.Erreur("Serveur injoignable. Réessayez.");
         }
         finally
         {
@@ -539,7 +525,6 @@
     }
 
     private sealed record ModulesTenant(int Modules);
-    private sealed record ReponseModules(string? Message, int Modules);
 
     private TenantAdminDto? tenantUsers;
     private List<UtilisateurAdminDto>? utilisateurs;

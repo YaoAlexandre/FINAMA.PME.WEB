@@ -10,15 +10,15 @@ namespace Finama.Web.Services;
 public class FinamaApiService
 {
     private readonly HttpClient _http;
-    private readonly IJSRuntime _js;
+    private readonly ILocalStorage _stockage;
     private readonly CustomAuthStateProvider _authProvider;
     private readonly NavigationManager _nav; // 🌟 CORRECTION : Déclaration du champ de navigation
 
     // 🌟 CORRECTION : Injection de NavigationManager dans le constructeur
-    public FinamaApiService(HttpClient http, IJSRuntime js, NavigationManager nav, CustomAuthStateProvider authProvider)
+    public FinamaApiService(HttpClient http, ILocalStorage stockage, NavigationManager nav, CustomAuthStateProvider authProvider)
     {
         _http = http;
-        _js = js;
+        _stockage = stockage;
         _nav = nav;
         _authProvider = authProvider;
     }
@@ -28,11 +28,11 @@ public class FinamaApiService
     // ─── Gestion du DeviceId pour l'OTP silencieux ──────────────────────────
     private async Task<string> GetDeviceIdAsync()
     {
-        var id = await _js.InvokeAsync<string?>("localStorage.getItem", "finama_device_id");
+        var id = await _stockage.LireAsync(ClesStockage.Appareil);
         if (string.IsNullOrEmpty(id))
         {
             id = Guid.NewGuid().ToString();
-            await _js.InvokeVoidAsync("localStorage.setItem", "finama_device_id", id);
+            await _stockage.EcrireAsync(ClesStockage.Appareil, id);
         }
         return id;
     }
@@ -127,11 +127,7 @@ public class FinamaApiService
     {
         try { await _http.PostAsync("api/auth/logout", null); }
         catch { /* hors ligne : la session locale est quand même détruite */ }
-        await _js.InvokeVoidAsync("localStorage.removeItem", "finama_token");
-        await _js.InvokeVoidAsync("localStorage.removeItem", "finama_refresh");
-        await _js.InvokeVoidAsync("localStorage.removeItem", "finama_user");
-        await _js.InvokeVoidAsync("localStorage.removeItem", "finama_entreprise");
-        await _js.InvokeVoidAsync("localStorage.removeItem", "finama_devise");
+        await _stockage.SupprimerAsync(ClesStockage.Session);
         _authProvider.NotifyUserLogout();
     }
 
@@ -603,10 +599,10 @@ public class FinamaApiService
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
-    public async Task<string?> GetTokenAsync() => await _js.InvokeAsync<string?>("localStorage.getItem", "finama_token");
-    public async Task<string?> GetUserNomAsync() => await _js.InvokeAsync<string?>("localStorage.getItem", "finama_user");
-    public async Task<string?> GetEntrepriseNomAsync() => await _js.InvokeAsync<string?>("localStorage.getItem", "finama_entreprise");
-    public async Task<string?> GetDeviseSymboleAsync() => await _js.InvokeAsync<string?>("localStorage.getItem", "finama_devise");
+    public async Task<string?> GetTokenAsync() => await _stockage.LireAsync(ClesStockage.Jeton);
+    public async Task<string?> GetUserNomAsync() => await _stockage.LireAsync(ClesStockage.Utilisateur);
+    public async Task<string?> GetEntrepriseNomAsync() => await _stockage.LireAsync(ClesStockage.Entreprise);
+    public async Task<string?> GetDeviseSymboleAsync() => await _stockage.LireAsync(ClesStockage.Devise);
 
     /// <summary>
     /// Connecté = access token encore valide, OU refresh token présent (AuthHeaderHandler renouvellera la session au premier appel).
@@ -617,7 +613,7 @@ public class FinamaApiService
         if (string.IsNullOrEmpty(token)) return false;
         if (!JwtOutils.EstExpire(token)) return true;
 
-        var refresh = await _js.InvokeAsync<string?>("localStorage.getItem", "finama_refresh");
+        var refresh = await _stockage.LireAsync(ClesStockage.Refresh);
         return !string.IsNullOrEmpty(refresh);
     }
 
@@ -645,12 +641,12 @@ public class FinamaApiService
     private async Task SauvegarderSessionAsync(AuthResponse r)
     {
         AuthHeaderHandler.ReinitialiserSession(); // nouvelle session : le verrou "session perdue" est levé
-        await _js.InvokeVoidAsync("localStorage.setItem", "finama_token", r.AccessToken);
+        await _stockage.EcrireAsync(ClesStockage.Jeton, r.AccessToken);
         if (!string.IsNullOrEmpty(r.RefreshToken))
-            await _js.InvokeVoidAsync("localStorage.setItem", "finama_refresh", r.RefreshToken);
-        await _js.InvokeVoidAsync("localStorage.setItem", "finama_user", r.NomUtilisateur);
-        await _js.InvokeVoidAsync("localStorage.setItem", "finama_entreprise", r.NomEntreprise);
-        await _js.InvokeVoidAsync("localStorage.setItem", "finama_devise", r.DeviseSymbole);
+            await _stockage.EcrireAsync(ClesStockage.Refresh, r.RefreshToken);
+        await _stockage.EcrireAsync(ClesStockage.Utilisateur, r.NomUtilisateur);
+        await _stockage.EcrireAsync(ClesStockage.Entreprise, r.NomEntreprise);
+        await _stockage.EcrireAsync(ClesStockage.Devise, r.DeviseSymbole);
         _authProvider.NotifyUserAuthentication(r.AccessToken);
     }
 

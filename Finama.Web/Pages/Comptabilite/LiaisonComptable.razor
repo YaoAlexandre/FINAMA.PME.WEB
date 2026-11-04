@@ -1,7 +1,6 @@
 @page "/comptabilite/liaison"
 @attribute [Authorize(Policy = "AdminTenant")]
-@using System.Net.Http.Json
-@inject HttpClient Http
+@inject ApiClient Api
 @inject NotificationService Notif
 
 <PageTitle>Liaison comptable — Finama</PageTitle>
@@ -120,7 +119,7 @@
     }
     public sealed record EnAttente(int Factures, int Reglements, int Caisses) { public int Total => Factures + Reglements + Caisses; }
     private sealed record Reponse(Parametres Parametres, Dictionary<string, string> Comptes, EnAttente EnAttente);
-    private sealed record ReponseApi(string? Message, List<string>? Erreurs);
+    private sealed record ReponseRattrapage(List<string>? Erreurs);
     private sealed record Champ(string Cle, string Libelle, Func<Parametres, string> Lire, Action<Parametres, string> Ecrire);
 
     private static readonly Champ[] Champs =
@@ -149,12 +148,9 @@
 
     private async Task Charger()
     {
-        try
-        {
-            var r = await Http.GetFromJsonAsync<Reponse>("api/compta/liaison");
-            _p = r?.Parametres; _comptes = r?.Comptes ?? new(); _attente = r?.EnAttente ?? new(0, 0, 0);
-        }
-        catch { Notif.Erreur("Paramètres indisponibles."); }
+        var r = await Api.GetAsync<Reponse>("api/compta/liaison", "Paramètres indisponibles.");
+        if (!r.Succes) { Notif.Erreur(r.Message); return; }
+        _p = r.Donnees?.Parametres; _comptes = r.Donnees?.Comptes ?? new(); _attente = r.Donnees?.EnAttente ?? new(0, 0, 0);
     }
 
     private async Task Enregistrer()
@@ -163,10 +159,9 @@
         _enCours = true;
         try
         {
-            using var r = await Http.PutAsJsonAsync("api/compta/liaison", _p);
-            var m = await Lire(r);
-            if (r.IsSuccessStatusCode) Notif.Succes(m?.Message ?? "Enregistré.", "Liaison comptable");
-            else Notif.Erreur(m?.Message ?? "Enregistrement impossible.", "Liaison comptable");
+            var r = await Api.PutAsync("api/compta/liaison", _p, succes: "Enregistré.");
+            if (r.Succes) Notif.Succes(r.Message, "Liaison comptable");
+            else Notif.Erreur(r.Message, "Liaison comptable");
             await Charger();
         }
         finally { _enCours = false; }
@@ -178,18 +173,12 @@
         try
         {
             var url = "api/compta/liaison/rattrapage" + (_depuis is { } d ? $"?depuis={d:yyyy-MM-dd}" : "");
-            using var r = await Http.PostAsync(url, null);
-            var m = await Lire(r);
-            if (r.IsSuccessStatusCode) Notif.Succes(m?.Message ?? "Terminé.", "Rattrapage");
-            else Notif.Erreur(m?.Message ?? "Rattrapage impossible.", "Rattrapage");
-            _erreurs = m?.Erreurs ?? new();
+            var r = await Api.PostAsync<ReponseRattrapage>(url, null, "Rattrapage impossible.", "Terminé.");
+            if (r.Succes) Notif.Succes(r.Message, "Rattrapage");
+            else Notif.Erreur(r.Message, "Rattrapage");
+            _erreurs = r.Donnees?.Erreurs ?? new();
             await Charger();
         }
         finally { _enCours = false; }
-    }
-
-    private static async Task<ReponseApi?> Lire(HttpResponseMessage r)
-    {
-        try { return await r.Content.ReadFromJsonAsync<ReponseApi>(); } catch { return null; }
     }
 }

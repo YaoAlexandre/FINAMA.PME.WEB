@@ -1,12 +1,12 @@
 @page "/commerce/caisse"
 @using Finama.Web
 @using Finama.Web.Services
-@using System.Net.Http.Json
 @implements IAsyncDisposable
+@inject ILocalStorage Stockage
 @inject CommerceApiService CommerceApi
 @inject NavigationManager Nav
 @inject IJSRuntime JS
-@inject HttpClient Http
+@inject ApiClient Api
 @using Microsoft.AspNetCore.Components.Authorization
 @inject AuthenticationStateProvider AuthState
 @inject PermissionsWeb Permissions
@@ -851,7 +851,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-                try { _afficherImages = await JS.InvokeAsync<string?>("localStorage.getItem", "finama_caisse_images") != "0"; } catch { }
+                try { _afficherImages = await Stockage.LireAsync(ClesStockage.CaisseImages) != "0"; } catch { }
         _ = Images.ChargerAsync().ContinueWith(_ => InvokeAsync(StateHasChanged));
         _chargementSession = true;
         try { _jsHorsLigne = await JS.InvokeAsync<IJSObjectReference>("import", "./js/finama-horsligne.js"); } catch { }
@@ -872,7 +872,7 @@
             private async Task BasculerImages()
     {
         _afficherImages = !_afficherImages;
-        try { await JS.InvokeVoidAsync("localStorage.setItem", "finama_caisse_images", _afficherImages ? "1" : "0"); } catch { }
+        await Stockage.EcrireAsync(ClesStockage.CaisseImages, _afficherImages ? "1" : "0");
     }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -881,22 +881,20 @@
         try
         {
             _jsPos = await JS.InvokeAsync<IJSObjectReference>("import", "./js/finama-pos.js");
-            _entrepriseNom = await JS.InvokeAsync<string?>("localStorage.getItem", "finama_entreprise") ?? "";
-            _impressionAuto = await JS.InvokeAsync<string?>("localStorage.getItem", "finama_pos_impression_auto") != "0";
-            _logo = await JS.InvokeAsync<string?>("localStorage.getItem", "finama_logo");   // cache : ticket imprimable même hors réseau
+            _entrepriseNom = await Stockage.LireAsync(ClesStockage.Entreprise) ?? "";
+            _impressionAuto = await Stockage.LireAsync(ClesStockage.ImpressionAuto) != "0";
+            _logo = await Stockage.LireAsync(ClesStockage.Logo);   // cache : ticket imprimable même hors réseau
             StateHasChanged();
         }
         catch { /* JS indisponible : impression désactivée */ }
 
         // Logo à jour depuis l'API (remplace le cache)
-        try
+        var logo = await Api.GetAsync<LogoReponse>("api/entreprise/logo");
+        if (logo.Succes)   // sinon on garde le cache
         {
-            var reponse = await Http.GetFromJsonAsync<LogoReponse>("api/entreprise/logo");
-            _logo = reponse?.DataUrl;
-            if (_logo is null) await JS.InvokeVoidAsync("localStorage.removeItem", "finama_logo");
-            else await JS.InvokeVoidAsync("localStorage.setItem", "finama_logo", _logo);
+            _logo = logo.Donnees?.DataUrl;
+            await Stockage.EcrireAsync(ClesStockage.Logo, _logo);   // null = suppression
         }
-        catch { /* on garde le cache */ }
         // Ticket de caisse : logo en noir et blanc (aperçu, impression et réimpression identiques)
         if (!string.IsNullOrEmpty(_logo))
         {
@@ -1443,32 +1441,25 @@
             var file = await _jsHorsLigne.InvokeAsync<List<VenteEnFile>>("fileLister") ?? new();
             foreach (var v in file.Where(v => v.Statut != "erreur"))
             {
-                HttpResponseMessage reponse;
-                try
-                {
-                    reponse = await Http.PostAsJsonAsync("api/commerce/pos/ventes/hors-ligne",
-                        new { Vente = v.Requete, DateVenteLocale = v.DateVenteLocale, NumeroHorsLigne = v.NumeroHorsLigne });
-                }
-                catch (HttpRequestException) { reseauOk = false; break; }   // toujours pas de réseau
+                var reponse = await Api.PostAsync<object>("api/commerce/pos/ventes/hors-ligne",
+                    new { Vente = v.Requete, DateVenteLocale = v.DateVenteLocale, NumeroHorsLigne = v.NumeroHorsLigne }, erreur: "");
 
-                using (reponse)
+                if (reponse.Statut is not { } statut) { reseauOk = false; break; }   // toujours pas de réseau
+
+                if (reponse.Succes)
                 {
-                    if (reponse.IsSuccessStatusCode)
-                    {
-                        await _jsHorsLigne.InvokeVoidAsync("fileRetirer", v.Id);
-                        envoyees++;
-                    }
-                    else if ((int)reponse.StatusCode is 401 or 429 or >= 500)
-                    {
-                        reseauOk = (int)reponse.StatusCode != 401;
-                        break;   // session expirée, serveur occupé ou en panne : on réessaiera plus tard
-                    }
-                    else
-                    {
-                        string? message = null;
-                        try { message = (await reponse.Content.ReadFromJsonAsync<ReponseErreur>())?.Message; } catch { }
-                        await _jsHorsLigne.InvokeVoidAsync("fileMarquerErreur", v.Id, message ?? $"Refusée par le serveur (erreur {(int)reponse.StatusCode}).");
-                    }
+                    await _jsHorsLigne.InvokeVoidAsync("fileRetirer", v.Id);
+                    envoyees++;
+                }
+                else if ((int)statut is 401 or 429 or >= 500)
+                {
+                    reseauOk = (int)statut != 401;
+                    break;   // session expirée, serveur occupé ou en panne : on réessaiera plus tard
+                }
+                else
+                {
+                    await _jsHorsLigne.InvokeVoidAsync("fileMarquerErreur", v.Id,
+                        string.IsNullOrEmpty(reponse.Message) ? $"Refusée par le serveur (erreur {(int)statut})." : reponse.Message);
                 }
             }
 
@@ -1507,21 +1498,13 @@
     /// (sinon le téléphone bloque le partage et l'ordinateur bloque l'ouverture de WhatsApp).</summary>
     private async Task PrechargerRecuPdfAsync(Guid venteId)
     {
-        try
-        {
-            using var r = await Http.GetAsync($"api/commerce/pos/ventes/{venteId}/recu");
-            if (r.IsSuccessStatusCode)
-                _recuPdf = (venteId, Convert.ToBase64String(await r.Content.ReadAsByteArrayAsync()));
-        }
-        catch { /* sera téléchargé au clic */ }
+        var pdf = await Api.GetOctetsAsync($"api/commerce/pos/ventes/{venteId}/recu");
+        if (pdf is { Succes: true, Donnees: { } octets })   // sinon : sera téléchargé au clic
+            _recuPdf = (venteId, Convert.ToBase64String(octets));
 
-        try
-        {
-            using var l = await Http.PostAsync($"api/commerce/pos/ventes/{venteId}/lien-recu", null);
-            if (l.IsSuccessStatusCode && (await l.Content.ReadFromJsonAsync<LienRecu>())?.Url is { } url)
-                _lienRecu = (venteId, url);
-        }
-        catch { /* message sans lien */ }
+        var lien = await Api.PostAsync<LienRecu>($"api/commerce/pos/ventes/{venteId}/lien-recu", null);
+        if (lien is { Succes: true, Donnees.Url: { } url })   // sinon : message sans lien
+            _lienRecu = (venteId, url);
     }
 
     /// <summary>Détail du ticket, envoyé avec le PDF (légende du fichier dans WhatsApp).</summary>
@@ -1592,7 +1575,7 @@
     private async Task BasculerImpressionAuto(ChangeEventArgs e)
     {
         _impressionAuto = e.Value is true;
-        try { await JS.InvokeVoidAsync("localStorage.setItem", "finama_pos_impression_auto", _impressionAuto ? "1" : "0"); }
+        try { await Stockage.EcrireAsync(ClesStockage.ImpressionAuto, _impressionAuto ? "1" : "0"); }
         catch { /* préférence non mémorisée */ }
     }
 
@@ -1663,8 +1646,6 @@
     }
 
     private sealed record TicketSession(Guid Id, string NumeroTicket, DateTime DateVente, decimal TotalTTC, bool EstAnnule, string? ClientNom, string? MotifAnnulation);
-    private sealed record ReponseAnnulation(Guid VenteId, string NumeroTicket, decimal MontantARendre, string Message);
-    private sealed record ReponseErreur(string? Message);
 
     private bool _afficherTickets;
     private List<TicketSession>? _tickets;
@@ -1677,8 +1658,9 @@
         if (_session is null) return;
         _afficherTickets = true;
         _tickets = null;
-        try { _tickets = await Http.GetFromJsonAsync<List<TicketSession>>($"api/commerce/pos/sessions/{_session.Id}/tickets") ?? new(); }
-        catch { _tickets = new(); NotificationService.Erreur("Liste des tickets indisponible.", "Tickets"); }
+        var r = await Api.GetAsync<List<TicketSession>>($"api/commerce/pos/sessions/{_session.Id}/tickets", "Liste des tickets indisponible.");
+        _tickets = r.Donnees ?? new();
+        if (!r.Succes) NotificationService.Erreur(r.Message, "Tickets");
     }
 
     private async Task DemarrerAnnulation(Guid venteId, string numero, decimal total)
@@ -1695,21 +1677,17 @@
         _enCoursAnnulation = true;
         try
         {
-            using var r = await Http.PostAsJsonAsync($"api/commerce/pos/ventes/{an.VenteId}/annuler",
-                new { Motif = an.Motif.Trim(), an.GerantEmail, an.GerantMotDePasse });
+            var r = await Api.PostAsync($"api/commerce/pos/ventes/{an.VenteId}/annuler",
+                new { Motif = an.Motif.Trim(), an.GerantEmail, an.GerantMotDePasse }, "Annulation refusée.", "Ticket annulé.");
 
-            if (!r.IsSuccessStatusCode)
+            if (!r.Succes)
             {
-                string? message = null;
-                try { message = (await r.Content.ReadFromJsonAsync<ReponseErreur>())?.Message; } catch { }
-                NotificationService.Erreur(message ?? (r.StatusCode == System.Net.HttpStatusCode.TooManyRequests
-                    ? "Trop d'essais : patientez une minute." : "Annulation refusée."), "Annulation");
+                NotificationService.Erreur(r.Message, "Annulation");
                 an.GerantMotDePasse = null;
                 return;
             }
 
-            var res = await r.Content.ReadFromJsonAsync<ReponseAnnulation>();
-            NotificationService.Avertir(res?.Message ?? "Ticket annulé.", "Ticket annulé");
+            NotificationService.Avertir(r.Message, "Ticket annulé");
             if (_dernierRecu?.Ticket.Id == an.VenteId) _dernierRecu = null;
             _annulation = null;
             await ChargerArticles();   // stocks à jour sur les cartes

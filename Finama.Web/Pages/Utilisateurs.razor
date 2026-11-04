@@ -8,8 +8,7 @@
 @inject NavigationManager Nav
 @inject NotificationService NotificationService
 @inject IJSRuntime JS
-@inject HttpClient Http
-@using System.Net.Http.Json
+@inject ApiClient Client
 
 <div class="page-wrapper position-relative">
     <div class="page-header d-flex justify-content-between align-items-center mb-4">
@@ -385,12 +384,12 @@
 
     private async Task ChargerAccesAsync()
     {
-        try
-        {
-            _profilsPerso = await Http.GetFromJsonAsync<List<ProfilPerso>>("api/profils") ?? new();
-            _acces = (await Http.GetFromJsonAsync<List<AccesUtilisateur>>("api/Utilisateurs/acces") ?? new()).ToDictionary(a => a.Id);
-        }
-        catch { /* profils personnalisés indisponibles : profils prédéfinis seulement */ }
+        // Profils personnalisés indisponibles : profils prédéfinis seulement
+        var profils = await Client.GetAsync<List<ProfilPerso>>("api/profils");
+        var acces = await Client.GetAsync<List<AccesUtilisateur>>("api/Utilisateurs/acces");
+        if (!profils.Succes || !acces.Succes) return;
+        _profilsPerso = profils.Donnees ?? new();
+        _acces = (acces.Donnees ?? new()).ToDictionary(a => a.Id);
     }
 
     private string AccesActuel(UtilisateurDto u)
@@ -428,21 +427,13 @@
         _enCours.Add(u.Id);
         try
         {
-            using var r = await Http.PutAsJsonAsync($"api/Utilisateurs/{u.Id}/acces", new { Role = role, ProfilId = profilId });
-            string? message = null;
-            try { message = (await r.Content.ReadFromJsonAsync<ReponseApi>())?.Message; } catch { }
-            Notifier(r.IsSuccessStatusCode, r.IsSuccessStatusCode ? "Accès modifié" : "Action impossible",
-                     message ?? (r.IsSuccessStatusCode ? "Accès modifié." : "L'accès n'a pas pu être modifié."));
-            if (r.IsSuccessStatusCode) { await ChargerUtilisateurs(); await ChargerAccesAsync(); SynchroniserSelection(u.Id); }
-        }
-        catch (Exception)
-        {
-            Notifier(false, "Erreur de communication", "Serveur injoignable.");
+            var r = await Client.PutAsync($"api/Utilisateurs/{u.Id}/acces", new { Role = role, ProfilId = profilId },
+                "L'accès n'a pas pu être modifié.", "Accès modifié.");
+            Notifier(r.Succes, r.Succes ? "Accès modifié" : "Action impossible", r.Message);
+            if (r.Succes) { await ChargerUtilisateurs(); await ChargerAccesAsync(); SynchroniserSelection(u.Id); }
         }
         finally { _enCours.Remove(u.Id); }
     }
-
-    private sealed record ReponseApi(string? Message);
 
     // ─── Modification de l'identité (nom, prénom, e-mail) ───
     private sealed class Identite { public Guid Id { get; init; } public string Nom { get; set; } = ""; public string Prenom { get; set; } = ""; public string Email { get; set; } = ""; public string EmailInitial { get; init; } = ""; }
@@ -458,12 +449,10 @@
         _identiteBusy = true;
         try
         {
-            using var r = await Http.PutAsJsonAsync($"api/Utilisateurs/{_identite.Id}/identite",
+            var r = await Client.PutAsync($"api/Utilisateurs/{_identite.Id}/identite",
                 new { Nom = _identite.Nom.Trim(), Prenom = _identite.Prenom.Trim(), Email = _identite.Email.Trim() });
-            string? message = null;
-            try { message = (await r.Content.ReadFromJsonAsync<ReponseApi>())?.Message; } catch { }
-            Notifier(r.IsSuccessStatusCode, r.IsSuccessStatusCode ? "Utilisateur modifié" : "Modification impossible", message ?? "");
-            if (r.IsSuccessStatusCode)
+            Notifier(r.Succes, r.Succes ? "Utilisateur modifié" : "Modification impossible", r.Message);
+            if (r.Succes)
             {
                 var id = _identite.Id;
                 _identite = null;

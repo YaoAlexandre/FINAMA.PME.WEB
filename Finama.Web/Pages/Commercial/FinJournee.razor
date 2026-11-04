@@ -1,9 +1,9 @@
 @page "/commerce/fin-journee"
-@using System.Net.Http.Json
 @using Finama.Web.Services
 @attribute [Authorize(Policy = "AdminTenant")]
 @implements IAsyncDisposable
-@inject HttpClient Http
+@inject ILocalStorage Stockage
+@inject ApiClient Api
 @inject CommerceApiService CommerceApi
 @inject IJSRuntime JS
 @inject NotificationService NotificationService
@@ -346,7 +346,7 @@ else if (_journal is { } j)
         try
         {
             _jsPos = await JS.InvokeAsync<IJSObjectReference>("import", "./js/finama-pos.js");
-            _entreprise = await JS.InvokeAsync<string?>("localStorage.getItem", "finama_entreprise");
+            _entreprise = await Stockage.LireAsync(ClesStockage.Entreprise);
         }
         catch { /* impression indisponible */ }
     }
@@ -359,24 +359,13 @@ else if (_journal is { } j)
         try
         {
             var url = $"api/commerce/pos/journal?date={_date:yyyy-MM-dd}" + (_magasinId != Guid.Empty ? $"&magasinId={_magasinId}" : "");
-            using var reponse = await Http.GetAsync(url);
+            var reponse = await Api.GetAsync<JournalJour>(url, "Impossible de charger la journée.");
 
-            if (reponse.IsSuccessStatusCode)
-            {
-                _journal = await reponse.Content.ReadFromJsonAsync<JournalJour>();
-            }
-            else
-            {
-                _journal = null;
-                _erreur = reponse.StatusCode == System.Net.HttpStatusCode.Forbidden
+            _journal = reponse.Succes ? reponse.Donnees : null;
+            if (!reponse.Succes)
+                _erreur = reponse.Statut == System.Net.HttpStatusCode.Forbidden
                     ? "La fin de journée est réservée à l'administrateur."
-                    : await LireMessageAsync(reponse) ?? "Impossible de charger la journée.";
-            }
-        }
-        catch (HttpRequestException)
-        {
-            _journal = null;
-            _erreur = "Serveur injoignable. Vérifiez votre connexion.";
+                    : reponse.Message;
         }
         finally
         {
@@ -406,11 +395,6 @@ else if (_journal is { } j)
         catch { /* runtime JS arrêté */ }
     }
 
-    private static async Task<string?> LireMessageAsync(HttpResponseMessage r)
-    {
-        try { return (await r.Content.ReadFromJsonAsync<MessageApi>())?.Message; }
-        catch { return null; }
-    }
 
     private static string Fcfa(decimal montant) => $"{montant:N0} F";
 
@@ -445,7 +429,6 @@ else if (_journal is { } j)
     // ─── Modèles (alignés sur JournalJourDto de l'API) ───
     public enum ModeP { Especes = 1, Carte = 2, MobileMoney = 3, Credit = 4, Points = 5 }
 
-    public record MessageApi(string? Message);
 
     public record JournalJour(
         DateOnly Date, Guid MagasinId, string Magasin, int NbTickets, int NbAnnules,

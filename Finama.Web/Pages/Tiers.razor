@@ -1,9 +1,8 @@
 @page "/referentiel/tiers"
 @using Finama.Web.Models
-@using System.Net.Http.Json
 @inject FinamaApiService Api
 @inject AppState State
-@inject HttpClient Http
+@inject ApiClient Client
 @inject NotificationService Notif
 
 <div class="page-header d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
@@ -563,8 +562,8 @@
         try
         {
             if (_editModel.CompteComptableId == Guid.Empty) _editModel.CompteComptableId = _compteInitial;
-            using var r = await Http.PutAsJsonAsync($"api/Tiers/{_selectedTiers.Id}", _editModel);
-            if (!r.IsSuccessStatusCode) { Notif.Erreur(await MessageAsync(r) ?? "Modification refusée.", "Tiers"); return; }
+            var r = await Client.PutAsync($"api/Tiers/{_selectedTiers.Id}", _editModel, "Modification refusée.");
+            if (!r.Succes) { Notif.Erreur(r.Message, "Tiers"); return; }
             Notif.Succes($"« {_editModel.Nom} » mis à jour.", "Tiers");
             _showEditModal = false;
             await ChargerDonnees();
@@ -604,9 +603,9 @@
         _isSubmitting = true;
         try
         {
-            using var r = await Http.PostAsJsonAsync("api/Tiers", _createModel);
-            if (!r.IsSuccessStatusCode) { Notif.Erreur(await MessageAsync(r) ?? "Création refusée.", "Tiers"); return; }
-            var cree = await r.Content.ReadFromJsonAsync<TiersDto>();
+            var r = await Client.PostAsync<TiersDto>("api/Tiers", _createModel, "Création refusée.");
+            if (!r.Succes) { Notif.Erreur(r.Message, "Tiers"); return; }
+            var cree = r.Donnees;
             Notif.Succes($"« {cree?.Nom} » créé avec le compte {cree?.CompteNumero}.", "Tiers");
             _showCreateModal = false;
             _comptesTiers = new();   // le nouveau sous-compte apparaîtra dans la recherche
@@ -616,11 +615,6 @@
         finally { _isSubmitting = false; }
     }
 
-    private sealed record ReponseApi(string? Message);
-    private static async Task<string?> MessageAsync(HttpResponseMessage r)
-    {
-        try { return (await r.Content.ReadFromJsonAsync<ReponseApi>())?.Message; } catch { return null; }
-    }
 
     private string ObtenirBadgeStyle(string type) => type switch
     {

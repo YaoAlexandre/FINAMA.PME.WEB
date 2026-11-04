@@ -3,6 +3,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using Finama.Web
 @using Finama.Web.Services
+@inject ILocalStorage Stockage
 @inject FinamaApiService Api
 @inject CommerceApiService CommerceApi
 @inject NavigationManager Nav
@@ -345,7 +346,7 @@
     {
         try
         {
-            var chemin = await JS.InvokeAsync<string?>("localStorage.getItem", "finama_derniere_page");
+            var chemin = await Stockage.LireAsync(ClesStockage.DernierePage);
             if (string.IsNullOrWhiteSpace(chemin) || chemin == "/") return;
             _reprise = _destinations.FirstOrDefault(x => string.Equals(x.Url, chemin, StringComparison.OrdinalIgnoreCase));
         }
@@ -549,7 +550,7 @@
         };
 
         string? derniere = null;
-        try { derniere = await JS.InvokeAsync<string?>("localStorage.getItem", $"finama_page_{code}"); }
+        try { derniere = await Stockage.LireAsync(ClesStockage.PageModule(code)); }
         catch { /* stockage indisponible */ }
 
         Nav.NavigateTo(!string.IsNullOrWhiteSpace(derniere) && derniere.StartsWith('/') ? derniere : defaut);
