@@ -1,0 +1,308 @@
+@page "/ventes/devis/{Id:guid}"
+@page "/commercial/devis/{Id:guid}"
+@inject VentesApiService Ventes
+@inject ExportService Export
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject NotificationService Notif
+
+<PageTitle>Devis @_d?.Numero — Finama</PageTitle>
+
+@if (_d is null)
+{
+    @if (_erreur is not null)
+    {
+        <div class="alert alert-warning">@_erreur <a href="/ventes/devis" class="ms-2">Retour à la liste</a></div>
+    }
+    else
+    {
+        <div class="text-center py-5"><div class="spinner-border text-info"></div></div>
+    }
+}
+else
+{
+    var d = _d;
+
+    <!-- EN-TÊTE + ACTIONS SELON LE STATUT -->
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+        <div>
+            <a href="/ventes/devis" class="small text-decoration-none"><i class="bi bi-arrow-left me-1"></i>Devis</a>
+            <h3 class="fw-bold mb-1 mt-1">
+                @d.Numero @if (d.Version > 1) { <span class="badge bg-light text-dark border ms-1">v@(d.Version)</span> }
+                <BadgeStatutDevis Statut="d.Statut" />
+            </h3>
+            <div class="text-muted">@d.TiersNom · @d.Libelle</div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-outline-danger" @onclick="Pdf" disabled="@_enCours"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</button>
+            @if (!string.IsNullOrWhiteSpace(d.TiersTelephone))
+            {
+                <button class="btn btn-outline-success" @onclick="WhatsApp" title="Message WhatsApp au client (joignez le PDF téléchargé)"><i class="bi bi-whatsapp"></i></button>
+            }
+
+            @switch (d.Statut)
+            {
+                case StatutDevisVm.Brouillon:
+                    <button class="btn btn-outline-secondary" @onclick='() => Nav.NavigateTo($"/ventes/devis/{d.Id}/modifier")'><i class="bi bi-pencil me-1"></i>Modifier</button>
+                    <button class="btn btn-primary fw-bold" @onclick="Envoyer" disabled="@_enCours"><i class="bi bi-send me-1"></i>Marquer comme envoyé</button>
+                    break;
+                case StatutDevisVm.Envoye:
+                case StatutDevisVm.Expire:
+                    <button class="btn btn-success fw-bold" @onclick="Accepter" disabled="@_enCours"><i class="bi bi-check2-circle me-1"></i>Le client accepte</button>
+                    <button class="btn btn-outline-danger" @onclick="() => _refus = string.Empty" disabled="@_enCours"><i class="bi bi-x-circle me-1"></i>Refusé</button>
+                    break;
+                case StatutDevisVm.Accepte:
+                    <button class="btn btn-dark fw-bold" @onclick="Facturer" disabled="@_enCours"><i class="bi bi-receipt me-1"></i>Créer la facture</button>
+                    break;
+                case StatutDevisVm.Converti:
+                    <a class="btn btn-dark" href="/factures"><i class="bi bi-receipt me-1"></i>Facture @d.FactureNumero</a>
+                    break;
+            }
+
+            <div class="btn-group">
+                <button type="button" class="btn btn-outline-secondary dropdown-toggle" @onclick="() => _menu = !_menu">Plus</button>
+                <ul class="dropdown-menu dropdown-menu-end @(_menu ? "show" : "")" style="position:absolute; right:0; top:100%;">
+                    <li><button class="dropdown-item" @onclick="Dupliquer"><i class="bi bi-files me-2"></i>Dupliquer (nouvelle version)</button></li>
+                    @if (d.Statut is StatutDevisVm.Envoye or StatutDevisVm.Refuse or StatutDevisVm.Expire)
+                    {
+                        <li><button class="dropdown-item" @onclick="RemettreEnBrouillon"><i class="bi bi-arrow-counterclockwise me-2"></i>Remettre en brouillon</button></li>
+                    }
+                    @if (d.Statut == StatutDevisVm.Accepte)
+                    {
+                        <li><button class="dropdown-item text-danger" @onclick="() => { _menu = false; _refus = string.Empty; }"><i class="bi bi-x-circle me-2"></i>Le client se rétracte</button></li>
+                    }
+                    @if (d.Statut == StatutDevisVm.Brouillon)
+                    {
+                        <li><hr class="dropdown-divider" /></li>
+                        <li><button class="dropdown-item text-danger" @onclick="Supprimer"><i class="bi bi-trash me-2"></i>Supprimer le brouillon</button></li>
+                    }
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    @if (d.Statut == StatutDevisVm.Brouillon)
+    {
+        <div class="alert alert-light border small"><i class="bi bi-info-circle me-1"></i>
+            <strong>Étape suivante :</strong> téléchargez le PDF, envoyez-le au client (e-mail, WhatsApp), puis cliquez sur « Marquer comme envoyé ».
+        </div>
+    }
+    else if (d.Statut == StatutDevisVm.Accepte)
+    {
+        <div class="alert alert-success small"><i class="bi bi-check2-circle me-1"></i>
+            Le client a accepté. Cliquez sur <strong>Créer la facture</strong> : elle reprend toutes les lignes et remises, et ce devis ne pourra plus être facturé une seconde fois.
+        </div>
+    }
+    else if (d.Statut == StatutDevisVm.Expire)
+    {
+        <div class="alert alert-warning small"><i class="bi bi-hourglass-bottom me-1"></i>
+            La date de validité est passée sans réponse. Relancez le client : s'il accepte quand même, cliquez sur « Le client accepte ».
+        </div>
+    }
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead class="small text-uppercase text-muted bg-light">
+                            <tr>
+                                <th class="ps-3">Désignation</th>
+                                <th class="text-end">Qté</th>
+                                <th class="text-end">P.U. HT</th>
+                                <th class="text-end">Remise</th>
+                                <th class="text-end">TVA</th>
+                                <th class="text-end pe-3">Total HT</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var l in d.Lignes)
+                            {
+                                <tr>
+                                    <td class="ps-3">@l.Designation</td>
+                                    <td class="text-end font-monospace">@l.Quantite.ToString("0.###")</td>
+                                    <td class="text-end font-monospace text-nowrap">@l.PrixUnitaireHT.ToString("N0")</td>
+                                    <td class="text-end small">@(l.RemisePourcent > 0 ? $"{l.RemisePourcent:0.##} %" : "")</td>
+                                    <td class="text-end small">@l.TauxTVA.ToString("0.##") %</td>
+                                    <td class="text-end pe-3 font-monospace fw-bold text-nowrap">@l.MontantHT.ToString("N0")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-body border-top">
+                    <div class="ms-auto" style="max-width: 320px;">
+                        @if (d.RemiseGlobale > 0)
+                        {
+                            <div class="d-flex justify-content-between small"><span>Sous-total HT</span><span class="font-monospace">@d.SousTotalHT.ToString("N0")</span></div>
+                            <div class="d-flex justify-content-between small text-danger"><span>Remise globale (@d.RemiseGlobalePourcent.ToString("0.##") %)</span><span class="font-monospace">- @d.RemiseGlobale.ToString("N0")</span></div>
+                        }
+                        <div class="d-flex justify-content-between small"><span>Total HT</span><span class="font-monospace fw-bold">@d.TotalHT.ToString("N0")</span></div>
+                        <div class="d-flex justify-content-between small mb-2"><span>TVA</span><span class="font-monospace">@d.TotalTVA.ToString("N0")</span></div>
+                        <div class="d-flex justify-content-between bg-info bg-opacity-10 rounded p-2">
+                            <span class="fw-bold">TOTAL TTC</span><span class="fw-bold font-monospace text-info">@d.TotalTTC.ToString("N0") F</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(d.Conditions) || !string.IsNullOrWhiteSpace(d.Notes))
+            {
+                <div class="card border-0 shadow-sm mt-3">
+                    <div class="card-body small">
+                        @if (!string.IsNullOrWhiteSpace(d.Conditions)) { <div class="mb-2"><strong>Conditions :</strong> @d.Conditions</div> }
+                        @if (!string.IsNullOrWhiteSpace(d.Notes)) { <div><strong>Notes :</strong> @d.Notes</div> }
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- SUIVI -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white fw-bold"><i class="bi bi-clock-history me-2"></i>Suivi</div>
+                <ul class="list-group list-group-flush small">
+                    <li class="list-group-item"><i class="bi bi-pencil text-secondary me-2"></i>Créé le @d.DateCreation.ToLocalTime().ToString("dd/MM/yyyy")@(string.IsNullOrWhiteSpace(d.CreeParNom) ? "" : $" par {d.CreeParNom}")</li>
+                    @if (d.DateEnvoi is { } envoi)
+                    {
+                        <li class="list-group-item"><i class="bi bi-send text-primary me-2"></i>Envoyé le @envoi.ToLocalTime().ToString("dd/MM/yyyy")</li>
+                    }
+                    <li class="list-group-item"><i class="bi bi-calendar-event text-warning me-2"></i>Valable jusqu'au @(d.DateExpiration?.ToString("dd/MM/yyyy") ?? "—")</li>
+                    @if (d.DateDecision is { } decision)
+                    {
+                        <li class="list-group-item">
+                            <i class="bi @(d.Statut == StatutDevisVm.Refuse ? "bi-x-circle text-danger" : "bi-check2-circle text-success") me-2"></i>
+                            @(d.Statut == StatutDevisVm.Refuse ? "Refusé" : "Accepté") le @decision.ToLocalTime().ToString("dd/MM/yyyy")
+                            @if (!string.IsNullOrWhiteSpace(d.MotifRefus)) { <div class="text-muted ms-4">« @d.MotifRefus »</div> }
+                        </li>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(d.FactureNumero))
+                    {
+                        <li class="list-group-item"><i class="bi bi-receipt text-dark me-2"></i>Facturé : <strong>@d.FactureNumero</strong></li>
+                    }
+                </ul>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- REFUS -->
+@if (_refus is not null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15,23,42,.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header"><h5 class="modal-title fw-bold">Devis refusé</h5><button class="btn-close" @onclick="() => _refus = null"></button></div>
+                <div class="modal-body">
+                    <label class="form-label small fw-bold">Motif (facultatif, utile pour vos prochaines offres)</label>
+                    <select class="form-select mb-2" @onchange="e => _refus = e.Value?.ToString()">
+                        <option value="">— Choisir —</option>
+                        <option>Prix trop élevé</option>
+                        <option>Délai trop long</option>
+                        <option>Concurrent retenu</option>
+                        <option>Projet abandonné ou reporté</option>
+                    </select>
+                    <input class="form-control" placeholder="Ou précisez…" @bind="_refus" />
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-light" @onclick="() => _refus = null">Annuler</button>
+                    <button class="btn btn-danger fw-bold" @onclick="Refuser" disabled="@_enCours">Confirmer le refus</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<ConfirmDialog @ref="_confirm" />
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private ConfirmDialog _confirm = default!;
+    private DevisVm? _d;
+    private string? _erreur;
+    private string? _refus;      // null = fenêtre fermée
+    private bool _enCours;
+    private bool _menu;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _d = await Ventes.ObtenirAsync(Id);
+        _erreur = _d is null ? Ventes.DerniereErreur ?? "Devis introuvable." : null;
+    }
+
+    private async Task Executer(Func<Task<DevisVm?>> appel, string succes)
+    {
+        _menu = false;
+        _enCours = true;
+        var r = await appel();
+        _enCours = false;
+        if (r is null) { Notif.Erreur(Ventes.DerniereErreur ?? "Action impossible.", "Devis"); return; }
+        _d = r;
+        Notif.Succes(succes);
+    }
+
+    private Task Envoyer() => Executer(() => Ventes.EnvoyerAsync(Id), "Devis marqué comme envoyé.");
+    private Task Accepter() => Executer(() => Ventes.AccepterAsync(Id), "Bravo, devis accepté ! Vous pouvez créer la facture.");
+    private Task RemettreEnBrouillon() => Executer(() => Ventes.RemettreEnBrouillonAsync(Id), "Devis remis en brouillon : il est de nouveau modifiable.");
+
+    private async Task Refuser()
+    {
+        var motif = _refus;
+        _refus = null;
+        await Executer(() => Ventes.RefuserAsync(Id, motif), "Devis marqué comme refusé.");
+    }
+
+    private async Task Dupliquer()
+    {
+        _menu = false;
+        var copie = await Ventes.DupliquerAsync(Id);
+        if (copie is null) { Notif.Erreur(Ventes.DerniereErreur ?? "Duplication impossible.", "Devis"); return; }
+        Notif.Succes($"Nouveau brouillon {copie.Numero} créé.");
+        Nav.NavigateTo($"/ventes/devis/{copie.Id}/modifier");
+    }
+
+    private async Task Facturer()
+    {
+        if (_d is null) return;
+        if (!await _confirm.DemanderAsync(
+                $"Une facture de {_d.TotalTTC:N0} F TTC sera créée pour {_d.TiersNom}, en brouillon. Le devis sera marqué « Facturé ».",
+                "Créer la facture ?", "Créer la facture")) return;
+
+        _enCours = true;
+        var r = await Ventes.ConvertirAsync(Id);
+        _enCours = false;
+        if (r is null) { Notif.Erreur(Ventes.DerniereErreur ?? "Facturation impossible.", "Devis"); return; }
+
+        Notif.Succes($"Facture {r.FactureNumero} créée en brouillon.");
+        _d = await Ventes.ObtenirAsync(Id);
+    }
+
+    private async Task Supprimer()
+    {
+        _menu = false;
+        if (!await _confirm.DemanderAsync("Le brouillon sera supprimé définitivement.", "Supprimer ce brouillon ?", "Supprimer", type: ConfirmationType.Danger)) return;
+        if (await Ventes.SupprimerAsync(Id)) { Notif.Succes("Brouillon supprimé."); Nav.NavigateTo("/ventes/devis"); }
+        else Notif.Erreur(Ventes.DerniereErreur ?? "Suppression impossible.", "Devis");
+    }
+
+    private async Task Pdf()
+    {
+        if (_d is null) return;
+        _enCours = true;
+        var erreur = await Export.TelechargerAsync($"api/devis/{Id}/pdf", $"Devis_{_d.Numero}.pdf");
+        _enCours = false;
+        if (erreur is not null) Notif.Erreur(erreur, "PDF");
+    }
+
+    private async Task WhatsApp()
+    {
+        if (_d is null) return;
+        var numero = new string((_d.TiersTelephone ?? "").Where(char.IsDigit).ToArray());
+        if (numero.Length == 8) numero = "228" + numero;
+        var texte = $"Bonjour, veuillez trouver notre devis {_d.Numero} « {_d.Libelle} » d'un montant de {_d.TotalTTC:N0} F TTC"
+                    + (_d.DateExpiration is { } e ? $", valable jusqu'au {e:dd/MM/yyyy}" : "") + ". Le PDF suit. Merci de votre confiance.";
+        await JS.InvokeVoidAsync("open", $"https://wa.me/{numero}?text={Uri.EscapeDataString(texte)}", "_blank");
+    }
+}

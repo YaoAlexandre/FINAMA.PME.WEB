@@ -1,0 +1,231 @@
+@page "/administration/profils"
+@attribute [Authorize(Policy = "Utilisateurs")]
+@inject ApiClient Api
+@inject NotificationService Notif
+
+<PageTitle>Profils & permissions — Finama</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold mb-1"><i class="bi bi-ui-checks-grid text-primary me-2"></i>Profils & permissions</h3>
+        <p class="text-muted small mb-0">Un profil = une liste de permissions. Utilisez un profil prêt à l'emploi, ou créez le vôtre en cochant les cases.</p>
+    </div>
+    <button class="btn btn-primary fw-bold" @onclick="() => Ouvrir(null)" disabled="@(_catalogue is null)">
+        <i class="bi bi-plus-circle me-1"></i>Nouveau profil
+    </button>
+</div>
+
+@if (_catalogue is null)
+{
+    <div class="text-center py-5">
+        @if (_erreur is not null) { <div class="alert alert-warning">@_erreur</div> }
+        else { <div class="spinner-border text-primary"></div> }
+    </div>
+}
+else
+{
+    <h6 class="fw-bold text-uppercase small text-muted mb-2">Profils de votre entreprise</h6>
+    <div class="row g-3 mb-4">
+        @if (!_profils.Any())
+        {
+            <div class="col-12">
+                <div class="border rounded-3 p-4 text-center text-muted small bg-light">
+                    Aucun profil personnalisé. Exemple : « Caissière + réception » = Tenir la caisse + Gérer articles et stock.
+                    Partez d'un profil prédéfini ci-dessous avec <strong>Personnaliser</strong>.
+                </div>
+            </div>
+        }
+        @foreach (var p in _profils)
+        {
+            <div class="col-md-6 col-xl-4" @key="p.Id">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h6 class="fw-bold mb-1">@p.Nom</h6>
+                            <span class="badge bg-light text-dark border">@p.NbUtilisateurs utilisateur(s)</span>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(p.Description)) { <p class="small text-muted mb-2">@p.Description</p> }
+                        <div class="d-flex flex-wrap gap-1">
+                            @foreach (var code in p.Permissions) { <span class="badge bg-primary bg-opacity-10 text-primary">@Libelle(code)</span> }
+                        </div>
+                    </div>
+                    <div class="card-footer bg-white d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-primary" @onclick="() => Ouvrir(p)"><i class="bi bi-pencil me-1"></i>Modifier</button>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => Supprimer(p)" disabled="@(p.NbUtilisateurs > 0)" title="@(p.NbUtilisateurs > 0 ? "Attribué à des utilisateurs" : "Supprimer")">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <h6 class="fw-bold text-uppercase small text-muted mb-2">Profils prêts à l'emploi</h6>
+    <div class="row g-3">
+        @foreach (var p in _catalogue.Predefinis)
+        {
+            <div class="col-md-6 col-xl-4" @key="p.Code">
+                <div class="card border-0 shadow-sm h-100 bg-light">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-1"><i class="bi bi-lock me-1 text-muted small"></i>@p.Libelle</h6>
+                        <p class="small text-muted mb-2">@p.Description</p>
+                        <div class="d-flex flex-wrap gap-1">
+                            @foreach (var code in p.Permissions.Where(Visible)) { <span class="badge bg-secondary bg-opacity-10 text-secondary">@Libelle(code)</span> }
+                        </div>
+                    </div>
+                    <div class="card-footer bg-transparent">
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => Personnaliser(p)"><i class="bi bi-files me-1"></i>Personnaliser</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@if (_edition is not null && _catalogue is not null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15,23,42,.5);">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">@(_edition.Id is null ? "Nouveau profil" : $"Modifier « {_edition.Nom} »")</h5>
+                    <button class="btn-close" @onclick="() => _edition = null" disabled="@_enCours"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Nom du profil *</label>
+                            <input class="form-control" maxlength="80" @bind="_edition.Nom" @bind:event="oninput" placeholder="Ex. : Caissière + réception" />
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold">Description</label>
+                            <input class="form-control" maxlength="250" @bind="_edition.Description" />
+                        </div>
+                    </div>
+
+                    @foreach (var g in _catalogue.Groupes)
+                    {
+                        var codes = g.Permissions.Select(x => x.Code).ToList();
+                        var toutes = codes.All(_edition.Permissions.Contains);
+                        <div class="border rounded-3 mb-3">
+                            <div class="d-flex justify-content-between align-items-center bg-light px-3 py-2 rounded-top">
+                                <span class="fw-bold"><i class="bi @g.Icone me-2"></i>@g.Titre</span>
+                                <button class="btn btn-sm btn-link" @onclick="() => ToutBasculer(codes, !toutes)">@(toutes ? "Tout décocher" : "Tout cocher")</button>
+                            </div>
+                            <div class="px-3 py-2">
+                                @foreach (var perm in g.Permissions)
+                                {
+                                    var id = $"p-{perm.Code.Replace('.', '-')}";
+                                    <div class="form-check my-1">
+                                        <input class="form-check-input" type="checkbox" id="@id" checked="@_edition.Permissions.Contains(perm.Code)"
+                                               @onchange="e => Basculer(perm.Code, e.Value is true)" />
+                                        <label class="form-check-label" for="@id">
+                                            <strong class="small">@perm.Libelle</strong>
+                                            <span class="d-block small text-muted">@perm.Description</span>
+                                        </label>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <span class="me-auto small text-muted">@_edition.Permissions.Count permission(s) cochée(s)</span>
+                    <button class="btn btn-light" @onclick="() => _edition = null" disabled="@_enCours">Annuler</button>
+                    <button class="btn btn-primary fw-bold" @onclick="Enregistrer"
+                            disabled="@(_enCours || string.IsNullOrWhiteSpace(_edition.Nom) || _edition.Nom.Trim().Length < 2 || _edition.Permissions.Count == 0)">
+                        @if (_enCours) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Enregistrer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private Catalogue? _catalogue;
+    private List<ProfilVm> _profils = new();
+    private Edition? _edition;
+    private string? _erreur;
+    private bool _enCours;
+
+    protected override async Task OnInitializedAsync() => await Charger();
+
+    private async Task Charger()
+    {
+        var catalogue = await Api.GetAsync<Catalogue>("api/profils/catalogue");
+        var profils = await Api.GetAsync<List<ProfilVm>>("api/profils");
+        if (!catalogue.Succes || !profils.Succes)
+        {
+            _erreur = "Impossible de charger les profils.";
+            return;
+        }
+        _catalogue = catalogue.Donnees;
+        _profils = profils.Donnees ?? new();
+    }
+
+    private bool Visible(string code) => _catalogue?.Groupes.Any(g => g.Permissions.Any(p => p.Code == code)) ?? false;
+
+    private string Libelle(string code)
+        => _catalogue?.Groupes.SelectMany(g => g.Permissions).FirstOrDefault(p => p.Code == code)?.Libelle ?? code;
+
+    private void Ouvrir(ProfilVm? p)
+        => _edition = p is null
+            ? new Edition()
+            : new Edition { Id = p.Id, Nom = p.Nom, Description = p.Description, Permissions = p.Permissions.ToHashSet() };
+
+    private void Personnaliser(PredefiniVm p)
+        => _edition = new Edition { Nom = $"{p.Libelle} (personnalisé)", Description = p.Description, Permissions = p.Permissions.Where(Visible).ToHashSet() };
+
+    private void Basculer(string code, bool coche)
+    {
+        if (_edition is null) return;
+        if (coche) _edition.Permissions.Add(code); else _edition.Permissions.Remove(code);
+    }
+
+    private void ToutBasculer(List<string> codes, bool cocher)
+    {
+        foreach (var c in codes) Basculer(c, cocher);
+    }
+
+    private async Task Enregistrer()
+    {
+        if (_edition is null) return;
+        _enCours = true;
+        try
+        {
+            var corps = new { Nom = _edition.Nom.Trim(), _edition.Description, Permissions = _edition.Permissions.ToList() };
+            var r = _edition.Id is { } id
+                ? await Api.PutAsync($"api/profils/{id}", corps, succes: "Profil enregistré.")
+                : await Api.PostAsync("api/profils", corps, "Enregistrement impossible.", "Profil enregistré.");
+            if (!r.Succes) { Notif.Erreur(r.Message, "Profil"); return; }
+
+            Notif.Succes(r.Message);
+            _edition = null;
+            await Charger();
+        }
+        finally { _enCours = false; }
+    }
+
+    private async Task Supprimer(ProfilVm p)
+    {
+        var r = await Api.DeleteAsync($"api/profils/{p.Id}", succes: "Profil supprimé.");
+        if (r.Succes) { Notif.Succes(r.Message); await Charger(); }
+        else Notif.Erreur(r.Message, "Profil");
+    }
+
+    private sealed class Edition
+    {
+        public Guid? Id { get; init; }
+        public string Nom { get; set; } = "";
+        public string? Description { get; set; }
+        public HashSet<string> Permissions { get; set; } = new();
+    }
+
+    private sealed record PermissionVm(string Code, string Libelle, string Description);
+    private sealed record GroupeVm(string Module, string Titre, string Icone, List<PermissionVm> Permissions);
+    private sealed record PredefiniVm(int Role, string Code, string Libelle, string Description, string[] Permissions);
+    private sealed record Catalogue(List<GroupeVm> Groupes, List<PredefiniVm> Predefinis);
+    private sealed record ProfilVm(Guid Id, string Nom, string? Description, string[] Permissions, int NbUtilisateurs);
+}

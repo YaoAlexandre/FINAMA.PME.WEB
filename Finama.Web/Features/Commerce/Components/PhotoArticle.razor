@@ -1,0 +1,70 @@
+@inject ImagesArticlesService Images
+@inject NotificationService Notif
+
+@* Photo facultative d'un article : aperçu, prise de photo ou choix dans la galerie, retrait. *@
+<div class="d-flex align-items-center gap-3">
+    <div class="photo-article-apercu rounded-3 border d-flex align-items-center justify-content-center overflow-hidden flex-shrink-0">
+        @if (_enCours)
+        {
+            <span class="spinner-border spinner-border-sm text-secondary"></span>
+        }
+        else if (Images.Url(ProduitId) is { } url)
+        {
+            <img src="@url" alt="Photo de l'article" />
+        }
+        else
+        {
+            <i class="bi bi-image text-muted fs-3"></i>
+        }
+    </div>
+    <div class="small">
+        @if (ProduitId == Guid.Empty)
+        {
+            <span class="text-muted">Enregistrez d'abord l'article, puis ajoutez sa photo.</span>
+        }
+        else
+        {
+            <label class="btn btn-sm btn-outline-primary mb-1 @(_enCours ? "disabled" : "")">
+                <i class="bi bi-camera me-1"></i>@(Images.Url(ProduitId) is null ? "Ajouter une photo" : "Changer la photo")
+                <InputFile OnChange="Choisir" accept="image/*" class="d-none" disabled="@_enCours" />
+            </label>
+            @if (Images.Url(ProduitId) is not null)
+            {
+                <button type="button" class="btn btn-sm btn-link text-danger mb-1" @onclick="Retirer" disabled="@_enCours">Retirer</button>
+            }
+            <div class="text-muted">Facultatif. Sur téléphone : appareil photo ou galerie.</div>
+        }
+    </div>
+</div>
+
+<style>
+    .photo-article-apercu { width: 72px; height: 72px; background: var(--bs-tertiary-bg, #f8f9fa); }
+    .photo-article-apercu img { width: 100%; height: 100%; object-fit: cover; }
+</style>
+
+@code {
+    [Parameter, EditorRequired] public Guid ProduitId { get; set; }
+    [Parameter] public EventCallback OnChange { get; set; }
+
+    private bool _enCours;
+
+    protected override Task OnInitializedAsync() => Images.ChargerAsync();
+
+    private async Task Choisir(InputFileChangeEventArgs e)
+    {
+        _enCours = true;
+        var erreur = await Images.EnvoyerAsync(ProduitId, e.File);
+        _enCours = false;
+        if (erreur is null) { Notif.Succes("Photo enregistrée.", "Article"); await OnChange.InvokeAsync(); }
+        else Notif.Erreur(erreur, "Photo");
+    }
+
+    private async Task Retirer()
+    {
+        _enCours = true;
+        var ok = await Images.SupprimerAsync(ProduitId);
+        _enCours = false;
+        if (ok) { Notif.Information("Photo retirée.", "Article"); await OnChange.InvokeAsync(); }
+        else Notif.Erreur("Suppression impossible.", "Photo");
+    }
+}

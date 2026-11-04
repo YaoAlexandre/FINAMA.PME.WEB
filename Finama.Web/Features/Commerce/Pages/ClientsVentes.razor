@@ -1,0 +1,98 @@
+@page "/ventes/clients"
+@* @page "/commercial/clients" *@
+@inject VentesApiService Ventes
+@inject NotificationService Notif
+@inject NavigationManager Nav
+
+<PageTitle>Clients — Finama</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold mb-1"><i class="bi bi-person-lines-fill text-info me-2"></i>Clients</h3>
+        <p class="text-muted small mb-0">Fichier client unique : les mêmes fiches servent aux devis, aux factures et à la comptabilité.</p>
+    </div>
+    <button class="btn btn-info text-white fw-bold" @onclick="() => _nouveau = new NouveauClient()"><i class="bi bi-person-plus me-1"></i>Nouveau client</button>
+</div>
+
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2">
+        <input class="form-control" placeholder="Rechercher un client (nom, code)…" @bind="_recherche" @bind:event="oninput" @onkeyup="Rechercher" />
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="list-group list-group-flush">
+        @if (_clients is null)
+        {
+            <div class="list-group-item text-center py-5"><div class="spinner-border text-info"></div></div>
+        }
+        else if (!_clients.Any())
+        {
+            <div class="list-group-item text-center py-5 text-muted">Aucun client trouvé.</div>
+        }
+        else
+        {
+            @foreach (var c in _clients)
+            {
+                <div class="list-group-item d-flex justify-content-between align-items-center" @key="c.Id">
+                    <span>
+                        <strong>@c.Nom</strong> <span class="text-muted small font-monospace ms-1">@c.Code</span>
+                        <span class="d-block small text-muted">@(string.Join(" · ", new[] { c.Telephone, c.Email }.Where(x => !string.IsNullOrWhiteSpace(x))))</span>
+                    </span>
+                    <button class="btn btn-sm btn-outline-info" @onclick='() => Nav.NavigateTo($"/ventes/devis/nouveau?client={c.Id}")'>
+                        <i class="bi bi-file-earmark-plus me-1"></i>Faire un devis
+                    </button>
+                </div>
+            }
+        }
+    </div>
+    <div class="card-footer bg-white small text-muted">Les 10 premiers résultats s'affichent : précisez la recherche pour trouver un client.</div>
+</div>
+
+@if (_nouveau is not null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15,23,42,.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header"><h5 class="modal-title fw-bold">Nouveau client</h5><button class="btn-close" @onclick="() => _nouveau = null"></button></div>
+                <div class="modal-body">
+                    <div class="mb-2"><label class="form-label small fw-bold">Nom ou raison sociale *</label><input class="form-control" maxlength="150" @bind="_nouveau.Nom" @bind:event="oninput" /></div>
+                    <div class="row g-2">
+                        <div class="col-md-6"><label class="form-label small fw-bold">Téléphone</label><ChampTelephone @bind-Value="_nouveau.Telephone" /></div>
+                        <div class="col-md-6"><label class="form-label small fw-bold">E-mail</label><ChampEmail @bind-Value="_nouveau.Email" /></div>
+                        <div class="col-md-8"><label class="form-label small fw-bold">Adresse</label><input class="form-control" maxlength="250" @bind="_nouveau.Adresse" /></div>
+                        <div class="col-md-4"><label class="form-label small fw-bold">NIF</label><input class="form-control text-uppercase" maxlength="30" @bind="_nouveau.Nif" /></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-light" @onclick="() => _nouveau = null">Annuler</button>
+                    <button class="btn btn-info text-white fw-bold" @onclick="Creer" disabled="@(_enCours || ControlesSaisie.Nom(_nouveau.Nom) is not null || ControlesSaisie.Telephone(_nouveau.Telephone) is not null || ControlesSaisie.Email(_nouveau.Email) is not null)">Créer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ClientVm>? _clients;
+    private string _recherche = "";
+    private NouveauClient? _nouveau;
+    private bool _enCours;
+
+    protected override async Task OnInitializedAsync() => await Rechercher();
+
+    private async Task Rechercher() => _clients = await Ventes.RechercherClientsAsync(_recherche);
+
+    private async Task Creer()
+    {
+        if (_nouveau is null) return;
+        _enCours = true;
+        var c = await Ventes.CreerClientAsync(_nouveau);
+        _enCours = false;
+        if (c is null) { Notif.Erreur(Ventes.DerniereErreur ?? "Création impossible.", "Client"); return; }
+        Notif.Succes($"Client « {c.Nom} » créé.");
+        _nouveau = null;
+        _recherche = c.Nom;
+        await Rechercher();
+    }
+}

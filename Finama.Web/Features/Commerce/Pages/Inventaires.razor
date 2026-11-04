@@ -1,0 +1,314 @@
+@page "/commerce/inventaires"
+@inject ICatalogueService CatalogueApi
+@inject IMagasinsService MagasinsApi
+@inject IStocksService StocksApi
+@inject ErreursCommerce ErreurCommerce
+@inject NavigationManager Nav
+@inject NotificationService Notif
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold text-dark mb-1"><i class="bi bi-clipboard-check text-success me-2"></i>Inventaires</h3>
+        <p class="text-muted small mb-0">Comptage physique des stocks et régularisation des écarts</p>
+    </div>
+    <button class="btn btn-success fw-bold px-3 py-2 rounded-3 shadow-sm d-flex align-items-center gap-2"
+            @onclick="OuvrirModalNouvelInventaire" disabled="@(_chargement || InventaireEnCours != null)"
+            title="@(InventaireEnCours != null ? "Terminez ou annulez l'inventaire en cours avant d'en ouvrir un autre" : "")">
+        <i class="bi bi-plus-circle fs-6"></i>
+        <span>Nouvel inventaire</span>
+    </button>
+</div>
+
+@if (InventaireEnCours is { } enCours)
+{
+    <div class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2 shadow-sm">
+        <span>
+            <i class="bi bi-hourglass-split me-1"></i>
+            Inventaire en cours : <strong>@enCours.Libelle</strong> — @NbComptees(enCours) / @enCours.Lignes.Count ligne(s) comptée(s).
+        </span>
+        <button class="btn btn-sm btn-warning fw-bold" @onclick="() => ConsulterInventaire(enCours.Id)">
+            <i class="bi bi-pencil-square me-1"></i>Continuer le comptage
+        </button>
+    </div>
+}
+
+<!-- LISTE DES FEUILLES D'INVENTAIRE -->
+<div class="card border-0 shadow-sm rounded-3">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light font-monospace small text-uppercase">
+                    <tr>
+                        <th class="ps-4">Référence</th>
+                        <th>Ouverture</th>
+                        <th>Intitulé</th>
+                        <th class="text-center">Avancement</th>
+                        <th class="text-center">Statut</th>
+                        <th class="text-end pe-4">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_chargement)
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center py-5">
+                                <div class="spinner-border text-success mb-2" role="status"></div>
+                                <div class="text-muted small">Chargement des inventaires...</div>
+                            </td>
+                        </tr>
+                    }
+                    else if (!_inventaires.Any())
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                <i class="bi bi-clipboard-x fs-1 d-block mb-2 opacity-50"></i>
+                                Aucun inventaire. Cliquez sur « Nouvel inventaire » pour lancer un comptage.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var inv in _inventaires)
+                        {
+                            var statut = InfoStatut(inv.Statut);
+                            var estOuvert = inv.Statut == StatutInventaire.Ouvert;
+                            var nbEcarts = inv.Lignes.Count(l => l.Ecart is { } e && e != 0);
+
+                            <tr @key="inv.Id">
+                                <td class="ps-4 font-monospace fw-bold text-dark">@inv.Numero</td>
+                                <td class="text-nowrap">@inv.DateOuverture.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@inv.Libelle</td>
+                                <td class="text-center small text-nowrap">
+                                    @if (estOuvert)
+                                    {
+                                        <span>@NbComptees(inv) / @inv.Lignes.Count comptée(s)</span>
+                                    }
+                                    else if (inv.Statut == StatutInventaire.Cloture)
+                                    {
+                                        <span class="@(nbEcarts > 0 ? "text-danger" : "text-success")">@(nbEcarts == 0 ? "Aucun écart" : $"{nbEcarts} écart(s)")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge @statut.Classe font-monospace px-3">@statut.Libelle</span>
+                                </td>
+                                <td class="text-end pe-4 text-nowrap">
+                                    <button class="btn btn-sm @(estOuvert ? "btn-success" : "btn-outline-primary")"
+                                            @onclick="() => ConsulterInventaire(inv.Id)">
+                                        <i class="bi @(estOuvert ? "bi-pencil-square" : "bi-eye") me-1"></i>@(estOuvert ? "Compter" : "Consulter")
+                                    </button>
+                                    @if (estOuvert)
+                                    {
+                                        <AuthorizeView Policy="AdminTenant">
+                                            <Authorized>
+                                                <button class="btn btn-sm btn-outline-danger ms-1" title="Annuler sans modifier le stock"
+                                                        @onclick="() => DemanderAnnulation(inv)" disabled="@_enCoursValidation">
+                                                    <i class="bi bi-x-circle"></i>
+                                                </button>
+                                            </Authorized>
+                                        </AuthorizeView>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- MODALE : NOUVEL INVENTAIRE -->
+@if (_afficherModalOuverture)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle me-2"></i>Nouvel inventaire</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="FermerModalOuverture"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Intitulé *</label>
+                        <input type="text" class="form-control" @bind="_libelle" placeholder="Ex : Inventaire de fin d'année" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Magasin</label>
+                        <select class="form-select" @bind="_magasinId">
+                            @foreach (var m in _magasins)
+                            {
+                                <option value="@m.Id">@m.Nom@(m.EstPrincipal ? " (principal)" : "")</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Périmètre</label>
+                        <select class="form-select" @bind="_categorieId">
+                            <option value="@Guid.Empty">Tous les articles</option>
+                            @foreach (var c in _categories)
+                            {
+                                <option value="@c.Id">Catégorie : @c.Libelle</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="alert alert-light border small mb-0">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Les quantités théoriques sont figées à l'ouverture. Évitez de vendre les articles inventoriés pendant le comptage.
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-light px-4" @onclick="FermerModalOuverture">Annuler</button>
+                    <button type="button" class="btn btn-success px-4 fw-bold" @onclick="ValiderOuvertureInventaire" disabled="@(_enCoursValidation || _magasinId == Guid.Empty)">
+                        @if (_enCoursValidation)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Générer la feuille de comptage
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<ConfirmDialog @ref="_confirm" />
+
+@code {
+    private ConfirmDialog _confirm = default!;
+    private List<InventaireDto> _inventaires = new();
+    private List<MagasinDto> _magasins = new();
+    private List<CategorieCommerceDto> _categories = new();
+
+    private bool _chargement = true;
+    private bool _afficherModalOuverture;
+    private bool _enCoursValidation;
+
+    private string _libelle = "";
+    private Guid _magasinId;
+    private Guid _categorieId;
+
+    private InventaireDto? InventaireEnCours => _inventaires.FirstOrDefault(i => i.Statut == StatutInventaire.Ouvert);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ChargerInventaires();
+    }
+
+    private async Task ChargerInventaires()
+    {
+        _chargement = true;
+        try
+        {
+            _inventaires = (await StocksApi.GetInventairesAsync())
+                .OrderBy(i => i.Statut == StatutInventaire.Ouvert ? 0 : 1)
+                .ThenByDescending(i => i.DateOuverture)
+                .ToList();
+
+            if (ErreurCommerce.Derniere is { } erreur)
+                Notif.Erreur(erreur, "Inventaires");
+        }
+        finally
+        {
+            _chargement = false;
+        }
+    }
+
+    private async Task OuvrirModalNouvelInventaire()
+    {
+        if (!_magasins.Any())
+            _magasins = (await MagasinsApi.GetMagasinsAsync()).Where(m => m.EstActif).ToList();
+        if (!_categories.Any())
+            _categories = (await CatalogueApi.GetCategoriesAsync()).OrderBy(c => c.Libelle).ToList();
+
+        if (!_magasins.Any())
+        {
+            Notif.Avertir("Créez d'abord un magasin dans Stock → Magasins & dépôts.", "Aucun magasin");
+            return;
+        }
+
+        var actif = await MagasinsApi.GetMagasinActifIdAsync();
+        _magasinId = _magasins.FirstOrDefault(m => m.Id == actif)?.Id
+                     ?? _magasins.FirstOrDefault(m => m.EstPrincipal)?.Id
+                     ?? _magasins[0].Id;
+        _categorieId = Guid.Empty;
+        _libelle = $"Inventaire du {DateTime.Today:dd/MM/yyyy}";
+        _afficherModalOuverture = true;
+    }
+
+    private void FermerModalOuverture() => _afficherModalOuverture = false;
+
+    private async Task ValiderOuvertureInventaire()
+    {
+        if (string.IsNullOrWhiteSpace(_libelle))
+        {
+            Notif.Avertir("Renseignez l'intitulé de l'inventaire.");
+            return;
+        }
+
+        _enCoursValidation = true;
+        try
+        {
+            var requete = new OuvrirInventaireRequest(_magasinId, _libelle.Trim(), _categorieId == Guid.Empty ? null : _categorieId);
+            var resultat = await StocksApi.OuvrirInventaireAsync(requete);
+
+            if (resultat is null)
+            {
+                // Message exact de l'API : inventaire déjà ouvert, aucun article, droits…
+                Notif.Erreur(ErreurCommerce.Derniere ?? "Ouverture impossible.", "Inventaire non créé");
+                return;
+            }
+
+            Notif.Succes($"Feuille de comptage générée : {resultat.Lignes.Count} ligne(s).");
+            _afficherModalOuverture = false;
+            ConsulterInventaire(resultat.Id);
+        }
+        finally
+        {
+            _enCoursValidation = false;
+        }
+    }
+
+    private async Task DemanderAnnulation(InventaireDto inv)
+    {
+        if (!await _confirm.DemanderAsync(
+                $"L'inventaire « {inv.Libelle} » sera abandonné. Les comptages saisis sont conservés pour consultation, mais aucun stock ne sera modifié.",
+                "Annuler cet inventaire ?", "Annuler l'inventaire", type: ConfirmationType.Danger)) return;
+
+        _enCoursValidation = true;
+        try
+        {
+            if (await StocksApi.AnnulerInventaireAsync(inv.Id))
+            {
+                Notif.Succes("Inventaire annulé. Le stock n'a pas été modifié.");
+                await ChargerInventaires();
+            }
+            else
+            {
+                Notif.Erreur(ErreurCommerce.Derniere ?? "Annulation impossible.", "Inventaire");
+            }
+        }
+        finally
+        {
+            _enCoursValidation = false;
+        }
+    }
+
+    private void ConsulterInventaire(Guid inventaireId) => Nav.NavigateTo($"/commerce/inventaires/{inventaireId}");
+
+    private static int NbComptees(InventaireDto inv) => inv.Lignes.Count(l => l.QuantiteComptee.HasValue);
+
+    private static (string Libelle, string Classe) InfoStatut(StatutInventaire s) => s switch
+    {
+        StatutInventaire.Ouvert => ("En cours", "bg-warning text-dark"),
+        StatutInventaire.Cloture => ("Clôturé", "bg-success bg-opacity-10 text-success"),
+        StatutInventaire.Annule => ("Annulé", "bg-secondary bg-opacity-10 text-secondary"),
+        _ => (s.ToString(), "bg-light text-dark")
+    };
+}

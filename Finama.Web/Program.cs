@@ -1,6 +1,4 @@
 using Finama.Web;
-using Finama.Web.Securite;
-using Finama.Web.Services;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Radzen;

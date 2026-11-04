@@ -1,7 +1,5 @@
 using System.Net.Http.Json;
 using Finama.Web.Core.Securite;
-using Finama.Web.Services;
-using Finama.Web.Models;
 
 namespace Finama.Web.Features.Authentification.Services;
 

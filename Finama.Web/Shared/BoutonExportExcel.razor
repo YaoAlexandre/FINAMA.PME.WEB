@@ -1,6 +1,5 @@
-@using Finama.Web.Services
 @inject ExportService Export
-@inject NotificationService NotificationService
+@inject NotificationService Notif
 
 @*
     Boutons d'export Excel + PDF (même contenu, deux formats).
@@ -58,7 +57,7 @@
 
             var erreur = await Export.TelechargerAsync(url, nom);
             if (erreur is not null)
-                NotificationService.Erreur(erreur, pdf ? "Export PDF" : "Export Excel");
+                Notif.Erreur(erreur, pdf ? "Export PDF" : "Export Excel");
         }
         finally
         {

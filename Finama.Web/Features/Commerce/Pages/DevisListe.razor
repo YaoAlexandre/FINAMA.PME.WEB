@@ -1,0 +1,134 @@
+@page "/ventes/devis"
+@page "/commercial/devis"
+@inject VentesApiService Ventes
+@inject NavigationManager Nav
+
+<PageTitle>Devis — Finama</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+        <h3 class="fw-bold mb-1"><i class="bi bi-file-earmark-text text-info me-2"></i>Devis</h3>
+        <p class="text-muted small mb-0">@(_devis?.Count ?? 0) devis @(_statut is null ? "" : $"« {LibelleFiltre(_statut)} »")</p>
+    </div>
+    <button class="btn btn-info text-white fw-bold" @onclick='() => Nav.NavigateTo("/ventes/devis/nouveau")'>
+        <i class="bi bi-plus-circle me-1"></i>Nouveau devis
+    </button>
+</div>
+
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2 d-flex flex-wrap gap-2 align-items-center">
+        @foreach (var (valeur, libelle) in Filtres)
+        {
+            <button class="btn btn-sm rounded-pill @(_statut == valeur ? "btn-dark" : "btn-outline-secondary")" @onclick="() => Filtrer(valeur)">@libelle</button>
+        }
+        <div class="ms-auto" style="min-width: 240px;">
+            <input class="form-control form-control-sm" placeholder="Client, numéro, objet…" @bind="_recherche" @bind:event="oninput" @onkeyup="RechercherSiEntree" />
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light small text-uppercase">
+                <tr>
+                    <th class="ps-3">Numéro</th>
+                    <th>Client</th>
+                    <th>Objet</th>
+                    <th>Date</th>
+                    <th>Validité</th>
+                    <th class="text-end">Total TTC</th>
+                    <th class="text-center">Statut</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_devis is null)
+                {
+                    <tr><td colspan="7" class="text-center py-5"><div class="spinner-border text-info"></div></td></tr>
+                }
+                else if (!_devis.Any())
+                {
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="bi bi-file-earmark-x fs-1 d-block mb-2 opacity-50"></i>
+                            @(_statut is null && string.IsNullOrWhiteSpace(_recherche) ? "Aucun devis pour l'instant." : "Aucun devis ne correspond.")
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var d in _devis)
+                    {
+                        <tr @key="d.Id" class="ligne-cliquable" @onclick='() => Nav.NavigateTo($"/ventes/devis/{d.Id}")'>
+                            <td class="ps-3 font-monospace fw-bold">@d.Numero</td>
+                            <td class="fw-bold">@d.TiersNom</td>
+                            <td class="text-muted small">@d.Libelle</td>
+                            <td class="small text-nowrap">@d.DateCreation.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                            <td class="small text-nowrap @(Bientot(d) ? "text-danger fw-bold" : "")">@d.DateExpiration?.ToString("dd/MM/yyyy")</td>
+                            <td class="text-end font-monospace fw-bold text-nowrap">@d.TotalTTC.ToString("N0") F</td>
+                            <td class="text-center">
+                                <BadgeStatutDevis Statut="d.Statut" />
+                                @if (!string.IsNullOrEmpty(d.FactureNumero))
+                                {
+                                    <div class="small text-muted font-monospace">@d.FactureNumero</div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (_erreur is not null)
+{
+    <div class="alert alert-warning mt-3">@_erreur</div>
+}
+
+<style>
+    .ligne-cliquable { cursor: pointer; }
+</style>
+
+@code {
+    [SupplyParameterFromQuery(Name = "statut")] public int? StatutQuery { get; set; }
+
+    private List<DevisResumeVm>? _devis;
+    private int? _statut;
+    private string _recherche = "";
+    private string? _erreur;
+
+    private static readonly (int? Valeur, string Libelle)[] Filtres =
+    [
+        (null, "Tous"), (0, "Brouillons"), (1, "Envoyés"), (2, "Acceptés"), (5, "Facturés"), (3, "Refusés"), (4, "Expirés")
+    ];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _statut = StatutQuery;
+        await Charger();
+    }
+
+    private async Task Charger()
+    {
+        _devis = null;
+        _devis = await Ventes.ListerDevisAsync(_statut, _recherche) ?? new();
+        _erreur = Ventes.DerniereErreur;
+    }
+
+    private async Task Filtrer(int? statut)
+    {
+        _statut = statut;
+        await Charger();
+    }
+
+    private async Task RechercherSiEntree(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" || string.IsNullOrWhiteSpace(_recherche)) await Charger();
+    }
+
+    private static bool Bientot(DevisResumeVm d)
+        => d.Statut == StatutDevisVm.Envoye && d.DateExpiration is { } e && e.Date <= DateTime.Today.AddDays(7);
+
+    private static string LibelleFiltre(int? s) => Filtres.FirstOrDefault(f => f.Valeur == s).Libelle;
+}

@@ -1,4 +1,3 @@
-@using Finama.Web.Services
 @* E-mail : contrôle de la forme nom@domaine.ext, 254 caractères max. Message affiché après la saisie. *@
 <input type="email" inputmode="email" autocomplete="email" maxlength="254"
        class="form-control @Classe @(_touche && Erreur is not null ? "is-invalid" : "")"

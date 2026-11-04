@@ -1,0 +1,178 @@
+@using Microsoft.AspNetCore.Components.Forms
+@inject ILocalStorage Stockage
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject NotificationService Notif
+
+@* Logo de l'entreprise : affiché sur les tickets de caisse (et bientôt les factures). *@
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white py-3 border-bottom border-light">
+        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-image text-secondary me-2"></i>Logo de l'entreprise</h5>
+    </div>
+    <div class="card-body">
+        <div class="d-flex align-items-center gap-4 flex-wrap">
+            <div class="logo-apercu">
+                @if (_chargement)
+                {
+                    <div class="spinner-border spinner-border-sm text-secondary"></div>
+                }
+                else if (!string.IsNullOrEmpty(_logo))
+                {
+                    <img src="@_logo" alt="Logo de l'entreprise" />
+                }
+                else
+                {
+                    <span class="text-muted small text-center">Aucun logo</span>
+                }
+            </div>
+
+            <div class="flex-grow-1" style="min-width: 240px;">
+                <p class="small text-muted mb-2">
+                    PNG, JPEG ou WebP. Il est redimensionné automatiquement (400 px max) et imprimé en tête des tickets.
+                    Préférez un logo sur fond blanc : les imprimantes de tickets impriment en noir et blanc.
+                </p>
+
+                <AuthorizeView Policy="AdminTenant">
+                    <Authorized>
+                        <label class="btn btn-success btn-sm fw-bold mb-0 @(_enCours ? "disabled" : "")">
+                            @if (_enCours)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-upload me-1"></i>
+                            }
+                            @(string.IsNullOrEmpty(_logo) ? "Ajouter un logo" : "Changer le logo")
+                            <InputFile OnChange="ChoisirFichier" accept="image/png,image/jpeg,image/webp" class="d-none" />
+                        </label>
+
+                        @if (!string.IsNullOrEmpty(_logo))
+                        {
+                            <button class="btn btn-outline-danger btn-sm ms-2" @onclick="Supprimer" disabled="@_enCours">
+                                <i class="bi bi-trash me-1"></i>Retirer
+                            </button>
+                        }
+                    </Authorized>
+                    <NotAuthorized>
+                        <span class="small text-muted">Seul l'administrateur peut modifier le logo.</span>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .logo-apercu {
+        width: 140px;
+        height: 140px;
+        border: 1px dashed #ced4da;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fff;
+        padding: 8px;
+    }
+
+        .logo-apercu img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+</style>
+
+@code {
+    private const long TailleMaxOctets = 300 * 1024;
+    private static readonly string[] TypesAcceptes = ["image/png", "image/jpeg", "image/webp"];
+
+    private string? _logo;
+    private bool _chargement = true;
+    private bool _enCours;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Pas de logo affiché en cas d'échec : sans conséquence
+        _logo = (await Api.GetAsync<LogoReponse>("api/entreprise/logo")).Donnees?.DataUrl;
+        _chargement = false;
+    }
+
+    private async Task ChoisirFichier(InputFileChangeEventArgs e)
+    {
+        var fichier = e.File;
+        if (!TypesAcceptes.Contains(fichier.ContentType))
+        {
+            Notif.Avertir("Format non accepté : choisissez une image PNG, JPEG ou WebP.", "Logo");
+            return;
+        }
+
+        _enCours = true;
+        try
+        {
+            // Redimensionné par le navigateur : un logo de 4 Mo devient ~30 Ko
+            var format = fichier.ContentType == "image/jpeg" ? "image/jpeg" : "image/png";
+            var reduit = await fichier.RequestImageFileAsync(format, 400, 400);
+
+            if (reduit.Size > TailleMaxOctets)
+            {
+                Notif.Avertir("Image trop lourde même après réduction (300 Ko max). Essayez un PNG plus simple.", "Logo");
+                return;
+            }
+
+            await using var flux = reduit.OpenReadStream(TailleMaxOctets);
+            using var memoire = new MemoryStream();
+            await flux.CopyToAsync(memoire);
+            var dataUrl = $"data:{format};base64,{Convert.ToBase64String(memoire.ToArray())}";
+
+            var reponse = await Api.PutAsync("api/entreprise/logo", new { DataUrl = dataUrl }, "Le logo n'a pas pu être enregistré.");
+            if (!reponse.Succes)
+            {
+                Notif.Erreur(reponse.Message, "Logo");
+                return;
+            }
+
+            _logo = dataUrl;
+            await MettreEnCacheAsync(dataUrl);
+            Notif.Succes("Logo enregistré : il apparaîtra sur les prochains tickets.");
+        }
+        catch (Exception)
+        {
+            Notif.Erreur("Lecture de l'image impossible. Essayez un autre fichier.", "Logo");
+        }
+        finally
+        {
+            _enCours = false;
+        }
+    }
+
+    private async Task Supprimer()
+    {
+        _enCours = true;
+        try
+        {
+            var reponse = await Api.DeleteAsync("api/entreprise/logo");
+            if (!reponse.Succes)
+            {
+                Notif.Erreur(reponse.Message, "Logo");
+                return;
+            }
+
+            _logo = null;
+            await MettreEnCacheAsync(null);
+            Notif.Succes("Logo retiré.");
+        }
+        finally
+        {
+            _enCours = false;
+        }
+    }
+
+    // La caisse lit ce cache : le ticket s'imprime avec le logo même si le réseau est lent
+    private async Task MettreEnCacheAsync(string? dataUrl)
+    {
+        await Stockage.EcrireAsync(ClesStockage.Logo, dataUrl);   // null = suppression ; stockage plein ignoré
+    }
+
+    private sealed record LogoReponse(string? DataUrl);
+}

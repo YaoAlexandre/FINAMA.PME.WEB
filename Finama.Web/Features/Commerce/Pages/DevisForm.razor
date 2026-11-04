@@ -1,0 +1,390 @@
+@page "/ventes/devis/nouveau"
+@page "/ventes/devis/{Id:guid}/modifier"
+@page "/commercial/devis/nouveau"
+@page "/commercial/devis/{Id:guid}/modifier"
+@inject VentesApiService Ventes
+@inject ICatalogueService CatalogueApi
+@inject NavigationManager Nav
+@inject NotificationService Notif
+
+<PageTitle>@(Id is null ? "Nouveau devis" : "Modifier le devis") — Finama</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold mb-1"><i class="bi bi-file-earmark-plus text-info me-2"></i>@(Id is null ? "Nouveau devis" : $"Modifier le devis {_numero}")</h3>
+        <p class="text-muted small mb-0">Le devis est enregistré en brouillon : vous pourrez le relire avant de l'envoyer.</p>
+    </div>
+    <button class="btn btn-outline-secondary" @onclick="Retour"><i class="bi bi-arrow-left me-1"></i>Retour</button>
+</div>
+
+@if (_chargement)
+{
+    <div class="text-center py-5"><div class="spinner-border text-info"></div></div>
+}
+else if (_bloque is not null)
+{
+    <div class="alert alert-warning">
+        @_bloque
+        <a class="ms-2" href="/ventes/devis/@Id">Voir le devis</a>
+    </div>
+}
+else
+{
+    <div class="row g-4">
+        <div class="col-xl-9">
+            <!-- CLIENT & OBJET -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-6 position-relative">
+                            <label class="form-label small fw-bold">Client *</label>
+                            @if (_client is not null)
+                            {
+                                <div class="d-flex align-items-center justify-content-between border rounded-3 px-3 py-2 bg-light">
+                                    <span>
+                                        <strong>@_client.Nom</strong>
+                                        <span class="text-muted small d-block">@(string.Join(" · ", new[] { _client.Telephone, _client.Email }.Where(x => !string.IsNullOrWhiteSpace(x))))</span>
+                                    </span>
+                                    <button class="btn btn-sm btn-link" @onclick="ChangerClient">Changer</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <input class="form-control" placeholder="Rechercher un client (nom, code)…" @bind="_rechercheClient" @bind:event="oninput"
+                                       @onkeyup="RechercherClients" @onfocus="RechercherClients" />
+                                @if (_resultats is not null)
+                                {
+                                    <div class="list-group position-absolute shadow w-100" style="z-index: 30; max-height: 260px; overflow: auto;">
+                                        @foreach (var c in _resultats)
+                                        {
+                                            <button type="button" class="list-group-item list-group-item-action" @onclick="() => ChoisirClient(c)">
+                                                <strong>@c.Nom</strong> <span class="text-muted small">@c.Code @c.Telephone</span>
+                                            </button>
+                                        }
+                                        <button type="button" class="list-group-item list-group-item-action text-info fw-bold" @onclick="OuvrirNouveauClient">
+                                            <i class="bi bi-person-plus me-1"></i>Créer un nouveau client@(string.IsNullOrWhiteSpace(_rechercheClient) ? "" : $" « {_rechercheClient} »")
+                                        </button>
+                                    </div>
+                                }
+                            }
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Objet du devis *</label>
+                            <input class="form-control" @bind="_saisie.Libelle" placeholder="Ex. : Installation réseau informatique du siège" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Valable jusqu'au</label>
+                            <input type="date" class="form-control" @bind="_saisie.DateExpiration" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                        </div>
+                        <div class="col-md-9">
+                            <label class="form-label small fw-bold">Conditions (paiement, livraison)</label>
+                            <input class="form-control" @bind="_saisie.Conditions" placeholder="Ex. : 50 % à la commande, solde à la livraison. Délai : 15 jours." />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LIGNES -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <span class="fw-bold"><i class="bi bi-list-ul me-2"></i>Articles & prestations</span>
+                    @if (_produits.Any())
+                    {
+                        <span class="small text-muted"><i class="bi bi-lightbulb me-1"></i>Tapez le nom d'un article du catalogue : prix et TVA se remplissent seuls</span>
+                    }
+                </div>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead class="small text-uppercase text-muted">
+                            <tr>
+                                <th class="ps-3">Désignation</th>
+                                <th style="width: 100px;" class="text-end">Qté</th>
+                                <th style="width: 140px;" class="text-end">P.U. HT</th>
+                                <th style="width: 95px;" class="text-end">Remise %</th>
+                                <th style="width: 90px;" class="text-end">TVA %</th>
+                                <th style="width: 130px;" class="text-end">Total HT</th>
+                                <th style="width: 44px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var (l, i) in _saisie.Lignes.Select((l, i) => (l, i)))
+                            {
+                                <tr @key="l">
+                                    <td class="ps-3">
+                                        <input class="form-control form-control-sm" list="catalogue-devis" value="@l.Designation"
+                                               placeholder="Désignation" @onchange="e => ChoisirDesignation(l, e.Value?.ToString())" />
+                                    </td>
+                                    <td><input type="number" step="any" min="0" class="form-control form-control-sm text-end" @bind="l.Quantite" @bind:event="oninput" /></td>
+                                    <td><input type="number" step="any" min="0" class="form-control form-control-sm text-end" @bind="l.PrixUnitaireHT" @bind:event="oninput" /></td>
+                                    <td><input type="number" step="any" min="0" max="100" class="form-control form-control-sm text-end" @bind="l.RemisePourcent" @bind:event="oninput" /></td>
+                                    <td><input type="number" step="any" min="0" max="100" class="form-control form-control-sm text-end" @bind="l.TauxTVA" @bind:event="oninput" /></td>
+                                    <td class="text-end font-monospace fw-bold text-nowrap">@l.MontantHT.ToString("N0")</td>
+                                    <td class="text-end pe-3">
+                                        <button class="btn btn-sm btn-link text-danger p-0" title="Supprimer la ligne" @onclick="() => _saisie.Lignes.Remove(l)" disabled="@(_saisie.Lignes.Count == 1)">
+                                            <i class="bi bi-x-circle"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-footer bg-white">
+                    <button class="btn btn-sm btn-outline-info" @onclick="AjouterLigne"><i class="bi bi-plus me-1"></i>Ajouter une ligne</button>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <label class="form-label small fw-bold">Notes pour le client (facultatif)</label>
+                    <textarea class="form-control" rows="2" @bind="_saisie.Notes" placeholder="Ex. : Prix incluant l'installation et la formation."></textarea>
+                </div>
+            </div>
+
+            <datalist id="catalogue-devis">
+                @foreach (var p in _produits)
+                {
+                    <option value="@p.Libelle">@p.PrixVenteTTC.ToString("N0") F TTC</option>
+                }
+            </datalist>
+        </div>
+
+        <!-- TOTAUX -->
+        <div class="col-xl-3">
+            <div class="card border-0 shadow-sm position-sticky" style="top: 80px;">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">Récapitulatif</h6>
+                    <div class="d-flex justify-content-between small mb-1"><span>Sous-total HT</span><span class="font-monospace">@_saisie.SousTotalHT.ToString("N0")</span></div>
+                    <div class="d-flex justify-content-between align-items-center small mb-1">
+                        <span>Remise globale</span>
+                        <div class="input-group input-group-sm" style="width: 100px;">
+                            <input type="number" step="any" min="0" max="100" class="form-control text-end" @bind="_saisie.RemiseGlobalePourcent" @bind:event="oninput" />
+                            <span class="input-group-text">%</span>
+                        </div>
+                    </div>
+                    @if (_saisie.RemiseGlobale > 0)
+                    {
+                        <div class="d-flex justify-content-between small text-danger mb-1"><span></span><span class="font-monospace">- @_saisie.RemiseGlobale.ToString("N0")</span></div>
+                    }
+                    <div class="d-flex justify-content-between small mb-1"><span>Total HT</span><span class="font-monospace fw-bold">@_saisie.TotalHT.ToString("N0")</span></div>
+                    <div class="d-flex justify-content-between small mb-2"><span>TVA</span><span class="font-monospace">@_saisie.TotalTVA.ToString("N0")</span></div>
+                    <div class="d-flex justify-content-between bg-info bg-opacity-10 rounded-3 p-2 mb-3">
+                        <span class="fw-bold">TOTAL TTC</span><span class="fw-bold font-monospace text-info">@_saisie.TotalTTC.ToString("N0") F</span>
+                    </div>
+
+                    @if (Problemes.Any())
+                    {
+                        <ul class="small text-muted ps-3 mb-3">
+                            @foreach (var p in Problemes) { <li>@p</li> }
+                        </ul>
+                    }
+
+                    <button class="btn btn-info text-white fw-bold w-100" @onclick="Enregistrer" disabled="@(_enCours || Problemes.Any())">
+                        @if (_enCours) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Enregistrer le brouillon
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- NOUVEAU CLIENT -->
+@if (_nouveauClient is not null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15,23,42,.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-person-plus me-2"></i>Nouveau client</h5>
+                    <button type="button" class="btn-close" @onclick="() => _nouveauClient = null"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2"><label class="form-label small fw-bold">Nom ou raison sociale *</label><input class="form-control" maxlength="150" @bind="_nouveauClient.Nom" @bind:event="oninput" /></div>
+                    <div class="row g-2">
+                        <div class="col-md-6"><label class="form-label small fw-bold">Téléphone</label><ChampTelephone @bind-Value="_nouveauClient.Telephone" /></div>
+                        <div class="col-md-6"><label class="form-label small fw-bold">E-mail</label><ChampEmail @bind-Value="_nouveauClient.Email" /></div>
+                        <div class="col-md-8"><label class="form-label small fw-bold">Adresse</label><input class="form-control" maxlength="250" @bind="_nouveauClient.Adresse" /></div>
+                        <div class="col-md-4"><label class="form-label small fw-bold">NIF</label><input class="form-control text-uppercase" maxlength="30" @bind="_nouveauClient.Nif" /></div>
+                    </div>
+                    <div class="form-text mt-2">Le client est ajouté à votre fichier unique (Tiers) : il sera retrouvé en comptabilité et sur ses factures.</div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-light" @onclick="() => _nouveauClient = null">Annuler</button>
+                    <button class="btn btn-info text-white fw-bold" @onclick="CreerClient" disabled="@(_enCours || ControlesSaisie.Nom(_nouveauClient.Nom) is not null || ControlesSaisie.Telephone(_nouveauClient.Telephone) is not null || ControlesSaisie.Email(_nouveauClient.Email) is not null)">Créer le client</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    [SupplyParameterFromQuery(Name = "client")] public Guid? ClientQuery { get; set; }
+
+    private DevisSaisie _saisie = new();
+    private ClientVm? _client;
+    private List<ClientVm>? _resultats;
+    private string _rechercheClient = "";
+    private NouveauClient? _nouveauClient;
+    private List<ProduitCommerceDto> _produits = new();
+    private string? _numero;
+    private string? _bloque;
+    private bool _chargement = true;
+    private bool _enCours;
+
+    private IEnumerable<string> Problemes
+    {
+        get
+        {
+            if (_client is null) yield return "Choisissez un client.";
+            if (string.IsNullOrWhiteSpace(_saisie.Libelle)) yield return "Indiquez l'objet du devis.";
+            if (!_saisie.Lignes.Any(l => !string.IsNullOrWhiteSpace(l.Designation) && l.Quantite > 0))
+                yield return "Ajoutez au moins une ligne (désignation et quantité).";
+            if (_saisie.Lignes.Any(l => l.PrixUnitaireHT < 0 || l.RemisePourcent is < 0 or > 100 || l.TauxTVA is < 0 or > 100))
+                yield return "Vérifiez les prix, remises et TVA (pas de valeur négative).";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Catalogue facultatif (module Commerce) : son absence n'empêche pas de faire un devis
+        _ = ChargerCatalogueAsync();
+
+        if (Id is { } id)
+        {
+            var d = await Ventes.ObtenirAsync(id);
+            if (d is null) { _bloque = Ventes.DerniereErreur ?? "Devis introuvable."; }
+            else if (d.Statut != StatutDevisVm.Brouillon)
+            {
+                _bloque = $"Le devis {d.Numero} est « {d.StatutLibelle} » : seul un brouillon se modifie. Depuis le devis, remettez-le en brouillon ou dupliquez-le.";
+            }
+            else
+            {
+                _numero = d.Numero;
+                _client = new ClientVm(d.TiersId, "", d.TiersNom, default, d.TiersEmail, d.TiersTelephone);
+                _saisie = new DevisSaisie
+                {
+                    Libelle = d.Libelle,
+                    TiersId = d.TiersId,
+                    DateExpiration = d.DateExpiration,
+                    Notes = d.Notes,
+                    Conditions = d.Conditions,
+                    RemiseGlobalePourcent = d.RemiseGlobalePourcent,
+                    Lignes = d.Lignes.Select(l => new LigneSaisie
+                    {
+                        ProduitId = l.ProduitId, Designation = l.Designation, Quantite = l.Quantite,
+                        PrixUnitaireHT = l.PrixUnitaireHT, RemisePourcent = l.RemisePourcent, TauxTVA = l.TauxTVA
+                    }).ToList()
+                };
+            }
+        }
+
+        // Arrivée depuis la fiche client (« Faire un devis »)
+        if (Id is null && ClientQuery is { } cid)
+        {
+            var c = (await Ventes.RechercherClientsAsync(null)).FirstOrDefault(x => x.Id == cid);
+            if (c is not null) ChoisirClient(c);
+        }
+
+        if (!_saisie.Lignes.Any()) AjouterLigne();
+        _chargement = false;
+    }
+
+    private async Task ChargerCatalogueAsync()
+    {
+        try
+        {
+            _produits = (await CatalogueApi.GetProduitsAsync()).Where(p => p.EstActif).OrderBy(p => p.Libelle).ToList();
+            StateHasChanged();
+        }
+        catch { /* module Commerce absent : saisie libre */ }
+    }
+
+    private void AjouterLigne() => _saisie.Lignes.Add(new LigneSaisie { TauxTVA = 18 });
+
+    // Article du catalogue reconnu : prix HT (depuis le TTC) et TVA remplis
+    private void ChoisirDesignation(LigneSaisie l, string? texte)
+    {
+        l.Designation = texte?.Trim() ?? "";
+        var p = _produits.FirstOrDefault(x => string.Equals(x.Libelle, l.Designation, StringComparison.OrdinalIgnoreCase));
+        if (p is null) { l.ProduitId = null; return; }
+
+        l.ProduitId = p.Id;
+        l.TauxTVA = p.TauxTva;
+        l.PrixUnitaireHT = Math.Round(p.PrixVenteTtc / (1 + p.TauxTva / 100m), 2);
+    }
+
+    private async Task RechercherClients()
+    {
+        _resultats = await Ventes.RechercherClientsAsync(_rechercheClient);
+    }
+
+    private void ChoisirClient(ClientVm c)
+    {
+        _client = c;
+        _saisie.TiersId = c.Id;
+        _resultats = null;
+        _rechercheClient = "";
+    }
+
+    private void ChangerClient()
+    {
+        _client = null;
+        _saisie.TiersId = Guid.Empty;
+    }
+
+    private void OuvrirNouveauClient()
+    {
+        _nouveauClient = new NouveauClient { Nom = _rechercheClient.Trim() };
+        _resultats = null;
+    }
+
+    private async Task CreerClient()
+    {
+        if (_nouveauClient is null) return;
+        _enCours = true;
+        var c = await Ventes.CreerClientAsync(_nouveauClient);
+        _enCours = false;
+
+        if (c is null)
+        {
+            Notif.Erreur(Ventes.DerniereErreur ?? "Création du client impossible.", "Client");
+            return;
+        }
+        Notif.Succes($"Client « {c.Nom} » créé.");
+        _nouveauClient = null;
+        ChoisirClient(c);
+    }
+
+    private async Task Enregistrer()
+    {
+        if (Problemes.Any() || _client is null) return;
+
+        _saisie.TiersId = _client.Id;
+        var envoi = new DevisSaisie
+        {
+            Libelle = _saisie.Libelle.Trim(),
+            TiersId = _saisie.TiersId,
+            DateExpiration = _saisie.DateExpiration,
+            Notes = _saisie.Notes,
+            Conditions = _saisie.Conditions,
+            RemiseGlobalePourcent = _saisie.RemiseGlobalePourcent,
+            Lignes = _saisie.Lignes.Where(l => !string.IsNullOrWhiteSpace(l.Designation) && l.Quantite > 0).ToList()
+        };
+
+        _enCours = true;
+        var resultat = Id is { } id ? await Ventes.ModifierAsync(id, envoi) : await Ventes.CreerAsync(envoi);
+        _enCours = false;
+
+        if (resultat is null)
+        {
+            Notif.Erreur(Ventes.DerniereErreur ?? "Enregistrement impossible.", "Devis");
+            return;
+        }
+        Notif.Succes($"Devis {resultat.Numero} enregistré.");
+        Nav.NavigateTo($"/ventes/devis/{resultat.Id}");
+    }
+
+    private void Retour() => Nav.NavigateTo(Id is { } id ? $"/ventes/devis/{id}" : "/ventes/devis");
+}

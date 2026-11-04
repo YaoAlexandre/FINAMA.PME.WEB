@@ -1,6 +1,5 @@
 using System.Net.Http.Json;
 using Finama.Web.Core.Securite;
-using Finama.Web.Models;
 
 namespace Finama.Web.Features.TableauBord.Services;
 
