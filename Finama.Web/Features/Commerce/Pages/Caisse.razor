@@ -20,7 +20,7 @@
     <!-- EN-TÊTE -->
     <header class="pos-header bg-dark text-white px-3 py-2 d-flex justify-content-between align-items-center shadow-sm">
         <div class="pos-header-info d-flex align-items-center gap-3 min-w-0">
-            <span class="fw-bold fs-5 text-success text-nowrap"><i class="bi bi-shop me-2"></i><span class="d-none d-sm-inline">Finama </span>POS</span>
+            <span class="fw-bold fs-5 text-success text-nowrap flex-shrink-0"><i class="bi bi-shop me-2"></i><span class="d-none d-sm-inline">Finama </span>POS</span>
             @if (_session != null)
             {
                 <span class="pos-session badge bg-success bg-opacity-25 text-success font-monospace text-truncate">
@@ -43,7 +43,7 @@
             }
             @if (_session != null)
             {
-                <span class="badge bg-secondary font-monospace d-none d-xl-inline">[F2] Encaisser | [F4] Réimprimer | [F8] Tickets | [Échap] Vider</span>
+                <span class="badge bg-secondary font-monospace text-nowrap d-none d-xxl-inline">[F2] Encaisser | [F4] Réimprimer | [F8] Tickets | [Échap] Vider</span>
                 <button class="btn btn-outline-light btn-sm font-monospace text-nowrap" @onclick="OuvrirTickets" title="Tickets de la session : réimprimer ou annuler">
                     <i class="bi bi-list-ul"></i><span class="pos-libelle ms-1">Tickets</span>
                 </button>
@@ -493,6 +493,12 @@
     .pos-wrapper { height: 100vh; overflow: hidden; }
     .pos-catalogue { width: 60%; }
     .pos-ticket { width: 40%; }
+
+    /* En-tête : le titre ne rétrécit jamais ; si la largeur manque (menu latéral ouvert, écran moyen),
+       les boutons passent à la ligne au lieu de recouvrir le titre et la session. */
+    .pos-header { flex-wrap: wrap; row-gap: 8px; column-gap: 12px; }
+    .pos-header-info { flex: 1 1 18rem; min-width: 0; }
+    .pos-header-actions { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
 
     /* Téléphone : tout empilé — recherche et articles, puis ticket ; barre « Encaisser » fixée en bas */
     @@media (max-width: 767.98px) {

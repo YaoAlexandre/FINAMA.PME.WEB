@@ -111,8 +111,10 @@ public partial class MainLayout
 
         if (_isInitialized)
         {
+            // Même liste que SecuriserAccesAsync : au premier chargement, AuthorizeRouteView affiche
+            // « Authorizing » dans ce layout, même pour une page publique (inscription…).
             var uriRelative = Nav.ToBaseRelativePath(Nav.Uri).ToLower();
-            if (!uriRelative.StartsWith("connexion") && !uriRelative.StartsWith("register"))
+            if (!EstPagePublique(uriRelative))
             {
                 var estConnecte = await AuthApi.EstConnecteAsync();
                 if (!estConnecte)
