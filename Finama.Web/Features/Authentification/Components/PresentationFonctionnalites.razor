@@ -1,0 +1,214 @@
+@*
+    Présentation animée des fonctionnalités, à côté des formulaires de connexion et d'inscription.
+    - Une diapositive à la fois ; chaque scène rejoue son animation à l'affichage (@key).
+    - Passage automatique toutes les 7 s (barre de progression de même durée, en CSS).
+      Pause au survol de la souris ou avec le bouton ; un clic sur un point affiche la diapositive.
+    - « Réduire les animations » (système) : aucune animation ni défilement automatique ;
+      les points restent utilisables. Styles : wwwroot/css/presentation.css
+*@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<section class="fp @(_pause ? "fp-en-pause" : "")" aria-roledescription="carrousel" aria-label="Découvrir Finama"
+         @onmouseenter="() => Survoler(true)" @onmouseleave="() => Survoler(false)">
+    <div class="fp-intro">
+        <span class="fp-badge"><i class="bi bi-stars"></i> Gestion des PME · Référentiel OHADA</span>
+        <h2 class="fp-titre">Toute votre entreprise,<br /><span>au même endroit.</span></h2>
+        <p class="fp-sous-titre">Comptabilité, caisse, ventes et équipe : Finama relie tout, même sans connexion.</p>
+    </div>
+
+    <div class="fp-zone" aria-live="@(_pause ? "polite" : "off")">
+        @{ var d = Diapos[_index]; }
+        <article @key="_cycle" class="fp-diapo" aria-roledescription="diapositive" aria-label="@($"{_index + 1} sur {Diapos.Length} : {d.Titre}")">
+            <div class="fp-scene" aria-hidden="true">@Scene(d.Code)</div>
+            <div class="fp-texte">
+                <span class="fp-icone"><i class="bi @d.Icone"></i></span>
+                <div>
+                    <h3>@d.Titre</h3>
+                    <p>@d.Texte</p>
+                </div>
+            </div>
+        </article>
+    </div>
+
+    <div class="fp-controles">
+        <div class="fp-points">
+            @for (var i = 0; i < Diapos.Length; i++)
+            {
+                var n = i;
+                <button type="button" class="fp-point @(n == _index ? "actif" : "")"
+                        aria-label="@($"Voir : {Diapos[n].Titre}")" aria-current="@(n == _index ? "true" : null)"
+                        @onclick="() => Aller(n)">
+                    @if (n == _index)
+                    {
+                        <span @key="_cycle" class="fp-progression"></span>
+                    }
+                </button>
+            }
+        </div>
+        <button type="button" class="fp-pause" @onclick="BasculerPause"
+                aria-label="@(_pause ? "Reprendre la présentation" : "Mettre la présentation en pause")">
+            <i class="bi @(_pause ? "bi-play-fill" : "bi-pause-fill")"></i>
+        </button>
+    </div>
+</section>
+
+@code {
+    private sealed record Diapo(string Code, string Icone, string Titre, string Texte);
+
+    private static readonly Diapo[] Diapos =
+    [
+        new("compta", "bi-journal-check", "Comptabilité OHADA",
+            "Saisissez vos écritures : la balance et le grand livre se mettent à jour tout seuls."),
+        new("caisse", "bi-upc-scan", "Caisse rapide",
+            "Scannez un article, encaissez en espèces ou en Mobile Money, imprimez le ticket."),
+        new("ventes", "bi-kanban", "Devis et suivi des ventes",
+            "Créez un devis en quelques clics et suivez chaque affaire jusqu'à la facture."),
+        new("horsligne", "bi-wifi-off", "Même sans réseau",
+            "Continuez à vendre : les ventes restent sur l'appareil et partent dès le retour du réseau."),
+        new("equipe", "bi-shield-lock", "Votre équipe, en sécurité",
+            "Chacun a les bons accès, et un code de vérification protège chaque connexion."),
+    ];
+
+    // Même durée que --fp-duree dans presentation.css (barre de progression).
+    private static readonly TimeSpan Duree = TimeSpan.FromSeconds(7);
+
+    private int _index;
+    private int _cycle;     // change à chaque diapositive : rejoue les animations
+    private bool _pause;    // bouton pause
+    private bool _survol;   // souris sur la présentation
+    private bool _mouvementReduit;
+    private CancellationTokenSource? _minuteur;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", ModulesJs.Mouvement);
+            _mouvementReduit = await module.InvokeAsync<bool>("reductionDemandee");
+        }
+        catch { /* préférence inconnue : animations normales */ }
+        Relancer();
+    }
+
+    /// <summary>Repart de zéro sur la diapositive courante (minuteur et barre de progression).</summary>
+    private void Relancer()
+    {
+        _minuteur?.Cancel();
+        _minuteur = null;
+        if (_mouvementReduit || _pause || _survol) return;
+
+        _minuteur = new CancellationTokenSource();
+        _ = DefilerAsync(_minuteur.Token);
+    }
+
+    private async Task DefilerAsync(CancellationToken jeton)
+    {
+        using var minuteur = new PeriodicTimer(Duree);
+        try
+        {
+            while (await minuteur.WaitForNextTickAsync(jeton))
+            {
+                _index = (_index + 1) % Diapos.Length;
+                _cycle++;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException) { /* pause, survol ou changement manuel */ }
+    }
+
+    private void Aller(int index)
+    {
+        _index = index;
+        _cycle++;
+        Relancer();
+    }
+
+    private void Survoler(bool survol)
+    {
+        if (_survol == survol) return;
+        _survol = survol;
+        // En quittant la zone, on repart de zéro pour que la barre et le minuteur restent alignés.
+        if (!survol) _cycle++;
+        Relancer();
+    }
+
+    private void BasculerPause()
+    {
+        _pause = !_pause;
+        if (!_pause) _cycle++;
+        Relancer();
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _minuteur?.Cancel();
+        _minuteur?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+
+    private static RenderFragment Scene(string code) => code switch
+    {
+        "compta" => @<div class="fp-ecran">
+                        <div class="fp-ecran-titre"><i class="bi bi-journal-text"></i> Journal des ventes</div>
+                        <div class="fp-ligne fp-entete"><span>Compte</span><span>Débit</span><span>Crédit</span></div>
+                        <div class="fp-ligne fp-e1"><span>411 Client</span><span>295 000</span><span>—</span></div>
+                        <div class="fp-ligne fp-e2"><span>701 Ventes</span><span>—</span><span>250 000</span></div>
+                        <div class="fp-ligne fp-e3"><span>4431 TVA</span><span>—</span><span>45 000</span></div>
+                        <div class="fp-bilan"><span>Débit = Crédit</span><span class="fp-ok"><i class="bi bi-check-circle-fill"></i> Équilibrée</span></div>
+                    </div>,
+
+        "caisse" => @<div class="fp-caisse">
+                        <div class="fp-scanner"><i class="bi bi-upc"></i><span class="fp-laser"></span></div>
+                        <div class="fp-ticket">
+                            <div class="fp-ticket-titre">Ticket T-0128</div>
+                            <div class="fp-ticket-ligne fp-e1"><span>Coca Cola × 2</span><span>1 200</span></div>
+                            <div class="fp-ticket-ligne fp-e2"><span>Pain × 1</span><span>300</span></div>
+                            <div class="fp-ticket-ligne fp-e3"><span>Savon × 1</span><span>500</span></div>
+                            <div class="fp-ticket-total"><span>Total</span><span>2 000 F</span></div>
+                            <div class="fp-modes"><span>Espèces</span><span>Mobile Money</span></div>
+                        </div>
+                    </div>,
+
+        "ventes" => @<div class="fp-pipeline">
+                        <div class="fp-colonne"><span>Prospect</span></div>
+                        <div class="fp-colonne"><span>Devis envoyé</span></div>
+                        <div class="fp-colonne fp-gagne"><span>Gagné</span></div>
+                        <div class="fp-affaire">
+                            <b>Devis D-0042</b>
+                            <small>850 000 F</small>
+                            <span class="fp-affaire-ok"><i class="bi bi-check2-circle"></i> Facturé</span>
+                        </div>
+                    </div>,
+
+        "horsligne" => @<div class="fp-horsligne">
+                           <div class="fp-appareil">
+                               <i class="bi bi-phone"></i>
+                               <span class="fp-reseau fp-reseau-off"><i class="bi bi-wifi-off"></i></span>
+                               <span class="fp-reseau fp-reseau-on"><i class="bi bi-wifi"></i></span>
+                           </div>
+                           <div class="fp-trajet">
+                               <span class="fp-colis fp-c1"></span>
+                               <span class="fp-colis fp-c2"></span>
+                               <span class="fp-colis fp-c3"></span>
+                           </div>
+                           <div class="fp-nuage">
+                               <i class="bi bi-cloud-check-fill"></i>
+                               <small>3 ventes envoyées</small>
+                           </div>
+                       </div>,
+
+        _ => @<div class="fp-equipe">
+                 <div class="fp-membres">
+                     <div class="fp-membre fp-e1"><span class="fp-avatar">AK</span><span class="fp-role">Gérant</span></div>
+                     <div class="fp-membre fp-e2"><span class="fp-avatar">FS</span><span class="fp-role">Caisse</span></div>
+                     <div class="fp-membre fp-e3"><span class="fp-avatar">YB</span><span class="fp-role">Comptable</span></div>
+                 </div>
+                 <div class="fp-otp">
+                     <i class="bi bi-shield-lock-fill"></i>
+                     <div class="fp-chiffres"><span>4</span><span>8</span><span>2</span><span>9</span><span>1</span><span>6</span></div>
+                 </div>
+             </div>
+    };
+}

@@ -9,4 +9,5 @@ public static class ModulesJs
     public const string Partage = "./js/finama-partage.js";
     public const string Codes = "./js/finama-codes.js";
     public const string Push = "./js/finama-push.js";
+    public const string Mouvement = "./js/finama-mouvement.js";
 }

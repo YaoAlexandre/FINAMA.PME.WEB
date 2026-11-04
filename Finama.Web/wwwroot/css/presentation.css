@@ -1,0 +1,283 @@
+/* ==========================================================================
+   Présentation animée des fonctionnalités (pages Connexion et Inscription)
+   Composant : Features/Authentification/Components/PresentationFonctionnalites.razor
+
+   Règle : l'état « au repos » de chaque élément est son état FINAL ; les animations
+   ne font que l'y amener. Avec « Réduire les animations », tout reste donc lisible.
+   ========================================================================== */
+
+/* ─── Mise en page : présentation à gauche, formulaire à droite ─── */
+.auth-split {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-width: 1180px;
+    padding: 24px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 470px);
+    align-items: center;
+    gap: 64px;
+}
+.auth-split > .auth-card { margin: 0; justify-self: end; }
+
+/* ─── Bloc de présentation ─── */
+.fp {
+    --fp-vert: var(--fn-green-400, #34D399);
+    --fp-vert-fonce: var(--fn-green-600, #0B8A66);
+    --fp-surface: rgba(19, 30, 48, .78);
+    --fp-bord: rgba(148, 163, 184, .18);
+    --fp-texte: #E2E8F0;
+    --fp-attenue: var(--fn-muted, #94A3B8);
+    --fp-duree: 7s;
+
+    color: var(--fp-texte);
+    font-family: 'Poppins', 'Segoe UI', system-ui, sans-serif;
+    min-width: 0;
+}
+
+.fp-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 999px;
+    font-size: .78rem; font-weight: 500;
+    color: var(--fp-vert);
+    background: rgba(20, 176, 126, .12);
+    border: 1px solid rgba(52, 211, 153, .3);
+}
+.fp-titre {
+    margin: 16px 0 10px;
+    font-size: clamp(1.7rem, 2.6vw, 2.5rem);
+    line-height: 1.15; font-weight: 700; letter-spacing: -.02em; color: #fff;
+}
+.fp-titre span {
+    background: linear-gradient(90deg, #fff, var(--fp-vert));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.fp-sous-titre { margin: 0 0 24px; color: var(--fp-attenue); font-size: .98rem; max-width: 34rem; }
+
+/* ─── Diapositive ─── */
+.fp-zone { min-height: 372px; }
+.fp-diapo { animation: fp-apparition .55s ease both; }
+.fp-scene {
+    position: relative;
+    height: 250px;
+    border-radius: 18px;
+    background: var(--fp-surface);
+    border: 1px solid var(--fp-bord);
+    box-shadow: 0 24px 48px -24px rgba(0, 0, 0, .6);
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+}
+.fp-texte { display: flex; gap: 14px; align-items: flex-start; margin-top: 18px; }
+.fp-texte h3 { margin: 0 0 4px; font-size: 1.08rem; font-weight: 600; color: #fff; }
+.fp-texte p { margin: 0; color: var(--fp-attenue); font-size: .92rem; line-height: 1.5; }
+.fp-icone {
+    flex: 0 0 auto; width: 42px; height: 42px; border-radius: 12px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; color: var(--fp-vert);
+    background: rgba(20, 176, 126, .14);
+}
+
+/* ─── Points de navigation + progression ─── */
+.fp-controles { display: flex; align-items: center; justify-content: space-between; margin-top: 18px; }
+.fp-points { display: flex; gap: 8px; align-items: center; }
+.fp-point {
+    position: relative; overflow: hidden;
+    width: 10px; height: 10px; padding: 0; border: 0; border-radius: 999px;
+    background: rgba(148, 163, 184, .35); cursor: pointer;
+    transition: width .3s ease, background-color .3s ease;
+}
+.fp-point:hover { background: rgba(148, 163, 184, .6); }
+.fp-point.actif { width: 44px; background: rgba(52, 211, 153, .25); }
+.fp-progression {
+    position: absolute; inset: 0;
+    background: var(--fp-vert);
+    transform-origin: left center;
+    animation: fp-progression var(--fp-duree) linear both;
+}
+/* Pause (survol ou bouton) : la barre s'arrête, comme le minuteur du composant */
+.fp:hover .fp-progression,
+.fp-en-pause .fp-progression { animation-play-state: paused; }
+
+.fp-pause {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 1px solid var(--fp-bord); background: transparent; color: var(--fp-attenue);
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.fp-pause:hover { color: #fff; border-color: rgba(148, 163, 184, .45); }
+.fp-point:focus-visible, .fp-pause:focus-visible { outline: 2px solid var(--fp-vert); outline-offset: 3px; }
+
+/* ─── Éléments communs aux scènes ─── */
+.fp-e1 { animation: fp-entree .5s ease both .5s; }
+.fp-e2 { animation: fp-entree .5s ease both 1.1s; }
+.fp-e3 { animation: fp-entree .5s ease both 1.7s; }
+
+/* Scène 1 : journal comptable */
+.fp-ecran { width: 100%; max-width: 400px; font-size: .82rem; }
+.fp-ecran-titre { font-weight: 600; color: #fff; margin-bottom: 10px; }
+.fp-ecran-titre i { color: var(--fp-vert); margin-right: 6px; }
+.fp-ligne {
+    display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px;
+    padding: 7px 10px; border-radius: 8px;
+    background: rgba(255, 255, 255, .04); margin-bottom: 6px;
+    font-variant-numeric: tabular-nums;
+}
+.fp-ligne span:not(:first-child) { text-align: right; }
+.fp-entete { background: none; color: var(--fp-attenue); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
+.fp-bilan {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--fp-bord); color: var(--fp-attenue);
+}
+.fp-ok {
+    color: #052e22; background: var(--fp-vert); font-weight: 600;
+    padding: 3px 10px; border-radius: 999px; font-size: .78rem;
+    animation: fp-pop .45s cubic-bezier(.3, 1.6, .5, 1) both 2.5s;
+}
+
+/* Scène 2 : caisse */
+.fp-caisse { display: flex; align-items: center; gap: 22px; width: 100%; max-width: 420px; }
+.fp-scanner {
+    position: relative; flex: 0 0 auto;
+    width: 110px; height: 110px; border-radius: 16px;
+    background: rgba(255, 255, 255, .06); border: 1px solid var(--fp-bord);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 3.4rem; color: #fff; overflow: hidden;
+}
+.fp-laser {
+    position: absolute; left: 10%; right: 10%; top: 50%; height: 2px;
+    background: #F87171; box-shadow: 0 0 10px 2px rgba(248, 113, 113, .7);
+    animation: fp-balayage 1.2s ease-in-out infinite alternate;
+}
+.fp-ticket {
+    flex: 1 1 auto; background: #fff; color: #0A1628; border-radius: 10px;
+    padding: 12px 14px; font-size: .8rem; font-family: "Courier New", monospace;
+    box-shadow: 0 16px 30px -18px rgba(0, 0, 0, .7);
+}
+.fp-ticket-titre { text-align: center; font-weight: 700; margin-bottom: 6px; }
+.fp-ticket-ligne, .fp-ticket-total { display: flex; justify-content: space-between; padding: 2px 0; }
+.fp-ticket-total {
+    margin-top: 6px; padding-top: 6px; border-top: 1px dashed #94A3B8; font-weight: 700; font-size: .9rem;
+    animation: fp-entree .5s ease both 2.3s;
+}
+.fp-modes { display: flex; gap: 6px; margin-top: 8px; animation: fp-entree .5s ease both 2.8s; }
+.fp-modes span {
+    font-family: 'Poppins', sans-serif; font-size: .68rem; font-weight: 600;
+    padding: 2px 8px; border-radius: 999px; background: #ECFDF5; color: #086B4F;
+}
+
+/* Scène 3 : suivi des ventes */
+.fp-pipeline {
+    position: relative; width: 100%; max-width: 440px; height: 170px;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+}
+.fp-colonne {
+    border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px dashed var(--fp-bord);
+    padding: 8px; font-size: .74rem; color: var(--fp-attenue); text-align: center;
+}
+.fp-gagne { border-color: rgba(52, 211, 153, .45); color: var(--fp-vert); }
+.fp-affaire {
+    position: absolute; top: 44px;
+    left: calc(66.666% + 10px); width: calc(33.333% - 20px);
+    padding: 10px; border-radius: 10px; background: #fff; color: #0A1628;
+    display: flex; flex-direction: column; gap: 2px; font-size: .76rem;
+    box-shadow: 0 14px 24px -14px rgba(0, 0, 0, .8);
+    animation: fp-deplacement 3.4s cubic-bezier(.6, 0, .3, 1) both .4s;
+}
+.fp-affaire small { color: #475569; font-variant-numeric: tabular-nums; }
+.fp-affaire-ok { margin-top: 4px; color: #086B4F; font-weight: 600; animation: fp-pop .45s cubic-bezier(.3, 1.6, .5, 1) both 3.6s; }
+
+/* Scène 4 : hors connexion */
+.fp-horsligne { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 420px; }
+.fp-appareil, .fp-nuage {
+    position: relative; flex: 0 0 auto; width: 96px; height: 96px; border-radius: 22px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(255, 255, 255, .06); border: 1px solid var(--fp-bord);
+    font-size: 2.6rem; color: #fff;
+}
+.fp-nuage { color: var(--fp-vert); animation: fp-pop .5s cubic-bezier(.3, 1.6, .5, 1) both 3.4s; }
+.fp-nuage small { font-size: .62rem; color: var(--fp-attenue); margin-top: 2px; white-space: nowrap; }
+.fp-reseau {
+    position: absolute; top: -8px; right: -8px; width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: .95rem;
+}
+.fp-reseau-off { background: #F59E0B; color: #1F2937; opacity: 0; animation: fp-reseau-coupe 2.4s ease both .2s; }
+.fp-reseau-on  { background: var(--fp-vert); color: #052e22; animation: fp-apparition .4s ease both 2.4s; }
+.fp-trajet { position: relative; flex: 1 1 auto; height: 4px; margin: 0 14px; border-radius: 2px; background: rgba(148, 163, 184, .2); }
+.fp-colis {
+    position: absolute; top: -7px; left: 0; width: 18px; height: 18px; border-radius: 5px;
+    background: var(--fp-vert); box-shadow: 0 0 12px rgba(52, 211, 153, .6);
+    opacity: 0;
+}
+.fp-c1 { animation: fp-envoi 1s ease-in-out both 2.5s; }
+.fp-c2 { animation: fp-envoi 1s ease-in-out both 2.8s; }
+.fp-c3 { animation: fp-envoi 1s ease-in-out both 3.1s; }
+
+/* Scène 5 : équipe et sécurité */
+.fp-equipe { display: flex; align-items: center; gap: 26px; width: 100%; max-width: 430px; }
+.fp-membres { display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; }
+.fp-membre {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px;
+    background: rgba(255, 255, 255, .05); font-size: .82rem;
+}
+.fp-avatar {
+    width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: rgba(20, 176, 126, .2); color: var(--fp-vert); font-weight: 600; font-size: .72rem;
+}
+.fp-role { margin-left: auto; font-size: .7rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--fp-bord); color: var(--fp-attenue); }
+.fp-otp { flex: 0 0 auto; text-align: center; }
+.fp-otp > i { font-size: 3rem; color: var(--fp-vert); display: block; animation: fp-pop .5s cubic-bezier(.3, 1.6, .5, 1) both 2.1s; }
+.fp-chiffres { display: flex; gap: 4px; margin-top: 8px; }
+.fp-chiffres span {
+    width: 20px; height: 26px; border-radius: 6px; background: #fff; color: #0A1628;
+    display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: .85rem;
+    animation: fp-entree .3s ease both;
+}
+.fp-chiffres span:nth-child(1) { animation-delay: 2.5s; }
+.fp-chiffres span:nth-child(2) { animation-delay: 2.65s; }
+.fp-chiffres span:nth-child(3) { animation-delay: 2.8s; }
+.fp-chiffres span:nth-child(4) { animation-delay: 2.95s; }
+.fp-chiffres span:nth-child(5) { animation-delay: 3.1s; }
+.fp-chiffres span:nth-child(6) { animation-delay: 3.25s; }
+
+/* ─── Animations ─── */
+@keyframes fp-apparition { from { opacity: 0; transform: translateY(10px); } }
+@keyframes fp-entree { from { opacity: 0; transform: translateY(8px); } }
+@keyframes fp-pop { from { opacity: 0; transform: scale(.4); } }
+@keyframes fp-progression { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes fp-balayage { from { top: 22%; } to { top: 78%; } }
+@keyframes fp-deplacement {
+    0%, 12% { left: 10px; }
+    45%, 58% { left: calc(33.333% + 10px); }
+    100% { left: calc(66.666% + 10px); }
+}
+@keyframes fp-reseau-coupe {
+    0% { opacity: 0; transform: scale(.4); }
+    15%, 85% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(.4); }
+}
+@keyframes fp-envoi {
+    0% { left: 0; opacity: 0; }
+    15% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { left: calc(100% - 18px); opacity: 0; }
+}
+
+/* ─── Écrans moyens et téléphones : bandeau compact au-dessus du formulaire ─── */
+@media (max-width: 991.98px) {
+    .auth-split { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px 32px; justify-items: center; }
+    .auth-split > .auth-card { justify-self: center; }
+    .fp { width: 100%; max-width: 470px; }
+    .fp-intro { text-align: center; }
+    .fp-titre { font-size: 1.45rem; margin: 12px 0 0; }
+    .fp-sous-titre, .fp-scene { display: none; }
+    .fp-zone { min-height: 0; margin-top: 14px; }
+    .fp-texte { margin-top: 0; padding: 12px 14px; border-radius: 14px; background: var(--fp-surface); border: 1px solid var(--fp-bord); }
+    .fp-controles { justify-content: center; gap: 14px; margin-top: 12px; }
+}
+
+/* ─── « Réduire les animations » : tout est immobile, pas de défilement automatique ─── */
+@media (prefers-reduced-motion: reduce) {
+    .fp *, .fp *::before, .fp *::after { animation: none !important; transition: none !important; }
+    .fp-progression, .fp-pause, .fp-colis, .fp-reseau-off { display: none; }
+}
