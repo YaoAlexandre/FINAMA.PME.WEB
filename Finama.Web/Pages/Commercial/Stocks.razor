@@ -1,7 +1,9 @@
 @page "/commerce/stocks"
 @using Finama.Web
 @using Finama.Web.Services
-@inject CommerceApiService CommerceApi
+@inject ICatalogueService CatalogueApi
+@inject IStocksService StocksApi
+@inject ErreursCommerce ErreurCommerce
 @inject NotificationService NotificationService
 
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
@@ -362,11 +364,11 @@
         _chargement = true;
         try
         {
-            var produits = await CommerceApi.GetProduitsAsync();
+            var produits = await CatalogueApi.GetProduitsAsync();
             _produitsParId = produits.ToDictionary(p => p.Id);
             _produitsDisponibles = produits.Where(p => p.GereStock && p.EstActif).ToList();
 
-            _stocks = await CommerceApi.GetStocksLotsAsync();
+            _stocks = await StocksApi.GetStocksLotsAsync();
             FiltrerLots();
         }
         finally
@@ -380,7 +382,7 @@
         _chargement = true;
         try
         {
-            _stocks = await CommerceApi.GetStocksLotsAsync();
+            _stocks = await StocksApi.GetStocksLotsAsync();
             FiltrerLots();
         }
         finally
@@ -481,7 +483,7 @@
         _enCoursValidation = true;
         try
         {
-            var (succes, messageErreur) = await CommerceApi.EnregistrerEntreeInitialeAsync(_nouvelleEntree);
+            var (succes, messageErreur) = await StocksApi.EnregistrerEntreeInitialeAsync(_nouvelleEntree);
 
             if (succes)
             {
@@ -549,7 +551,7 @@
                 Commentaire = _commentaireAjustement.Trim()
             };
 
-            var succes = await CommerceApi.AjusterStockAsync(request);
+            var succes = await StocksApi.AjusterStockAsync(request);
             if (succes)
             {
                 NotificationService.Succes($"Stock de « {_lotAjustement.DesignationProduit} » ajusté de {(_deltaAjustement > 0 ? "+" : "")}{Quantite(_deltaAjustement, art)}.");
@@ -558,7 +560,7 @@
             }
             else
             {
-                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Impossible d'ajuster le stock.", "Ajustement refusé");
+                NotificationService.Erreur(ErreurCommerce.Derniere ?? "Impossible d'ajuster le stock.", "Ajustement refusé");
             }
         }
         catch (Exception)

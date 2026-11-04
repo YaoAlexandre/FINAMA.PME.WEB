@@ -5,3 +5,5 @@ global using Finama.Web.Features.Administration.Services;
 global using Finama.Web.Features.Authentification.Services;
 global using Finama.Web.Features.Comptabilite.Services;
 global using Finama.Web.Features.TableauBord.Services;
+global using Finama.Web.Features.Commerce.Services;
+global using Finama.Web.Features.Commerce.Models;

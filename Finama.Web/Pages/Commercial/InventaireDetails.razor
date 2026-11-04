@@ -1,7 +1,9 @@
 @page "/commerce/inventaires/{Id:guid}"
 @using Finama.Web
 @using Finama.Web.Services
-@inject CommerceApiService CommerceApi
+@inject ICatalogueService CatalogueApi
+@inject IStocksService StocksApi
+@inject ErreursCommerce ErreurCommerce
 @inject NavigationManager Nav
 @inject NotificationService NotificationService
 
@@ -136,13 +138,13 @@ else
     protected override async Task OnInitializedAsync()
     {
         await ChargerDetails();
-        _produits = await CommerceApi.GetProduitsAsync();   // pour retrouver l'article à partir du code scanné
+        _produits = await CatalogueApi.GetProduitsAsync();   // pour retrouver l'article à partir du code scanné
     }
 
     private async Task ChargerDetails()
     {
         _chargement = true;
-        _inventaire = await CommerceApi.GetInventaireDetailsAsync(Id);
+        _inventaire = await StocksApi.GetInventaireDetailsAsync(Id);
         _chargement = false;
     }
 
@@ -193,10 +195,10 @@ else
         ligne.QuantiteComptee = qteComptee;
 
         var request = new ComptageRequest(new List<SaisieLigneComptage> { new SaisieLigneComptage(ligne.LigneId, qteComptee) });
-        if (!await CommerceApi.CompterInventaireAsync(Id, request))
+        if (!await StocksApi.CompterInventaireAsync(Id, request))
         {
             ligne.QuantiteComptee = ancienne;   // l'écran ne ment jamais : la valeur affichée est celle qui est enregistrée
-            NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Le comptage n'a pas été enregistré.", "Comptage non enregistré");
+            NotificationService.Erreur(ErreurCommerce.Derniere ?? "Le comptage n'a pas été enregistré.", "Comptage non enregistré");
         }
         // Pas de notification de succès à chaque ligne : le badge « Saisi » suffit et ne gêne pas la saisie rapide.
     }
@@ -224,9 +226,9 @@ else
         _enCoursAction = true;
         try
         {
-            if (!await CommerceApi.CloturerInventaireAsync(Id, new ClotureInventaireRequest(traiterCommeZero)))
+            if (!await StocksApi.CloturerInventaireAsync(Id, new ClotureInventaireRequest(traiterCommeZero)))
             {
-                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "L'inventaire n'a pas pu être clôturé.", "Clôture impossible");
+                NotificationService.Erreur(ErreurCommerce.Derniere ?? "L'inventaire n'a pas pu être clôturé.", "Clôture impossible");
                 return;
             }
 

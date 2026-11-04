@@ -2,7 +2,8 @@
 @using Finama.Web
 @using Finama.Web.Services
 @inject ILocalStorage Stockage
-@inject CommerceApiService CommerceApi
+@inject IMagasinsService MagasinsApi
+@inject ErreursCommerce ErreurCommerce
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject NotificationService NotificationService
@@ -219,7 +220,7 @@
     private async Task ChargerMagasins()
     {
         _chargement = true;
-        _magasins = await CommerceApi.GetMagasinsAsync();
+        _magasins = await MagasinsApi.GetMagasinsAsync();
         _chargement = false;
     }
 
@@ -275,7 +276,7 @@
         _enCours = true;
         try
         {
-            var succes = await CommerceApi.CreerMagasinAsync(_nouveauRequest);
+            var succes = await MagasinsApi.CreerMagasinAsync(_nouveauRequest);
             if (succes)
             {
                 NotificationService.Succes("Structure enregistrée avec succès.");
@@ -284,7 +285,7 @@
             }
             else
             {
-                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Impossible d'enregistrer le magasin.", "Magasin non enregistré");
+                NotificationService.Erreur(ErreurCommerce.Derniere ?? "Impossible d'enregistrer le magasin.", "Magasin non enregistré");
             }
         }
         catch (Exception)
@@ -303,9 +304,9 @@
                 $"« {m.Nom} » deviendra le magasin par défaut pour le stock et la caisse.\nL'ancien magasin principal reste actif.",
                 "Changer de magasin principal ?", "Définir comme principal")) return;
 
-        if (!await CommerceApi.DefinirMagasinPrincipalAsync(m.Id))
+        if (!await MagasinsApi.DefinirMagasinPrincipalAsync(m.Id))
         {
-            NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Le magasin principal n'a pas été modifié.", "Changement refusé");
+            NotificationService.Erreur(ErreurCommerce.Derniere ?? "Le magasin principal n'a pas été modifié.", "Changement refusé");
             return;
         }
 

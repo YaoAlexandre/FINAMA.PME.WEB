@@ -2,7 +2,8 @@
 @using Finama.Web.Services
 @attribute [Authorize(Policy = "Commercial")]
 @implements IAsyncDisposable
-@inject CommerceApiService CommerceApi
+@inject ICatalogueService CatalogueApi
+@inject ErreursCommerce ErreurCommerce
 @inject ApiClient Api
 @inject IJSRuntime JS
 @inject NotificationService NotificationService
@@ -245,8 +246,8 @@
     private async Task Charger()
     {
         _chargement = true;
-        _articles = (await CommerceApi.GetProduitsAsync()).Where(a => a.EstActif).OrderBy(a => a.Libelle).ToList();
-        if (CommerceApi.DerniereErreur is { } e) NotificationService.Erreur(e, "Articles");
+        _articles = (await CatalogueApi.GetProduitsAsync()).Where(a => a.EstActif).OrderBy(a => a.Libelle).ToList();
+        if (ErreurCommerce.Derniere is { } e) NotificationService.Erreur(e, "Articles");
         _chargement = false;
     }
 

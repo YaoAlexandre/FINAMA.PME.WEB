@@ -1,7 +1,9 @@
 @page "/commerce/produits"
 @using Finama.Web
 @using Finama.Web.Services
-@inject CommerceApiService CommerceApi
+@inject ICatalogueService CatalogueApi
+@inject IParametresCommerceService ParametresApi
+@inject ErreursCommerce ErreurCommerce
 @inject NotificationService NotificationService
 @inject NavigationManager Nav
 @inject IJSRuntime JS
@@ -351,9 +353,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _parametres = await CommerceApi.GetParametresAsync() ?? new ParametresCommerceDto();
-        _categories = await CommerceApi.GetCategoriesAsync();
-        if (_parametres.UtiliseLivres) _editeurs = await CommerceApi.GetEditeursAsync();
+        _parametres = await ParametresApi.GetParametresAsync() ?? new ParametresCommerceDto();
+        _categories = await CatalogueApi.GetCategoriesAsync();
+        if (_parametres.UtiliseLivres) _editeurs = await CatalogueApi.GetEditeursAsync();
          await Images.ChargerAsync();
         await ChargerProduits();
     }
@@ -361,8 +363,8 @@
     private async Task ChargerProduits()
     {
         _chargement = true;
-        _produits = await CommerceApi.GetProduitsAsync();
-        if (CommerceApi.DerniereErreur != null) NotificationService.Erreur(CommerceApi.DerniereErreur, "Chargement");
+        _produits = await CatalogueApi.GetProduitsAsync();
+        if (ErreurCommerce.Derniere != null) NotificationService.Erreur(ErreurCommerce.Derniere, "Chargement");
         FiltrerProduits();
         _chargement = false;
     }
@@ -526,12 +528,12 @@
         try
         {
             var succes = _produitEnCoursId == Guid.Empty
-                ? await CommerceApi.CreerProduitAsync(_nouveauProduit)
-                : await CommerceApi.ModifierProduitAsync(_produitEnCoursId, _nouveauProduit);
+                ? await CatalogueApi.CreerProduitAsync(_nouveauProduit)
+                : await CatalogueApi.ModifierProduitAsync(_produitEnCoursId, _nouveauProduit);
 
             if (!succes)
             {
-                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Erreur inconnue.", "Enregistrement impossible");
+                NotificationService.Erreur(ErreurCommerce.Derniere ?? "Erreur inconnue.", "Enregistrement impossible");
                 return;
             }
 
@@ -551,9 +553,9 @@
                 $"« {p.Designation} » n'apparaîtra plus en caisse ni dans les listes de vente.\nL'historique des ventes et du stock est conservé.",
                 "Désactiver cet article ?", "Désactiver", type: ConfirmationType.Danger)) return;
 
-        if (!await CommerceApi.DesactiverProduitAsync(p.Id))
+        if (!await CatalogueApi.DesactiverProduitAsync(p.Id))
         {
-            NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Opération impossible.");
+            NotificationService.Erreur(ErreurCommerce.Derniere ?? "Opération impossible.");
             return;
         }
         await ChargerProduits();

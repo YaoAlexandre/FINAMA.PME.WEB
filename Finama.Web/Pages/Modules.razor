@@ -5,7 +5,7 @@
 @using Finama.Web.Services
 @inject ILocalStorage Stockage
 @inject IAuthService AuthApi
-@inject CommerceApiService CommerceApi
+@inject IParametresCommerceService ParametresApi
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthState
@@ -268,7 +268,7 @@
         // La synthèse commerce est facultative : si elle échoue, la page reste utilisable.
         if (_peutCommerce)
         {
-            _tb = await CommerceApi.GetTableauBordAsync();
+            _tb = await ParametresApi.GetTableauBordAsync();
             _tbIndisponible = _tb == null;
         }
 

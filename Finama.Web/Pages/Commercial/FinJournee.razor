@@ -4,7 +4,7 @@
 @implements IAsyncDisposable
 @inject ILocalStorage Stockage
 @inject ApiClient Api
-@inject CommerceApiService CommerceApi
+@inject IMagasinsService MagasinsApi
 @inject IJSRuntime JS
 @inject NotificationService NotificationService
 
@@ -329,12 +329,12 @@ else if (_journal is { } j)
 
     protected override async Task OnInitializedAsync()
     {
-        _magasins = (await CommerceApi.GetMagasinsAsync())
+        _magasins = (await MagasinsApi.GetMagasinsAsync())
             .Where(m => m.EstActif && m.Type == TypeMagasin.PointDeVente)
             .OrderByDescending(m => m.EstPrincipal).ThenBy(m => m.Nom)
             .ToList();
 
-        var actif = await CommerceApi.GetMagasinActifIdAsync();
+        var actif = await MagasinsApi.GetMagasinActifIdAsync();
         _magasinId = _magasins.FirstOrDefault(m => m.Id == actif)?.Id ?? _magasins.FirstOrDefault()?.Id ?? Guid.Empty;
 
         await Charger();

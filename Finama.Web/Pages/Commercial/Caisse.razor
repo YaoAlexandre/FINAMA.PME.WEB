@@ -3,7 +3,11 @@
 @using Finama.Web.Services
 @implements IAsyncDisposable
 @inject ILocalStorage Stockage
-@inject CommerceApiService CommerceApi
+@inject ICaisseService CaisseApi
+@inject ICatalogueService CatalogueApi
+@inject IClientsCommerceService ClientsApi
+@inject IMagasinsService MagasinsApi
+@inject ErreursCommerce ErreurCommerce
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject ApiClient Api
@@ -911,9 +915,9 @@
 
     private async Task ResoudreMagasinAsync()
     {
-        var magasins = await CommerceApi.GetMagasinsAsync();
+        var magasins = await MagasinsApi.GetMagasinsAsync();
         var pdv = magasins.Where(m => m.EstActif && m.Type == TypeMagasin.PointDeVente).ToList();
-        var actifId = await CommerceApi.GetMagasinActifIdAsync();
+        var actifId = await MagasinsApi.GetMagasinActifIdAsync();
 
         var choisi = pdv.FirstOrDefault(m => m.Id == actifId) ?? pdv.FirstOrDefault(m => m.EstPrincipal) ?? pdv.FirstOrDefault();
         _magasinId = choisi?.Id;
@@ -924,8 +928,8 @@
 
     private async Task ChargerSessionAsync()
     {
-        _caisses = await CommerceApi.GetCaissesAsync(_magasinId!.Value);
-        _session = await CommerceApi.GetSessionActiveAsync(_magasinId.Value);
+        _caisses = await CaisseApi.GetCaissesAsync(_magasinId!.Value);
+        _session = await CaisseApi.GetSessionActiveAsync(_magasinId.Value);
 
         if (_session != null)
         {
@@ -935,7 +939,7 @@
         else
         {
             _caisseChoisieId = _caisses.FirstOrDefault(c => !c.SessionOuverte)?.Id ?? Guid.Empty;
-            if (CommerceApi.DerniereErreur != null) NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Une erreur est survenue.", "Caisse");
+            if (ErreurCommerce.Derniere != null) NotificationService.Erreur(ErreurCommerce.Derniere ?? "Une erreur est survenue.", "Caisse");
         }
     }
 
@@ -944,8 +948,8 @@
         _enCoursAction = true;
         try
         {
-            var session = await CommerceApi.OuvrirSessionAsync(new OuvrirSessionPosRequest { CaisseId = _caisseChoisieId, FondDeCaisse = _fondDeCaisse });
-            if (session == null) { NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Une erreur est survenue.", "Ouverture impossible"); return; }
+            var session = await CaisseApi.OuvrirSessionAsync(new OuvrirSessionPosRequest { CaisseId = _caisseChoisieId, FondDeCaisse = _fondDeCaisse });
+            if (session == null) { NotificationService.Erreur(ErreurCommerce.Derniere ?? "Une erreur est survenue.", "Ouverture impossible"); return; }
             await ChargerSessionAsync();
         }
         finally { _enCoursAction = false; }
@@ -955,7 +959,7 @@
     {
         if (_horsLigne) return;   // hors connexion : catalogue local
         _chargementArticles = true;
-        var articles = await CommerceApi.GetProduitsAsync(_magasinId);
+        var articles = await CatalogueApi.GetProduitsAsync(_magasinId);
         if (EstErreurReseau())
         {
             _horsLigne = true;    // on garde le catalogue déjà affiché
@@ -1110,7 +1114,7 @@
             _afficherResultatsClient = false;
             return;
         }
-        _resultatsClients = (await CommerceApi.RechercherClientsAsync(_rechercheClient.Trim())).Where(c => c.EstActif).ToList();
+        _resultatsClients = (await ClientsApi.RechercherClientsAsync(_rechercheClient.Trim())).Where(c => c.EstActif).ToList();
         _afficherResultatsClient = true;
     }
 
@@ -1170,12 +1174,12 @@
             var horsLigne = _horsLigne;
             if (!horsLigne)
             {
-                ticket = await CommerceApi.EncaisserVenteAsync(requete);
+                ticket = await CaisseApi.EncaisserVenteAsync(requete);
                 if (ticket == null && EstErreurReseau())
                     horsLigne = _horsLigne = true;   // réseau perdu pendant l'encaissement : on garde la vente sur l'appareil
                 else if (ticket == null)
                 {
-                    NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Une erreur est survenue.", "Échec de l'encaissement");
+                    NotificationService.Erreur(ErreurCommerce.Derniere ?? "Une erreur est survenue.", "Échec de l'encaissement");
                     return;
                 }
             }
@@ -1299,7 +1303,7 @@
         public DateTime EnregistreLe { get; set; }
     }
 
-    private bool EstErreurReseau() => CommerceApi.DerniereErreur?.StartsWith(MessageReseau) == true;
+    private bool EstErreurReseau() => ErreurCommerce.Derniere?.StartsWith(MessageReseau) == true;
 
     private async Task<bool> EnLigneAsync()
     {
@@ -1607,7 +1611,7 @@
         _enCoursAction = true;
         try
         {
-            var ok = await CommerceApi.CloturerSessionAsync(new CloturerSessionPosRequest
+            var ok = await CaisseApi.CloturerSessionAsync(new CloturerSessionPosRequest
             {
                 SessionCaisseId = _session.Id,
                 Commentaire = _commentaireCloture,
@@ -1619,7 +1623,7 @@
                 }
             });
 
-            if (!ok) { NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Une erreur est survenue.", "Clôture impossible"); return; }
+            if (!ok) { NotificationService.Erreur(ErreurCommerce.Derniere ?? "Une erreur est survenue.", "Clôture impossible"); return; }
 
             NotificationService.Succes("Clôture enregistrée. Merci pour votre journée !", "Caisse clôturée");
             _afficherCloture = false;

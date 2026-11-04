@@ -1,7 +1,8 @@
 @page "/commerce/parametres"
 @using Finama.Web
 @using Finama.Web.Services
-@inject CommerceApiService CommerceApi
+@inject IParametresCommerceService ParametresApi
+@inject ErreursCommerce ErreurCommerce
 @inject NotificationService NotificationService
 @inject IJSRuntime JS
 @inject NavigationManager Nav
@@ -147,9 +148,9 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _profils = await CommerceApi.GetProfilsActiviteAsync();
-        _parametres = await CommerceApi.GetParametresAsync() ?? new ParametresCommerceDto();
-        if (CommerceApi.DerniereErreur != null) NotificationService.Erreur(CommerceApi.DerniereErreur, "Chargement");
+        _profils = await ParametresApi.GetProfilsActiviteAsync();
+        _parametres = await ParametresApi.GetParametresAsync() ?? new ParametresCommerceDto();
+        if (ErreurCommerce.Derniere != null) NotificationService.Erreur(ErreurCommerce.Derniere, "Chargement");
         _chargement = false;
     }
 
@@ -163,10 +164,10 @@ else
         _enCours = true;
         try
         {
-            var resultat = await CommerceApi.AppliquerProfilAsync(profil.Code);
+            var resultat = await ParametresApi.AppliquerProfilAsync(profil.Code);
             if (resultat == null)
             {
-                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Erreur inconnue.", "Application impossible");
+                NotificationService.Erreur(ErreurCommerce.Derniere ?? "Erreur inconnue.", "Application impossible");
                 return;
             }
 
@@ -181,10 +182,10 @@ else
         _enCours = true;
         try
         {
-            var resultat = await CommerceApi.SauvegarderParametresAsync(_parametres);
+            var resultat = await ParametresApi.SauvegarderParametresAsync(_parametres);
             if (resultat == null)
             {
-                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Erreur inconnue.", "Enregistrement impossible");
+                NotificationService.Erreur(ErreurCommerce.Derniere ?? "Erreur inconnue.", "Enregistrement impossible");
                 return;
             }
 

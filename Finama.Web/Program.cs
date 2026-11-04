@@ -49,7 +49,14 @@ builder.Services.AddScoped<IUtilisateursService, UtilisateursService>();
 builder.Services.AddScoped<IEntrepriseService, EntrepriseService>();
 // Commerce, ventes, support…
 builder.Services.AddScoped<DevisApiService>();
-builder.Services.AddScoped<CommerceApiService>();
+// Commerce : une seule « dernière erreur » partagée par les services du module
+builder.Services.AddScoped<ErreursCommerce>();
+builder.Services.AddScoped<ICatalogueService, CatalogueService>();
+builder.Services.AddScoped<IStocksService, StocksService>();
+builder.Services.AddScoped<IParametresCommerceService, ParametresCommerceService>();
+builder.Services.AddScoped<IMagasinsService, MagasinsService>();
+builder.Services.AddScoped<ICaisseService, CaisseService>();
+builder.Services.AddScoped<IClientsCommerceService, ClientsCommerceService>();
 builder.Services.AddScoped<ExportService>();
 builder.Services.AddScoped<ModulesService>();
 builder.Services.AddScoped<SupportService>();

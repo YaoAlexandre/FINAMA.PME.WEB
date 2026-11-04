@@ -4,7 +4,7 @@
 @page "/commercial/devis/{Id:guid}/modifier"
 @using Finama.Web.Services
 @inject VentesApiService Ventes
-@inject CommerceApiService CommerceApi
+@inject ICatalogueService CatalogueApi
 @inject NavigationManager Nav
 @inject NotificationService Notif
 
@@ -296,7 +296,7 @@ else
     {
         try
         {
-            _produits = (await CommerceApi.GetProduitsAsync()).Where(p => p.EstActif).OrderBy(p => p.Libelle).ToList();
+            _produits = (await CatalogueApi.GetProduitsAsync()).Where(p => p.EstActif).OrderBy(p => p.Libelle).ToList();
             StateHasChanged();
         }
         catch { /* module Commerce absent : saisie libre */ }

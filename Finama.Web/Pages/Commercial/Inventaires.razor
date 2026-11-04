@@ -1,6 +1,9 @@
 @page "/commerce/inventaires"
 @using Finama.Web.Services
-@inject CommerceApiService CommerceApi
+@inject ICatalogueService CatalogueApi
+@inject IMagasinsService MagasinsApi
+@inject IStocksService StocksApi
+@inject ErreursCommerce ErreurCommerce
 @inject NavigationManager Nav
 @inject NotificationService NotificationService
 
@@ -204,12 +207,12 @@
         _chargement = true;
         try
         {
-            _inventaires = (await CommerceApi.GetInventairesAsync())
+            _inventaires = (await StocksApi.GetInventairesAsync())
                 .OrderBy(i => i.Statut == StatutInventaire.Ouvert ? 0 : 1)
                 .ThenByDescending(i => i.DateOuverture)
                 .ToList();
 
-            if (CommerceApi.DerniereErreur is { } erreur)
+            if (ErreurCommerce.Derniere is { } erreur)
                 NotificationService.Erreur(erreur, "Inventaires");
         }
         finally
@@ -221,9 +224,9 @@
     private async Task OuvrirModalNouvelInventaire()
     {
         if (!_magasins.Any())
-            _magasins = (await CommerceApi.GetMagasinsAsync()).Where(m => m.EstActif).ToList();
+            _magasins = (await MagasinsApi.GetMagasinsAsync()).Where(m => m.EstActif).ToList();
         if (!_categories.Any())
-            _categories = (await CommerceApi.GetCategoriesAsync()).OrderBy(c => c.Libelle).ToList();
+            _categories = (await CatalogueApi.GetCategoriesAsync()).OrderBy(c => c.Libelle).ToList();
 
         if (!_magasins.Any())
         {
@@ -231,7 +234,7 @@
             return;
         }
 
-        var actif = await CommerceApi.GetMagasinActifIdAsync();
+        var actif = await MagasinsApi.GetMagasinActifIdAsync();
         _magasinId = _magasins.FirstOrDefault(m => m.Id == actif)?.Id
                      ?? _magasins.FirstOrDefault(m => m.EstPrincipal)?.Id
                      ?? _magasins[0].Id;
@@ -254,12 +257,12 @@
         try
         {
             var requete = new OuvrirInventaireRequest(_magasinId, _libelle.Trim(), _categorieId == Guid.Empty ? null : _categorieId);
-            var resultat = await CommerceApi.OuvrirInventaireAsync(requete);
+            var resultat = await StocksApi.OuvrirInventaireAsync(requete);
 
             if (resultat is null)
             {
                 // Message exact de l'API : inventaire déjà ouvert, aucun article, droits…
-                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Ouverture impossible.", "Inventaire non créé");
+                NotificationService.Erreur(ErreurCommerce.Derniere ?? "Ouverture impossible.", "Inventaire non créé");
                 return;
             }
 
@@ -282,14 +285,14 @@
         _enCoursValidation = true;
         try
         {
-            if (await CommerceApi.AnnulerInventaireAsync(inv.Id))
+            if (await StocksApi.AnnulerInventaireAsync(inv.Id))
             {
                 NotificationService.Succes("Inventaire annulé. Le stock n'a pas été modifié.");
                 await ChargerInventaires();
             }
             else
             {
-                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Annulation impossible.", "Inventaire");
+                NotificationService.Erreur(ErreurCommerce.Derniere ?? "Annulation impossible.", "Inventaire");
             }
         }
         finally

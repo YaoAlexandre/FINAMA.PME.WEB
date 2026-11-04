@@ -1,7 +1,8 @@
 @page "/commerce/clients"
 @using Finama.Web
 @using Finama.Web.Services
-@inject CommerceApiService CommerceApi
+@inject IClientsCommerceService ClientsApi
+@inject ErreursCommerce ErreurCommerce
 @inject NotificationService NotificationService
 
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
@@ -224,8 +225,8 @@
     private async Task Charger()
     {
         _chargement = true;
-        _clients = await CommerceApi.RechercherClientsAsync(_recherche);
-        if (CommerceApi.DerniereErreur != null) NotificationService.Erreur(CommerceApi.DerniereErreur, "Chargement");
+        _clients = await ClientsApi.RechercherClientsAsync(_recherche);
+        if (ErreurCommerce.Derniere != null) NotificationService.Erreur(ErreurCommerce.Derniere, "Chargement");
         _chargement = false;
     }
 
@@ -236,8 +237,8 @@
 
     private async Task VoirDetail(ClientCommerceDto c)
     {
-        _detail = await CommerceApi.GetClientAsync(c.Id);
-        if (_detail == null) NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Introuvable.", "Fiche client");
+        _detail = await ClientsApi.GetClientAsync(c.Id);
+        if (_detail == null) NotificationService.Erreur(ErreurCommerce.Derniere ?? "Introuvable.", "Fiche client");
     }
 
     private void OuvrirNouveau()
@@ -280,12 +281,12 @@
         try
         {
             var resultat = _idEdition == null
-                ? await CommerceApi.CreerClientAsync(_form)
-                : await CommerceApi.ModifierClientAsync(_idEdition.Value, _form);
+                ? await ClientsApi.CreerClientAsync(_form)
+                : await ClientsApi.ModifierClientAsync(_idEdition.Value, _form);
 
             if (resultat == null)
             {
-                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Erreur inconnue.", "Enregistrement impossible");
+                NotificationService.Erreur(ErreurCommerce.Derniere ?? "Erreur inconnue.", "Enregistrement impossible");
                 return;
             }
 
@@ -303,9 +304,9 @@
                 "Désactiver ce client ?", "Désactiver", type: ConfirmationType.Danger))
             return;
 
-        if (!await CommerceApi.DefinirClientActifAsync(c.Id, !c.EstActif))
+        if (!await ClientsApi.DefinirClientActifAsync(c.Id, !c.EstActif))
         {
-            NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Opération impossible.");
+            NotificationService.Erreur(ErreurCommerce.Derniere ?? "Opération impossible.");
             return;
         }
         await Charger();

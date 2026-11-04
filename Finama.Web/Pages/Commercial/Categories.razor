@@ -1,7 +1,9 @@
 @page "/commerce/categories"
 @using Finama.Web
 @using Finama.Web.Services
-@inject CommerceApiService CommerceApi
+@inject ICatalogueService CatalogueApi
+@inject IParametresCommerceService ParametresApi
+@inject ErreursCommerce ErreurCommerce
 @inject NotificationService NotificationService
 @inject IJSRuntime JS
 @inject NavigationManager Nav
@@ -254,10 +256,10 @@
     private async Task Charger()
     {
         _chargement = true;
-        _parametres = await CommerceApi.GetParametresAsync() ?? new ParametresCommerceDto();
-        _categories = await CommerceApi.GetCategoriesAsync();
-        if (CommerceApi.DerniereErreur != null) NotificationService.Erreur(CommerceApi.DerniereErreur, "Chargement");
-        _editeurs = _parametres.UtiliseLivres ? await CommerceApi.GetEditeursAsync() : new();
+        _parametres = await ParametresApi.GetParametresAsync() ?? new ParametresCommerceDto();
+        _categories = await CatalogueApi.GetCategoriesAsync();
+        if (ErreurCommerce.Derniere != null) NotificationService.Erreur(ErreurCommerce.Derniere, "Chargement");
+        _editeurs = _parametres.UtiliseLivres ? await CatalogueApi.GetEditeursAsync() : new();
         ConstruireArbre();
         _chargement = false;
     }
@@ -350,12 +352,12 @@
         try
         {
             var resultat = _categorieEditionId == null
-                ? await CommerceApi.CreerCategorieAsync(_formCategorie)
-                : await CommerceApi.ModifierCategorieAsync(_categorieEditionId.Value, _formCategorie);
+                ? await CatalogueApi.CreerCategorieAsync(_formCategorie)
+                : await CatalogueApi.ModifierCategorieAsync(_categorieEditionId.Value, _formCategorie);
 
             if (resultat == null)
             {
-                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Erreur inconnue.", "Enregistrement impossible");
+                NotificationService.Erreur(ErreurCommerce.Derniere ?? "Erreur inconnue.", "Enregistrement impossible");
                 return;
             }
 
@@ -372,9 +374,9 @@
                 $"« {cat.Libelle} » sera définitivement supprimée.\nElle ne peut l'être que si elle ne contient aucun article ni sous-catégorie.",
                 "Supprimer cette catégorie ?", "Supprimer", type: ConfirmationType.Danger)) return;
 
-        if (!await CommerceApi.SupprimerCategorieAsync(cat.Id))
+        if (!await CatalogueApi.SupprimerCategorieAsync(cat.Id))
         {
-            NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Erreur inconnue.", "Suppression impossible");
+            NotificationService.Erreur(ErreurCommerce.Derniere ?? "Erreur inconnue.", "Suppression impossible");
             return;
         }
 
@@ -404,12 +406,12 @@
         try
         {
             var resultat = _editeurEditionId == null
-                ? await CommerceApi.CreerEditeurAsync(_formEditeur)
-                : await CommerceApi.ModifierEditeurAsync(_editeurEditionId.Value, _formEditeur);
+                ? await CatalogueApi.CreerEditeurAsync(_formEditeur)
+                : await CatalogueApi.ModifierEditeurAsync(_editeurEditionId.Value, _formEditeur);
 
             if (resultat == null)
             {
-                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Erreur inconnue.", "Enregistrement impossible");
+                NotificationService.Erreur(ErreurCommerce.Derniere ?? "Erreur inconnue.", "Enregistrement impossible");
                 return;
             }
 
@@ -422,9 +424,9 @@
 
     private async Task BasculerEditeur(EditeurCommerceDto e)
     {
-        if (!await CommerceApi.DefinirEditeurActifAsync(e.Id, !e.EstActif))
+        if (!await CatalogueApi.DefinirEditeurActifAsync(e.Id, !e.EstActif))
         {
-            NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Opération impossible.");
+            NotificationService.Erreur(ErreurCommerce.Derniere ?? "Opération impossible.");
             return;
         }
         await Charger();
