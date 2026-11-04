@@ -31,9 +31,23 @@ builder.Services.AddScoped(sp =>
 // ─── Core : stockage navigateur et client API (erreurs et réseau gérés au même endroit) ───
 builder.Services.AddScoped<ILocalStorage, LocalStorage>();
 builder.Services.AddScoped<ApiClient>();
+builder.Services.AddScoped<IdentifiantAppareil>();
 
-// ─── Services API ─────────────────────────────────────────────────────────────
-builder.Services.AddScoped<FinamaApiService>();
+// ─── Services API par module ──────────────────────────────────────────────────
+// Authentification & tableau de bord
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ITableauBordService, TableauBordService>();
+// Comptabilité
+builder.Services.AddScoped<IExercicesService, ExercicesService>();
+builder.Services.AddScoped<IEtatsFinanciersService, EtatsFinanciersService>();
+builder.Services.AddScoped<IPlanComptableService, PlanComptableService>();
+builder.Services.AddScoped<IEcrituresService, EcrituresService>();
+builder.Services.AddScoped<IFacturesService, FacturesService>();
+builder.Services.AddScoped<ITiersService, TiersService>();
+// Administration
+builder.Services.AddScoped<IUtilisateursService, UtilisateursService>();
+builder.Services.AddScoped<IEntrepriseService, EntrepriseService>();
+// Commerce, ventes, support…
 builder.Services.AddScoped<DevisApiService>();
 builder.Services.AddScoped<CommerceApiService>();
 builder.Services.AddScoped<ExportService>();

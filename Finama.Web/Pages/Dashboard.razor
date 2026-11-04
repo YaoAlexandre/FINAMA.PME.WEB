@@ -2,7 +2,8 @@
 @using Finama.Web.Models
 @using Finama.Web.Services
 @layout MainLayout
-@inject FinamaApiService Api
+@inject IExercicesService ExercicesApi
+@inject ITableauBordService TableauBordApi
 @inject NavigationManager Nav
 @inject AppState State
 @inject NotificationService Notif
@@ -292,7 +293,7 @@ else
 
         try
         {
-            var resultat = await Api.ChargerTableauBordAsync();
+            var resultat = await TableauBordApi.ChargerTableauBordAsync();
             _data = resultat.Donnees;
             _codeErreur = resultat.Code;
             _messageErreur = resultat.Message;
@@ -313,7 +314,7 @@ else
 
         try
         {
-            var erreur = await Api.OuvrirExerciceAsync(_anneeCourante);
+            var erreur = await ExercicesApi.OuvrirExerciceAsync(_anneeCourante);
             if (erreur is null)
             {
                 Notif.Notify(NotificationSeverity.Success, "Exercice ouvert", $"L'exercice {_anneeCourante} est prêt pour la saisie.");

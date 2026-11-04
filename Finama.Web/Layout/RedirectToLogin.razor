@@ -1,5 +1,5 @@
 @inject NavigationManager Nav
-@inject FinamaApiService Api
+@inject IAuthService AuthApi
 
 @if (_accesRefuse)
 {
@@ -20,7 +20,7 @@
     {
         var etat = AuthState is null ? null : await AuthState;
 
-        if (etat?.User.Identity?.IsAuthenticated == true && await Api.EstConnecteAsync())
+        if (etat?.User.Identity?.IsAuthenticated == true && await AuthApi.EstConnecteAsync())
         {
             // Connecté mais rôle insuffisant : on explique au lieu d'afficher une page blanche
             _accesRefuse = true;

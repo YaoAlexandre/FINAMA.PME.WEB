@@ -5,7 +5,7 @@
 @using Finama.Web.Services
 @layout EmptyLayout
 @inject ILocalStorage Stockage
-@inject FinamaApiService Api
+@inject IAuthService AuthApi
 @inject NavigationManager Nav
 @inject AppState State
 @inject IJSRuntime JS
@@ -141,7 +141,7 @@
             if (!_enAttenteDeOtp)
             {
                 // ─── ÉTAPE 1 : identifiants ───
-                var resultat = await Api.LoginAsync(_model.Email, _model.MotDePasse);
+                var resultat = await AuthApi.LoginAsync(_model.Email, _model.MotDePasse);
                 if (resultat is null)
                 {
                     Afficher("La connexion n'a pas abouti. Réessayez.");
@@ -164,7 +164,7 @@
                     return;
                 }
 
-                var authData = await Api.VerifyOtpAsync(_model.Email, _codeOtp);
+                var authData = await AuthApi.VerifyOtpAsync(_model.Email, _codeOtp);
                 if (authData is not null) await TraiterConnexionReussie(authData);
                 else Afficher("Code incorrect ou expiré.");
             }
@@ -205,7 +205,7 @@
         // Le magasin mémorisé peut appartenir à un autre compte ou à des données supprimées
         await Stockage.SupprimerAsync(ClesStockage.MagasinId);
         State.Utilisateur = authData;
-        // Jetons (access + refresh) déjà enregistrés par FinamaApiService.SauvegarderSessionAsync
+        // Jetons (access + refresh) déjà enregistrés par AuthService.SauvegarderSessionAsync
 
         if (AuthStateProvider is CustomAuthStateProvider customProvider)
             customProvider.NotifyUserAuthentication(authData.AccessToken);
@@ -225,7 +225,7 @@
 
         try
         {
-            var resultat = await Api.LoginAsync(_model.Email, _model.MotDePasse);
+            var resultat = await AuthApi.LoginAsync(_model.Email, _model.MotDePasse);
             if (resultat is not null && string.IsNullOrEmpty(resultat.AccessToken))
                 Afficher("Un nouveau code a été envoyé à votre adresse e-mail.", type: "succes");
             else
@@ -257,7 +257,7 @@
 
     private async Task Inscription()
     {
-        await Api.LogoutAsync();
+        await AuthApi.LogoutAsync();
         Nav.NavigateTo("/inscription");
     }
 

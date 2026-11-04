@@ -4,7 +4,7 @@
 @using Finama.Web.Services
 @using Finama.Web.Shared
 @using Radzen
-@inject FinamaApiService Api
+@inject IUtilisateursService UtilisateursApi
 @inject NavigationManager Nav
 @inject NotificationService NotificationService
 @inject IJSRuntime JS
@@ -361,7 +361,7 @@
 
     private async Task ChargerUtilisateurs()
     {
-        _utilisateurs = await Api.GetUtilisateursTenantAsync();
+        _utilisateurs = await UtilisateursApi.GetUtilisateursTenantAsync();
         _page = PagingExtensions.PageValide(_page, _utilisateurs?.Count ?? 0, _taille);
     }
 
@@ -477,7 +477,7 @@
         var (role, profilId) = Decoder(_accesCreation);
         _request.Role = role;
         _request.ProfilId = profilId;
-        var erreur = await Api.CreerCollaborateurAsync(_request);
+        var erreur = await UtilisateursApi.CreerCollaborateurAsync(_request);
         if (erreur == null)
         {
             NotificationService.Succes($"L'accès de {_request.Prenom} {_request.Nom} est créé. Il devra changer son mot de passe à sa première connexion.", "Collaborateur ajouté");
@@ -509,7 +509,7 @@
                 _enCours.Add(u.Id);
                 try
                 {
-                    var r = await Api.ModifierStatutUtilisateurAsync(u.Id, !u.EstActif);
+                    var r = await UtilisateursApi.ModifierStatutUtilisateurAsync(u.Id, !u.EstActif);
                     Notifier(r.Succes, r.Succes ? "Accès mis à jour" : "Action impossible", r.Message);
                     if (r.Succes) { await ChargerUtilisateurs(); SynchroniserSelection(u.Id); }
                 }
@@ -529,7 +529,7 @@
                 _enCours.Add(u.Id);
                 try
                 {
-                    var r = await Api.ReinitialiserMotDePasseUtilisateurAsync(u.Id);
+                    var r = await UtilisateursApi.ReinitialiserMotDePasseUtilisateurAsync(u.Id);
                     Notifier(r.Succes, r.Succes ? "Mot de passe réinitialisé" : "Action impossible", r.Message);
                     if (r.Succes && !string.IsNullOrEmpty(r.MotDePasseTemporaire))
                     {

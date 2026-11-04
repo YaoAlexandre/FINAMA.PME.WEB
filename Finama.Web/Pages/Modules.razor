@@ -4,7 +4,7 @@
 @using Finama.Web
 @using Finama.Web.Services
 @inject ILocalStorage Stockage
-@inject FinamaApiService Api
+@inject IAuthService AuthApi
 @inject CommerceApiService CommerceApi
 @inject NavigationManager Nav
 @inject IJSRuntime JS
@@ -239,9 +239,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _nom = await Api.GetUserNomAsync() ?? "";
-        _entreprise = await Api.GetEntrepriseNomAsync() ?? "";
-        _devise = await Api.GetDeviseSymboleAsync() ?? "FCFA";
+        _nom = await AuthApi.GetUserNomAsync() ?? "";
+        _entreprise = await AuthApi.GetEntrepriseNomAsync() ?? "";
+        _devise = await AuthApi.GetDeviseSymboleAsync() ?? "FCFA";
 
         var etat = await AuthState.GetAuthenticationStateAsync();
         var utilisateur = etat.User;

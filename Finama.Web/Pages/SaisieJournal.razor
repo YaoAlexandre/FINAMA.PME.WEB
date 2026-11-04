@@ -4,7 +4,9 @@
 @using Finama.Web.Models
 @using Finama.Web.Services
 @using Finama.Web.Shared
-@inject FinamaApiService Api
+@inject IEcrituresService EcrituresApi
+@inject IExercicesService ExercicesApi
+@inject IPlanComptableService PlanComptableApi
 @inject NavigationManager Nav
 @inject AppState State
 @inject NotificationService Notif
@@ -164,7 +166,7 @@
         try
         {
             // Liste complète : un compte déjà choisi ne disparaît jamais quand on change de journal
-            _comptes = await Api.GetPlanComptableSelectAsync();
+            _comptes = await PlanComptableApi.GetPlanComptableSelectAsync();
         }
         catch (Exception)
         {
@@ -186,7 +188,7 @@
     {
         try
         {
-            var existante = await Api.GetEcritureAsync(Id!.Value);
+            var existante = await EcrituresApi.GetEcritureAsync(Id!.Value);
             if (existante is null)
             {
                 Verrouiller("Cette écriture est introuvable.");
@@ -317,8 +319,8 @@
             };
 
             var res = Id.HasValue
-                ? await Api.ModifierEcritureAsync(Id.Value, payload)
-                : await Api.CreerEcritureAsync(payload);
+                ? await EcrituresApi.ModifierEcritureAsync(Id.Value, payload)
+                : await EcrituresApi.CreerEcritureAsync(payload);
 
             if (res is not null && res.Id != Guid.Empty)
             {
@@ -345,7 +347,7 @@
     {
         try
         {
-            var exercices = await Api.GetExercicesAsync();
+            var exercices = await ExercicesApi.GetExercicesAsync();
             var exercice = exercices.FirstOrDefault(e => !e.EstCloture && date.Date >= e.DateDebut.Date && date.Date <= e.DateFin.Date);
             if (exercice is not null) return exercice.Id;
         }

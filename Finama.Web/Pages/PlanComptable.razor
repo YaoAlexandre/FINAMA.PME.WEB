@@ -2,7 +2,7 @@
 @using Finama.Web.Models
 @layout MainLayout
 @using Finama.Web.Shared
-@inject FinamaApiService Api
+@inject IPlanComptableService PlanComptableApi
 @inject NotificationService Notif
 
 <PageTitle>Plan comptable — Finama</PageTitle>
@@ -288,7 +288,7 @@
         {
             if (_page < 1) _page = 1;
 
-            var resultat = await Api.GetPlanComptableAsync(
+            var resultat = await PlanComptableApi.GetPlanComptableAsync(
                 classe: string.IsNullOrEmpty(_filtreClasse) ? null : _filtreClasse,
                 recherche: _recherche,
                 page: _page,
@@ -298,7 +298,7 @@
             if (resultat is { TotalPages: > 0 } && _page > resultat.TotalPages)
             {
                 _page = resultat.TotalPages;
-                resultat = await Api.GetPlanComptableAsync(
+                resultat = await PlanComptableApi.GetPlanComptableAsync(
                     classe: string.IsNullOrEmpty(_filtreClasse) ? null : _filtreClasse,
                     recherche: _recherche,
                     page: _page,
@@ -358,7 +358,7 @@
 
         try
         {
-            _numero = await Api.GetProchainNumeroSousCompteAsync(parent.Id);
+            _numero = await PlanComptableApi.GetProchainNumeroSousCompteAsync(parent.Id);
         }
         catch
         {
@@ -380,7 +380,7 @@
     {
         try
         {
-            await Api.ChangerStatutCompteAsync(c.Id, !c.EstActif);
+            await PlanComptableApi.ChangerStatutCompteAsync(c.Id, !c.EstActif);
             Notif.Succes(c.EstActif ? $"Le compte {c.Numero} est désactivé : il n'apparaît plus dans les saisies."
                                     : $"Le compte {c.Numero} est de nouveau actif.",
                          c.EstActif ? "Compte désactivé" : "Compte activé");
@@ -399,7 +399,7 @@
         {
             if (_compteEdite is null)
             {
-                await Api.CreerCompteAsync(new CreerCompteRequest(
+                await PlanComptableApi.CreerCompteAsync(new CreerCompteRequest(
                     Numero: _numero,
                     Libelle: _libelle,
                     Classe: _classe,
@@ -408,7 +408,7 @@
             }
             else
             {
-                await Api.ModifierCompteAsync(_compteEdite.Id, new ModifierCompteRequest(
+                await PlanComptableApi.ModifierCompteAsync(_compteEdite.Id, new ModifierCompteRequest(
                     Libelle: _libelle,
                     EstActif: bool.Parse(_actif),
                     CompteParentId: _compteEdite.CompteParentId));

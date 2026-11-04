@@ -1,6 +1,9 @@
 @page "/referentiel/tiers"
 @using Finama.Web.Models
-@inject FinamaApiService Api
+@inject IAuthService AuthApi
+@inject IEntrepriseService EntrepriseApi
+@inject IPlanComptableService PlanComptableApi
+@inject ITiersService TiersApi
 @inject AppState State
 @inject ApiClient Client
 @inject NotificationService Notif
@@ -471,7 +474,7 @@
         await ChargerDonnees();
     }
 
-    private async Task ChargerDonnees() => _resultat = await Api.ListerTiersAsync(_filtre);
+    private async Task ChargerDonnees() => _resultat = await TiersApi.ListerTiersAsync(_filtre);
 
     // CHARGEMENT DEPUIS TON ENDPOINT /api/Devises
     private async Task ChargerDevises()
@@ -479,7 +482,7 @@
         try
         {
             // Remplace par ton modèle de DTO réel (ex: DeviseDto ou semblable)
-            _devisesDisponibles = await Api.GetDevisesActivesAsync();
+            _devisesDisponibles = await EntrepriseApi.GetDevisesActivesAsync();
         }
         catch
         {
@@ -495,14 +498,14 @@
     private async Task ChargerComptesComptables()
     {
         if (_comptesTiers.Any()) return;
-        try { _comptesTiers = (await Api.GetPlanComptableSelectAsync("4")).OrderBy(c => c.Code).ToList(); }
+        try { _comptesTiers = (await PlanComptableApi.GetPlanComptableSelectAsync("4")).OrderBy(c => c.Code).ToList(); }
         catch { _comptesTiers = new(); }
     }
 
     /// <summary>Devise de tenue de l'entreprise (XOF…) proposée par défaut, plutôt que la première de la liste.</summary>
     private async Task<string> DeviseParDefautAsync()
     {
-        var symbole = await Api.GetDeviseSymboleAsync();
+        var symbole = await AuthApi.GetDeviseSymboleAsync();
         return _devisesDisponibles.FirstOrDefault(d => d.Code == symbole || d.Symbole == symbole)?.Code
                ?? _devisesDisponibles.FirstOrDefault(d => d.Code == "XOF")?.Code
                ?? _devisesDisponibles.FirstOrDefault()?.Code ?? "XOF";
@@ -582,7 +585,7 @@
     {
         if (_selectedTiers == null) return;
 
-        var success = await Api.SupprimerTiersAsync(_selectedTiers.Id);
+        var success = await TiersApi.SupprimerTiersAsync(_selectedTiers.Id);
         if (success)
         {
             _showDeleteModal = false;

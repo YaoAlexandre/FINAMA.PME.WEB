@@ -1,7 +1,8 @@
 @page "/balance"
 @using Finama.Web.Models
 @using Finama.Web.Services
-@inject FinamaApiService Api
+@inject IEtatsFinanciersService EtatsApi
+@inject IExercicesService ExercicesApi
 @inject NavigationManager Nav
 
 <PageTitle>Balance des Comptes — Finama</PageTitle>
@@ -379,7 +380,7 @@ else if (_estEquilibree == true)
         try
         {
             // 1. 🌟 On commence par récupérer l'exercice système courant pour initialiser la session
-            var exerciceCourant = await Api.GetExerciceCourantAsync();
+            var exerciceCourant = await ExercicesApi.GetExerciceCourantAsync();
             if (exerciceCourant != null)
             {
                 _exerciceIdActuel = exerciceCourant.Id;
@@ -408,7 +409,7 @@ else if (_estEquilibree == true)
         try
         {
             // 2. 🌟 Balance de l'exercice, limitée à la période choisie le cas échéant
-            var wrapper = await Api.GetBalanceAsync(_exerciceIdActuel, dateDebut: _dateDebut, dateFin: _dateFin);
+            var wrapper = await EtatsApi.GetBalanceAsync(_exerciceIdActuel, dateDebut: _dateDebut, dateFin: _dateFin);
 
             if (wrapper?.Rapport != null)
             {
@@ -483,7 +484,7 @@ else if (_estEquilibree == true)
 
         try
         {
-            var success = await Api.CloturerExerciceAsync(_exerciceIdActuel);
+            var success = await ExercicesApi.CloturerExerciceAsync(_exerciceIdActuel);
 
             if (success)
             {

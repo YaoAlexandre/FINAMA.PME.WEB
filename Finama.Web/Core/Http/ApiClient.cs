@@ -129,5 +129,25 @@ public sealed class ApiClient
         return MessageErreur(reponse.StatusCode, message, parDefaut);
     }
 
+    /// <summary>Code métier ({ "code": "AUCUN_EXERCICE", … }) et message d'une réponse d'erreur.</summary>
+    public static async Task<(string? Code, string? Message)> LireCodeErreurAsync(HttpResponseMessage reponse)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(await reponse.Content.ReadAsStringAsync());
+            string? Lire(string nom)
+            {
+                foreach (var p in doc.RootElement.EnumerateObject())
+                    if (p.Name.Equals(nom, StringComparison.OrdinalIgnoreCase) && p.Value.ValueKind == JsonValueKind.String)
+                        return p.Value.GetString();
+                return null;
+            }
+            return (Lire("code"), Lire("message"));
+        }
+        catch
+        {
+            return (null, null);
+        }
+    }
 }
 

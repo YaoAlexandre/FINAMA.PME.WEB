@@ -1,7 +1,8 @@
 ﻿@page "/comptabilite/ecritures/details/{Id:guid}"
 @using Finama.Web.Models
 @using Finama.Web.Services
-@inject FinamaApiService Api
+@inject IAuthService AuthApi
+@inject IEcrituresService EcrituresApi
 @inject NavigationManager Nav
 
 <div class="page-wrapper">
@@ -162,7 +163,7 @@
     {
         _loading = true;
         // On interroge l'API pour récupérer l'écriture et ses lignes
-        _ecriture = await Api.GetEcritureDetailsAsync(Id);
+        _ecriture = await EcrituresApi.GetEcritureDetailsAsync(Id);
         _loading = false;
     }
 
@@ -177,7 +178,7 @@
             return;
         }
 
-        var estConnecte = await Api.EstConnecteAsync();
+        var estConnecte = await AuthApi.EstConnecteAsync();
 
         if (!estConnecte)
         {

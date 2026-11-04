@@ -6,7 +6,7 @@
 @layout MainLayout
 @inject ILocalStorage Stockage
 @inject IJSRuntime JS
-@inject FinamaApiService Api
+@inject IEntrepriseService EntrepriseApi
 @inject NotificationService NotificationService
 
 <PageTitle>Mon Entreprise — Finama</PageTitle>
@@ -243,7 +243,7 @@ else
         _chargement = true;
         try
         {
-            _entreprise = await Api.GetEntrepriseDetailsAsync();
+            _entreprise = await EntrepriseApi.GetEntrepriseDetailsAsync();
         }
         catch (Exception)
         {
@@ -282,7 +282,7 @@ else
                 return;
             }
             _edition.Nom = _edition.Nom.Trim();
-            await Api.UpdateEntrepriseAsync(_edition);
+            await EntrepriseApi.UpdateEntrepriseAsync(_edition);
 
             // Le menu (en bas à gauche) affiche le nom gardé à la connexion : on le met à jour tout de suite
             await Stockage.EcrireAsync(ClesStockage.Entreprise, _edition.Nom);

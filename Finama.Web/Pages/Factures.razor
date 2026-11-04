@@ -2,7 +2,10 @@
 @using Finama.Web.Models
 @layout MainLayout
 @using Finama.Web.Shared
-@inject FinamaApiService Api
+@inject IAuthService AuthApi
+@inject IExercicesService ExercicesApi
+@inject IFacturesService FacturesApi
+@inject ITiersService TiersApi
 @inject NotificationService Notif
 @inject IJSRuntime JS
 
@@ -361,7 +364,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _exerciceCourant = await Api.GetExerciceCourantAsync();
+        _exerciceCourant = await ExercicesApi.GetExerciceCourantAsync();
         await ChargerAsync();
 
         if (_factures?.Items?.Any() == true)
@@ -370,7 +373,7 @@
         }
         else if (_exerciceCourant is not null)
         {
-            _devise = await Api.GetDeviseSymboleAsync() ?? "XOF";
+            _devise = await AuthApi.GetDeviseSymboleAsync() ?? "XOF";
         }
     }
 
@@ -379,13 +382,13 @@
         _chargement = true;
         try
         {
-            var resultat = await Api.GetFacturesAsync(_page, _taille);
+            var resultat = await FacturesApi.GetFacturesAsync(_page, _taille);
 
             // Page devenue vide : retour à la dernière page valide
             if (resultat is { TotalPages: > 0 } && _page > resultat.TotalPages)
             {
                 _page = resultat.TotalPages;
-                resultat = await Api.GetFacturesAsync(_page, _taille);
+                resultat = await FacturesApi.GetFacturesAsync(_page, _taille);
             }
 
             _factures = resultat;
@@ -426,7 +429,7 @@
     {
         try
         {
-            _tiersSelect = await Api.GetTiersSelectAsync(nature);
+            _tiersSelect = await TiersApi.GetTiersSelectAsync(nature);
         }
         catch (Exception)
         {
@@ -444,7 +447,7 @@
     {
         try
         {
-            var pdf = await Api.GetFacturePdfAsync(id);
+            var pdf = await FacturesApi.GetFacturePdfAsync(id);
             if (pdf is null)
             {
                 Notif.Erreur("Le PDF de cette facture n'a pas pu être généré. Réessayez dans un instant.", "Téléchargement impossible");
@@ -469,7 +472,7 @@
         _sauvegarde = true; _erreur = "";
         try
         {
-            await Api.CreerFactureAsync(new CreerFactureRequest(
+            await FacturesApi.CreerFactureAsync(new CreerFactureRequest(
                 Type: int.Parse(_cType),
                 DateFacture: _cDateFacture,
                 DateEcheance: _cDateEcheance,

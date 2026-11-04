@@ -2,7 +2,7 @@
 @using Finama.Web.Models
 @using Finama.Web.Services
 @using Finama.Web.Shared
-@inject FinamaApiService Api
+@inject IEcrituresService EcrituresApi
 @inject NavigationManager Nav
 @inject NotificationService Notif
 
@@ -213,13 +213,13 @@
         _chargement = true;
         try
         {
-            var resultat = await Api.GetEcrituresAsync(_filtre);
+            var resultat = await EcrituresApi.GetEcrituresAsync(_filtre);
 
             // La page demandée n'existe plus (dernière ligne supprimée, filtre plus restrictif) : retour à la dernière page
             if (resultat is { TotalPages: > 0 } && _filtre.Page > resultat.TotalPages)
             {
                 _filtre.Page = resultat.TotalPages;
-                resultat = await Api.GetEcrituresAsync(_filtre);
+                resultat = await EcrituresApi.GetEcrituresAsync(_filtre);
             }
 
             _ecritures = resultat ?? new PagedResult<EcritureDto>();
@@ -303,8 +303,8 @@
         try
         {
             var succes = validation
-                ? await Api.ValiderEcritureAsync(cible.Id)
-                : await Api.SupprimerEcritureAsync(cible.Id);
+                ? await EcrituresApi.ValiderEcritureAsync(cible.Id)
+                : await EcrituresApi.SupprimerEcritureAsync(cible.Id);
 
             if (succes)
             {

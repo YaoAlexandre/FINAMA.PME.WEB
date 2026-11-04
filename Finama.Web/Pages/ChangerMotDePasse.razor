@@ -2,7 +2,7 @@
 @using Finama.Web.Models
 @using Finama.Web.Services
 @layout EmptyLayout
-@inject FinamaApiService Api
+@inject IAuthService AuthApi
 @inject NavigationManager Nav
 @inject AppState State
 
@@ -75,7 +75,7 @@
 
         try
         {
-            var result = await Api.ChangerMotDePasseAsync(_model);
+            var result = await AuthApi.ChangerMotDePasseAsync(_model);
 
             if (result != null && result.IsSuccess)
             {
@@ -86,7 +86,7 @@
                     State.Utilisateur = State.Utilisateur with { DoitChangerMotDePasse = false };
                 }
 
-                // La nouvelle session (sans verrou "mot de passe temporaire") est déjà enregistrée par FinamaApiService.
+                // La nouvelle session (sans verrou "mot de passe temporaire") est déjà enregistrée par AuthService.
                 // Rechargement complet : le menu et les droits sont relus depuis le nouveau jeton.
                 await Task.Delay(800);
                 Nav.NavigateTo("/modules", forceLoad: true);

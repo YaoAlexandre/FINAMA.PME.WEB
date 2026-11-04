@@ -22,7 +22,7 @@ public class AuthHeaderHandler : DelegatingHandler
     private static readonly SemaphoreSlim VerrouRefresh = new(1, 1);
 
     // Session définitivement perdue (refresh refusé) : plus aucune tentative, une seule redirection.
-    // Réinitialisé par FinamaApiService à chaque nouvelle connexion réussie.
+    // Réinitialisé par AuthService à chaque nouvelle connexion réussie.
     private static volatile bool _sessionPerdue;
     private static int _redirectionEnCours;
 

@@ -1,2 +1,7 @@
 global using Finama.Web.Core.Http;
+global using Finama.Web.Core.Securite;
 global using Finama.Web.Core.Stockage;
+global using Finama.Web.Features.Administration.Services;
+global using Finama.Web.Features.Authentification.Services;
+global using Finama.Web.Features.Comptabilite.Services;
+global using Finama.Web.Features.TableauBord.Services;

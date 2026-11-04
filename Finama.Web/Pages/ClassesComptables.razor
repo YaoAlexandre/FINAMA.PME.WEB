@@ -1,7 +1,7 @@
 ﻿@page "/configuration/classes-comptables"
 @using Finama.Web.Models
 @layout MainLayout
-@inject FinamaApiService Api
+@inject IPlanComptableService PlanComptableApi
 
 <PageTitle>Configuration des Classes — Finama</PageTitle>
 
@@ -164,7 +164,7 @@
         _erreurGlobale = null;
         try
         {
-            _classes = await Api.GetClassesComptablesAsync();
+            _classes = await PlanComptableApi.GetClassesComptablesAsync();
         }
         catch (Exception ex)
         {
@@ -235,11 +235,11 @@
             bool succes;
             if (_estModeEdition)
             {
-                succes = await Api.ModifierClasseComptableAsync(_numeroInput, _libelleInput);
+                succes = await PlanComptableApi.ModifierClasseComptableAsync(_numeroInput, _libelleInput);
             }
             else
             {
-                succes = await Api.CreerClasseComptableAsync(new() { Numero = _numeroInput, Libelle = _libelleInput });
+                succes = await PlanComptableApi.CreerClasseComptableAsync(new() { Numero = _numeroInput, Libelle = _libelleInput });
             }
 
             if (succes)

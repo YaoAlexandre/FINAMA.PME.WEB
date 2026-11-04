@@ -3,7 +3,8 @@
 @inherits LayoutComponentBase
 @implements IAsyncDisposable
 @inject ILocalStorage Stockage
-@inject FinamaApiService Api
+@inject IAuthService AuthApi
+@inject IEntrepriseService EntrepriseApi
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject ModulesService Modules
@@ -938,7 +939,7 @@
             var uriRelative = Nav.ToBaseRelativePath(Nav.Uri).ToLower();
             if (!uriRelative.StartsWith("connexion") && !uriRelative.StartsWith("register"))
             {
-                var estConnecte = await Api.EstConnecteAsync();
+                var estConnecte = await AuthApi.EstConnecteAsync();
                 if (!estConnecte)
                 {
                     Nav.NavigateTo("/connexion", forceLoad: false);
@@ -1048,11 +1049,11 @@
 
     private async Task ChargerDonneesSessionAsync()
     {
-        _userNom = await Api.GetUserNomAsync() ?? "";
-        _entrepriseNom = await Api.GetEntrepriseNomAsync() ?? "";
+        _userNom = await AuthApi.GetUserNomAsync() ?? "";
+        _entrepriseNom = await AuthApi.GetEntrepriseNomAsync() ?? "";
 
-        var baseDevise = await Api.GetDeviseSymboleAsync() ?? "XOF";
-        _listeDevises = await Api.GetDevisesActivesAsync();
+        var baseDevise = await AuthApi.GetDeviseSymboleAsync() ?? "XOF";
+        _listeDevises = await EntrepriseApi.GetDevisesActivesAsync();
 
         if (_listeDevises != null && _listeDevises.Any())
         {
@@ -1085,7 +1086,7 @@
     /// </summary>
     private async Task<string> EtatSessionAsync()
     {
-        var token = await Api.GetTokenAsync();
+        var token = await AuthApi.GetTokenAsync();
         if (string.IsNullOrEmpty(token)) return "absente";
         if (!JwtOutils.EstExpire(token)) return "valide";
 
@@ -1115,7 +1116,7 @@
     {
         _moduleDropdownOpen = false;
         _dropdownOpen = false;
-        await Api.LogoutAsync();
+        await AuthApi.LogoutAsync();
         Nav.NavigateTo("/connexion", forceLoad: true);   // repart de zéro : aucun droit ni menu du compte précédent
     }
 

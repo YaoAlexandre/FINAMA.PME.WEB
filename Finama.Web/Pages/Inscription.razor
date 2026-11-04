@@ -3,7 +3,8 @@
 @layout EmptyLayout
 @using Finama.Web.Models
 @using Finama.Web.Services
-@inject FinamaApiService Api
+@inject IAuthService AuthApi
+@inject IEntrepriseService EntrepriseApi
 @inject NavigationManager Nav
 
 <div class="auth-container">
@@ -82,7 +83,7 @@
     protected override async Task OnInitializedAsync()
     {
         // Chargement des pays via l'API (api/Pays)
-        _listePays = await Api.GetPaysAsync();
+        _listePays = await EntrepriseApi.GetPaysAsync();
     }
 
     private async Task GererInscription()
@@ -92,7 +93,7 @@
 
         try
         {
-            var success = await Api.RegisterAsync(_regModel);
+            var success = await AuthApi.RegisterAsync(_regModel);
             if (success)
             {
                 Nav.NavigateTo("/connexion?status=success");
