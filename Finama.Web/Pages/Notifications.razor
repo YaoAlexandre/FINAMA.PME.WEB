@@ -1,0 +1,233 @@
+@page "/notifications"
+@using System.Net.Http.Json
+@using Finama.Web.Services
+@implements IAsyncDisposable
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject PermissionsWeb Permissions
+@inject Radzen.NotificationService Notif
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthState
+
+<PageTitle>Notifications — Finama</PageTitle>
+
+<div style="max-width: 720px;">
+    <h3 class="fw-bold mb-1"><i class="bi bi-bell text-success me-2"></i>Notifications</h3>
+    <p class="text-muted small mb-4">Recevez les alertes importantes sur ce téléphone ou cet ordinateur, même quand Finama est fermé.</p>
+
+    @if (_etat is null)
+    {
+        <div class="text-center py-5"><div class="spinner-border text-success"></div></div>
+    }
+    else
+    {
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-body p-4">
+                @if (!_serveurActif)
+                {
+                    <div class="alert alert-secondary mb-0"><i class="bi bi-info-circle me-1"></i>Les notifications ne sont pas encore activées sur le serveur Finama.</div>
+                }
+                else if (_etat.Ios && !_etat.Installee)
+                {
+                    <div class="d-flex gap-3">
+                        <i class="bi bi-phone fs-2 text-success"></i>
+                        <div>
+                            <div class="fw-bold mb-1">Sur iPhone, installez d'abord Finama</div>
+                            <div class="small text-muted">Apple n'autorise les notifications que pour les applications installées :
+                                touchez <i class="bi bi-box-arrow-up"></i> <strong>Partager</strong>, puis <strong>« Sur l'écran d'accueil »</strong>,
+                                ouvrez Finama depuis l'icône et revenez sur cette page.</div>
+                        </div>
+                    </div>
+                }
+                else if (!_etat.Supporte)
+                {
+                    <div class="alert alert-warning mb-0">Ce navigateur ne gère pas les notifications. Utilisez Chrome, Edge, Firefox ou Safari récent.</div>
+                }
+                else if (_etat.Permission == "denied")
+                {
+                    <div class="d-flex gap-3">
+                        <i class="bi bi-bell-slash fs-2 text-danger"></i>
+                        <div>
+                            <div class="fw-bold mb-1">Notifications bloquées sur cet appareil</div>
+                            <div class="small text-muted">Elles ont été refusées. Réautorisez-les dans les réglages du navigateur
+                                (icône de cadenas à gauche de l'adresse → Notifications → Autoriser), puis rechargez la page.</div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <span class="fs-2 @(_abonne ? "text-success" : "text-muted")"><i class="bi @(_abonne ? "bi-bell-fill" : "bi-bell")"></i></span>
+                        <div class="flex-grow-1">
+                            <div class="fw-bold">@(_abonne ? "Activées sur cet appareil" : "Désactivées sur cet appareil")</div>
+                            <div class="small text-muted">@_appareils appareil(s) abonné(s) sur votre compte.</div>
+                        </div>
+                        @if (_abonne)
+                        {
+                            <button class="btn btn-outline-success" @onclick="Tester" disabled="@_enCours"><i class="bi bi-send me-1"></i>Tester</button>
+                            <button class="btn btn-outline-secondary" @onclick="Desactiver" disabled="@_enCours">Désactiver</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-success fw-bold px-4" @onclick="Activer" disabled="@_enCours">
+                                @if (_enCours) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                Activer les notifications
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <h6 class="fw-bold text-uppercase small text-muted">Ce que vous recevrez</h6>
+        <ul class="list-group list-group-flush shadow-sm rounded-4 overflow-hidden">
+            @foreach (var a in _estSuperAdmin ? AlertesPlateforme : Alertes.Where(a => a.Visible(Permissions)))
+            {
+                <li class="list-group-item d-flex gap-3 py-3">
+                    <i class="bi @a.Icone fs-4 @a.Couleur"></i>
+                    <div>
+                        <div class="fw-bold">@a.Titre</div>
+                        <div class="small text-muted">@a.Description</div>
+                    </div>
+                </li>
+            }
+        </ul>
+        <p class="small text-muted mt-3">
+            @if (_estSuperAdmin)
+            {
+                <text>Alertes de la plateforme, entre 7 h et 21 h (les erreurs serveur, à toute heure). Chaque alerte n'est envoyée qu'une fois.</text>
+            }
+            else
+            {
+                <text>Les alertes sont envoyées entre 7 h et 20 h, au plus une fois par jour pour chaque type (une fois par devis accepté).</text>
+            }
+        </p>
+    }
+</div>
+
+@code {
+    private IJSObjectReference? _module;
+    private EtatAppareil? _etat;
+    private bool _serveurActif;
+    private string _clePublique = "";
+    private int _appareils;
+    private bool _abonne;
+    private bool _enCours;
+
+    private sealed record EtatAppareil(bool Supporte, bool Ios, bool Installee, string Permission);
+    private sealed record ConfigPush(bool Actif, string ClePublique, int Appareils);
+    private sealed record ResultatAbonnement(bool Ok, string? Raison, string? Endpoint, string? P256dh, string? Auth, string? Appareil);
+    private sealed record ReponseApi(string? Message);
+
+    private sealed record Alerte(string Titre, string Description, string Icone, string Couleur, string[] Perms)
+    {
+        public bool Visible(PermissionsWeb p) => p.A(Perms);
+    }
+
+    private bool _estSuperAdmin;
+
+    private static readonly Alerte[] AlertesPlateforme =
+    [
+        new("Nouvelle demande d'accès", "Un prospect a rempli le formulaire du site : rappelez-le dans l'heure.", "bi-person-plus", "text-success", []),
+        new("Nouvelle entreprise inscrite", "Pour lui souhaiter la bienvenue et proposer une démo.", "bi-building-add", "text-primary", []),
+        new("Abonnement bientôt expiré", "7 jours avant l'échéance, pour relancer avant le blocage.", "bi-hourglass-split", "text-warning", []),
+        new("Abonnement expiré", "Les utilisateurs du client ne peuvent plus se connecter.", "bi-x-octagon", "text-danger", []),
+        new("Erreurs serveur", "Au moins 5 erreurs en 15 minutes : à vérifier dans les journaux de l'API.", "bi-bug", "text-danger", []),
+    ];
+
+    private static readonly Alerte[] Alertes =
+    [
+        new("Stock bas", "Les articles passés sous leur seuil de réapprovisionnement.", "bi-box-seam", "text-warning", ["stock.gerer", "admin.parametres"]),
+        new("Dates de péremption", "Les lots périmés ou qui périment dans moins de 10 jours.", "bi-calendar-x", "text-danger", ["stock.gerer", "admin.parametres"]),
+        new("Factures en retard", "Les factures de vente dont l'échéance est dépassée.", "bi-receipt", "text-primary", ["compta.valider", "ventes.facturer", "admin.parametres"]),
+        new("Devis accepté", "Dès qu'un client accepte un devis (le vôtre, ou tous si vous les supervisez).", "bi-check2-circle", "text-success", ["ventes.devis", "ventes.tousdevis"]),
+    ];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _estSuperAdmin = (await AuthState.GetAuthenticationStateAsync()).User.IsInRole("SuperAdmin");
+        await Permissions.ChargerAsync();
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/finama-push.js");
+        await Rafraichir();
+    }
+
+    private async Task Rafraichir()
+    {
+        try
+        {
+            var config = await Http.GetFromJsonAsync<ConfigPush>("api/push/config");
+            _serveurActif = config?.Actif == true;
+            _clePublique = config?.ClePublique ?? "";
+            _appareils = config?.Appareils ?? 0;
+        }
+        catch { _serveurActif = false; }
+
+        _etat = await _module!.InvokeAsync<EtatAppareil>("etat");
+        _abonne = _etat.Supporte && _etat.Permission == "granted" && !string.IsNullOrEmpty(await _module.InvokeAsync<string?>("abonnementActuel"));
+        StateHasChanged();
+    }
+
+    private async Task Activer()
+    {
+        if (_module is null) return;
+        _enCours = true;
+        try
+        {
+            var r = await _module.InvokeAsync<ResultatAbonnement>("abonner", _clePublique);
+            if (!r.Ok)
+            {
+                Notif.Avertir(r.Raison switch
+                {
+                    "denied" => "Vous avez refusé les notifications. Réautorisez-les dans les réglages du navigateur.",
+                    "service-worker" => "L'application n'est pas encore prête sur cet appareil. Rechargez la page puis réessayez.",
+                    _ => "Activation annulée."
+                }, "Notifications");
+                return;
+            }
+            using var reponse = await Http.PostAsJsonAsync("api/push/abonnements", new { r.Endpoint, r.P256dh, r.Auth, r.Appareil });
+            var msg = await MessageAsync(reponse);
+            if (reponse.IsSuccessStatusCode) Notif.Succes(msg ?? "Notifications activées.");
+            else Notif.Erreur(msg ?? "Activation impossible.", "Notifications");
+        }
+        catch { Notif.Erreur("Activation impossible sur cet appareil.", "Notifications"); }
+        finally { _enCours = false; await Rafraichir(); }
+    }
+
+    private async Task Desactiver()
+    {
+        if (_module is null) return;
+        _enCours = true;
+        try
+        {
+            var endpoint = await _module.InvokeAsync<string?>("desabonner");
+            if (endpoint is not null)
+                using (await Http.PostAsJsonAsync("api/push/abonnements/retirer", new { Endpoint = endpoint })) { }
+            Notif.Information("Notifications désactivées sur cet appareil.", "Notifications");
+        }
+        catch { Notif.Erreur("Désactivation impossible.", "Notifications"); }
+        finally { _enCours = false; await Rafraichir(); }
+    }
+
+    private async Task Tester()
+    {
+        _enCours = true;
+        try
+        {
+            using var r = await Http.PostAsync("api/push/test", null);
+            var msg = await MessageAsync(r);
+            if (r.IsSuccessStatusCode) Notif.Succes(msg ?? "Notification envoyée.");
+            else Notif.Erreur(msg ?? "Échec de l'envoi.", "Test");
+        }
+        finally { _enCours = false; }
+    }
+
+    private static async Task<string?> MessageAsync(HttpResponseMessage r)
+    {
+        try { return (await r.Content.ReadFromJsonAsync<ReponseApi>())?.Message; } catch { return null; }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { if (_module is not null) await _module.DisposeAsync(); } catch { }
+    }
+}

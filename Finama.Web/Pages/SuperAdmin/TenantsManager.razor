@@ -253,6 +253,35 @@
     </div>
 }
 
+@* ===== Fenêtre : renommer ===== *@
+@if (tenantRenommer is not null)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold">Renommer l'entreprise</h5>
+                    <button type="button" class="btn-close" aria-label="Fermer" @onclick="() => tenantRenommer = null" disabled="@renommerBusy"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label small fw-bold">Nouveau nom (raison sociale)</label>
+                    <input class="form-control fw-bold" maxlength="150" @bind="nouveauNom" @bind:event="oninput" />
+                    <div class="form-text">Actuel : @tenantRenommer.Nom. Le nom apparaît sur les factures, devis et tickets du client.</div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button class="btn btn-light" @onclick="() => tenantRenommer = null" disabled="@renommerBusy">Annuler</button>
+                    <button class="btn btn-primary" @onclick="Renommer"
+                            disabled="@(renommerBusy || string.IsNullOrWhiteSpace(nouveauNom) || nouveauNom.Trim().Length < 2 || nouveauNom.Trim() == tenantRenommer.Nom)">
+                        @if (renommerBusy) { <span class="spinner-border spinner-border-sm me-1" role="status"></span> }
+                        Renommer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @* ===== Fenêtre : modules ===== *@
 @if (tenantModules is not null)
 {
@@ -438,6 +467,37 @@
         (4, "Commerce & Ventes", "Caisse, articles, stocks, inventaires, fidélité", "bi-cart3"),
     ];
 
+    // ─── Renommer ───
+    private TenantAdminDto? tenantRenommer;
+    private string nouveauNom = "";
+    private bool renommerBusy;
+
+    private void OuvrirRenommer(TenantAdminDto t)
+    {
+        tenantRenommer = t;
+        nouveauNom = t.Nom;
+    }
+
+    private async Task Renommer()
+    {
+        if (tenantRenommer is null) return;
+        renommerBusy = true;
+        try
+        {
+            using var r = await Http.PutAsJsonAsync($"api/superadmin/tenants/{tenantRenommer.Id}/nom", new { Nom = nouveauNom.Trim() });
+            string? message = null;
+            try { message = (await r.Content.ReadFromJsonAsync<MessageApi>())?.Message; } catch { }
+            if (!r.IsSuccessStatusCode) { Notif.Erreur(message ?? "Renommage impossible."); return; }
+            Notif.Succes(message ?? "Entreprise renommée.");
+            tenantRenommer = null;
+            await ChargerDonnees();
+        }
+        catch { Notif.ErreurServeur(); }
+        finally { renommerBusy = false; }
+    }
+
+    private sealed record MessageApi(string? Message);
+
     private async Task OuvrirModules(TenantAdminDto t)
     {
         tenantModules = t;
@@ -562,6 +622,9 @@
         </button>
         <button class="btn btn-outline-warning" title="Accéder en mode support" @onclick="() => OuvrirSupport(t)" disabled="@(!t.EstActif)">
             <i class="bi bi-headset"></i>
+        </button>
+        <button class="btn btn-outline-secondary" title="Renommer l'entreprise" @onclick="() => OuvrirRenommer(t)">
+            <i class="bi bi-pencil-square"></i>
         </button>
         <button class="btn btn-outline-success" title="Modules accessibles" @onclick="() => OuvrirModules(t)">
             <i class="bi bi-grid-3x3-gap"></i>

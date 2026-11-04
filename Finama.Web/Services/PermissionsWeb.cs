@@ -1,5 +1,7 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.JSInterop;
 
 namespace Finama.Web.Services;
 
@@ -9,12 +11,15 @@ namespace Finama.Web.Services;
 /// </summary>
 public class PermissionsWeb
 {
+    private const string CleCache = "finama_permissions";
     private readonly HttpClient _http;
+    private readonly IJSRuntime _js;
     private Task<HashSet<string>>? _chargement;
 
-    public PermissionsWeb(HttpClient http, AuthenticationStateProvider auth)
+    public PermissionsWeb(HttpClient http, AuthenticationStateProvider auth, IJSRuntime js)
     {
         _http = http;
+        _js = js;
         // Connexion, déconnexion, changement de compte : les droits du compte précédent sont oubliés
         auth.AuthenticationStateChanged += _ => Reinitialiser();
     }
@@ -40,17 +45,44 @@ public class PermissionsWeb
 
     private async Task<HashSet<string>> LireAsync()
     {
+        var utilisateur = await UtilisateurCourantAsync();
         try
         {
             var r = await _http.GetFromJsonAsync<Reponse>("api/moi/permissions");
-            return r?.Permissions?.ToHashSet() ?? new HashSet<string>();
+            var droits = r?.Permissions?.ToHashSet() ?? new HashSet<string>();
+            // Copie locale : la caisse reste utilisable hors connexion avec les droits de CET utilisateur
+            if (utilisateur is not null)
+                try { await _js.InvokeVoidAsync("localStorage.setItem", CleCache, JsonSerializer.Serialize(new Cache(utilisateur, droits.ToArray()))); } catch { }
+            return droits;
         }
         catch
         {
             _chargement = null;   // nouvel essai au prochain appel
+            // Hors connexion : derniers droits connus, uniquement s'ils appartiennent au même utilisateur
+            try
+            {
+                var brut = await _js.InvokeAsync<string?>("localStorage.getItem", CleCache);
+                var cache = string.IsNullOrEmpty(brut) ? null : JsonSerializer.Deserialize<Cache>(brut);
+                if (cache is not null && utilisateur is not null && cache.Utilisateur == utilisateur) return cache.Droits.ToHashSet();
+            }
+            catch { }
             return new HashSet<string>();
         }
     }
+
+    private async Task<string?> UtilisateurCourantAsync()
+    {
+        try
+        {
+            var jeton = await _js.InvokeAsync<string?>("localStorage.getItem", "finama_token");
+            if (string.IsNullOrEmpty(jeton)) return null;
+            var charge = JwtOutils.LirePayload(jeton);
+            return charge.TryGetValue("sub", out var sub) ? sub.GetString() : null;
+        }
+        catch { return null; }
+    }
+
+    private sealed record Cache(string Utilisateur, string[] Droits);
 
     private sealed record Reponse(string[]? Permissions);
 }

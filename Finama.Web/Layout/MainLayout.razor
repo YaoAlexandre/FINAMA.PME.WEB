@@ -131,6 +131,14 @@
                             </NavLink>
                         </Authorized>
                     </AuthorizeView>
+                    <AuthorizeView Policy="AdminTenant" Context="liaison">
+                        <Authorized>
+                            <NavLink href="/comptabilite/liaison" class="nav-item">
+                                <i class="bi bi-link-45deg nav-icon"></i>
+                                <span>Liaison comptable</span>
+                            </NavLink>
+                        </Authorized>
+                    </AuthorizeView>
                 </div>
 
                 <div class="nav-section">
@@ -335,7 +343,9 @@
                 <span class="badge bg-secondary font-monospace d-none d-md-inline-block">
                     Module : @(_moduleActif == "COMPTA" ? "Finance & Compta" : _moduleActif == "COMMERCE" ? "Commerce & Ventes" : _moduleActif == "VENTES" ? "Ventes & Devis" : _moduleActif == "ADMIN" ? "Administration" : "Accueil")
                 </span>
-
+                <a href="/notifications" class="btn btn-sm btn-outline-secondary rounded-3" title="Notifications" aria-label="Notifications">
+                    <i class="bi bi-bell"></i>
+                </a>
                 <ThemeSwitcher />
 
                 <!-- Devise de tenue de la comptabilité : fixe (OHADA : une seule monnaie de tenue).
@@ -889,7 +899,11 @@
 
             var chemin = "/" + relatif;
             await JS.InvokeVoidAsync("localStorage.setItem", "finama_derniere_page", chemin);
-            await JS.InvokeVoidAsync("localStorage.setItem", $"finama_page_{ModuleDepuisUrl(relatif)}", chemin);
+
+            // Pages communes (accueil, notifications…) : jamais retenues comme « dernière page » d'un module
+            var module = ModuleDepuisUrl(relatif);
+            if (module != "MODULES")
+                await JS.InvokeVoidAsync("localStorage.setItem", $"finama_page_{module}", chemin);
         }
         catch { /* stockage indisponible : sans conséquence */ }
     }
@@ -960,7 +974,7 @@
         if (relatif.StartsWith("commerce")) return "COMMERCE";
         if (relatif.StartsWith("ventes") || relatif.StartsWith("commercial")) return "VENTES";
         if (relatif.StartsWith("configuration") || relatif.StartsWith("administration") || relatif.StartsWith("utilisateurs") || relatif.StartsWith("entreprise") || relatif.StartsWith("superadmin")) return "ADMIN";
-        if (relatif.StartsWith("modules")) return "MODULES";   // Hub global des modules
+        if (relatif.StartsWith("modules") || relatif.StartsWith("notifications")) return "MODULES";   // pages communes à tous
         return "COMPTA";
     }
 
@@ -993,7 +1007,10 @@
         try { derniere = await JS.InvokeAsync<string?>("localStorage.getItem", $"finama_page_{module}"); }
         catch { /* stockage indisponible */ }
 
-        Nav.NavigateTo(!string.IsNullOrWhiteSpace(derniere) && derniere.StartsWith('/') ? derniere : defaut);
+        // Une valeur mémorisée d'un autre module (ou d'une ancienne version) est ignorée
+        var valide = !string.IsNullOrWhiteSpace(derniere) && derniere.StartsWith('/')
+                     && ModuleDepuisUrl(derniere.TrimStart('/').ToLower()) == module;
+        Nav.NavigateTo(valide ? derniere! : defaut);
     }
 
     private async Task SecuriserAccesAsync()

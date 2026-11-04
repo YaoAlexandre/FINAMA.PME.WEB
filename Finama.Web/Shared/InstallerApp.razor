@@ -1,10 +1,28 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 
-@* Bandeau « Installer l'application Finama » : Android et ordinateur (bouton), iPhone (instructions). Masqué si déjà installée ou refusé. *@
-@if (_afficher)
+@* Bandeaux de l'application : hors connexion · nouvelle version · installation sur le téléphone *@
+
+@if (!_enLigne)
 {
-    <div class="installer-app d-flex align-items-center gap-3 px-3 py-2">
+    <div class="bandeau-app bandeau-hors-ligne d-flex align-items-center gap-2 px-3 py-2" role="status">
+        <i class="bi bi-wifi-off fs-5"></i>
+        <div class="small"><strong>Hors connexion.</strong> Vos données s'afficheront et s'enregistreront dès le retour du réseau.</div>
+    </div>
+}
+
+@if (_miseAJour)
+{
+    <div class="bandeau-app bandeau-maj d-flex align-items-center gap-3 px-3 py-2" role="status">
+        <i class="bi bi-stars fs-5"></i>
+        <div class="flex-grow-1 small"><strong>Nouvelle version de Finama disponible.</strong></div>
+        <button class="btn btn-sm btn-light fw-bold" @onclick="AppliquerMiseAJour">Mettre à jour</button>
+    </div>
+}
+
+@if (_afficherInstallation)
+{
+    <div class="bandeau-app bandeau-installer d-flex align-items-center gap-3 px-3 py-2">
         <img src="icons/icon-192.png" alt="" width="40" height="40" class="rounded-3" />
         <div class="flex-grow-1 small">
             <div class="fw-bold">Installez Finama sur votre téléphone</div>
@@ -21,19 +39,24 @@
         {
             <button class="btn btn-sm btn-light fw-bold" @onclick="Installer">Installer</button>
         }
-        <button class="btn-close btn-close-white" aria-label="Plus tard" @onclick="Masquer"></button>
+        <button class="btn-close btn-close-white" aria-label="Plus tard" @onclick="MasquerInstallation"></button>
     </div>
 }
 
 <style>
-    .installer-app { background: #0F8873; color: #fff; position: sticky; top: 0; z-index: 1030; }
+    .bandeau-app { color: #fff; position: sticky; top: 0; z-index: 1030; }
+    .bandeau-installer { background: #0F8873; }
+    .bandeau-maj { background: #1d4ed8; }
+    .bandeau-hors-ligne { background: #b45309; }
 </style>
 
 @code {
     private IJSObjectReference? _module;
     private DotNetObjectReference<InstallerApp>? _ref;
     private EtatPwa? _etat;
-    private bool _afficher;
+    private bool _afficherInstallation;
+    private bool _miseAJour;
+    private bool _enLigne = true;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -53,22 +76,41 @@
     {
         if (_module is null) return;
         _etat = await _module.InvokeAsync<EtatPwa>("etat");
+        _enLigne = _etat.EnLigne;
         var refuse = await JS.InvokeAsync<string?>("localStorage.getItem", "finama_pwa_masque") == "1";
-        // Proposé sur iPhone (pas d'invitation automatique) ou quand le navigateur permet l'installation
-        _afficher = !_etat.Installee && !refuse && (_etat.Installable || _etat.Ios);
+        _afficherInstallation = !_etat.Installee && !refuse && (_etat.Installable || _etat.Ios);
         StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void MiseAJourDisponible()
+    {
+        _miseAJour = true;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void ReseauChange(bool enLigne)
+    {
+        _enLigne = enLigne;
+        StateHasChanged();
+    }
+
+    private async Task AppliquerMiseAJour()
+    {
+        if (_module is not null) await _module.InvokeVoidAsync("appliquerMiseAJour");
     }
 
     private async Task Installer()
     {
         if (_module is null) return;
-        if (await _module.InvokeAsync<bool>("installer")) _afficher = false;
+        if (await _module.InvokeAsync<bool>("installer")) _afficherInstallation = false;
         await MettreAJour();
     }
 
-    private async Task Masquer()
+    private async Task MasquerInstallation()
     {
-        _afficher = false;
+        _afficherInstallation = false;
         try { await JS.InvokeVoidAsync("localStorage.setItem", "finama_pwa_masque", "1"); } catch { }
     }
 
@@ -78,5 +120,5 @@
         _ref?.Dispose();
     }
 
-    private sealed record EtatPwa(bool Installee, bool Ios, bool Installable);
+    private sealed record EtatPwa(bool Installee, bool Ios, bool Installable, bool EnLigne);
 }

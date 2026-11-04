@@ -11,6 +11,7 @@
 @inject AuthenticationStateProvider AuthState
 @inject PermissionsWeb Permissions
 @inject Radzen.NotificationService NotificationService
+@inject ImagesArticlesService Images
 
 <div class="pos-wrapper d-flex flex-column bg-light">
     <!-- EN-TÊTE -->
@@ -25,6 +26,18 @@
             }
         </div>
         <div class="pos-header-actions d-flex align-items-center gap-2">
+            @if (_horsLigne)
+            {
+                <span class="badge bg-warning text-dark text-nowrap" title="Les ventes sont gardées sur l'appareil et envoyées au retour du réseau">
+                    <i class="bi bi-wifi-off me-1"></i>Hors connexion
+                </span>
+            }
+            @if (_ventesEnAttente > 0 || _ventesEnErreur > 0)
+            {
+                <button class="btn btn-sm @(_ventesEnErreur > 0 ? "btn-danger" : "btn-outline-warning") text-nowrap" @onclick="OuvrirFile" title="Ventes faites sans réseau">
+                    <i class="bi bi-cloud-upload"></i><span class="pos-libelle ms-1">@(_ventesEnAttente + _ventesEnErreur) à envoyer</span>
+                </button>
+            }
             @if (_session != null)
             {
                 <span class="badge bg-secondary font-monospace d-none d-xl-inline">[F2] Encaisser | [F4] Réimprimer | [F8] Tickets | [Échap] Vider</span>
@@ -35,6 +48,9 @@
                     <i class="bi bi-lock"></i><span class="pos-libelle ms-1">Clôturer<span class="d-none d-lg-inline"> la caisse</span></span>
                 </button>
             }
+                        <button class="btn btn-outline-light btn-sm text-nowrap" title="Afficher ou masquer les photos des articles" @onclick="BasculerImages">
+                <i class="bi @(_afficherImages ? "bi-image-fill" : "bi-image")"></i>
+            </button>
             <button class="btn btn-outline-light btn-sm font-monospace text-nowrap" @onclick='() => Nav.NavigateTo("/modules")' title="Quitter la caisse">
                 <i class="bi bi-arrow-left-circle"></i><span class="pos-libelle ms-1">Quitter</span>
             </button>
@@ -125,7 +141,20 @@
                                 <div class="col-6 col-md-6 col-xl-4" @key="art.Id">
                                     <button type="button"
                                             class="article-card btn btn-outline-light text-dark w-100 p-3 h-100 d-flex flex-column justify-content-between border rounded-3 shadow-sm text-start"
-                                            @onclick="() => AjouterAuPanier(art)">
+                                                                                       @onclick="() => AjouterAuPanier(art)">
+                                        @if (_afficherImages && AvecPhotos)
+                                        {
+                                            <div class="article-visuel mb-2">
+                                                @if (Images.Url(art.Id) is { } photo)
+                                                {
+                                                    <img src="@photo" alt="" loading="lazy" />
+                                                }
+                                                else
+                                                {
+                                                    <span class="article-initiales">@Initiales(art.Designation)</span>
+                                                }
+                                            </div>
+                                        }
                                         <div class="d-flex justify-content-between align-items-start mb-2 w-100 gap-1">
                                             <span class="fw-bold text-dark article-nom" title="@art.Designation">@art.Designation</span>
                                             @if (art.IsLivre)
@@ -237,9 +266,12 @@
                                 else { <i class="bi bi-whatsapp me-1"></i> }
                                 Envoyer le reçu
                             </button>
-                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DemarrerAnnulation(_dernierRecu.Ticket.Id, _dernierRecu.Ticket.NumeroTicket, _dernierRecu.Ticket.TotalTTC)">
-                                <i class="bi bi-x-circle me-1"></i>Annuler ce ticket
-                            </button>
+                            @if (!_dernierRecu.EstHorsLigne)
+                            {
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DemarrerAnnulation(_dernierRecu.Ticket.Id, _dernierRecu.Ticket.NumeroTicket, _dernierRecu.Ticket.TotalTTC)">
+                                    <i class="bi bi-x-circle me-1"></i>Annuler ce ticket
+                                </button>
+                            }
                         </div>
                     </div>
                 }
@@ -342,8 +374,8 @@
                         <button class="btn btn-outline-success" @onclick="() => AjouterPaiement(ModePaiementPos.Especes)"><i class="bi bi-cash me-1"></i>Espèces</button>
                         <button class="btn btn-outline-primary" @onclick="() => AjouterPaiement(ModePaiementPos.Carte)"><i class="bi bi-credit-card me-1"></i>Carte</button>
                         <button class="btn btn-outline-warning" @onclick="() => AjouterPaiement(ModePaiementPos.MobileMoney)"><i class="bi bi-phone me-1"></i>Mobile Money</button>
-                        <button class="btn btn-outline-secondary" disabled="@(_client == null)" @onclick="() => AjouterPaiement(ModePaiementPos.Credit)"><i class="bi bi-journal-text me-1"></i>Crédit client</button>
-                        <button class="btn btn-outline-secondary" disabled="@(_client == null)" @onclick="() => AjouterPaiement(ModePaiementPos.Points)"><i class="bi bi-star me-1"></i>Points</button>
+                        <button class="btn btn-outline-secondary" disabled="@(_client == null || _horsLigne)" title="@(_horsLigne ? "Indisponible hors connexion" : null)" @onclick="() => AjouterPaiement(ModePaiementPos.Credit)"><i class="bi bi-journal-text me-1"></i>Crédit client</button>
+                        <button class="btn btn-outline-secondary" disabled="@(_client == null || _horsLigne)" title="@(_horsLigne ? "Indisponible hors connexion" : null)" @onclick="() => AjouterPaiement(ModePaiementPos.Points)"><i class="bi bi-star me-1"></i>Points</button>
                     </div>
 
                     @foreach (var p in _paiements)
@@ -437,6 +469,7 @@
         <div class="t-ligne"><span>Caisse</span><span>@r.Caisse</span></div>
         @if (!string.IsNullOrWhiteSpace(r.ClientNom)) { <div class="t-ligne"><span>Client</span><span>@r.ClientNom</span></div> }
         @if (r.Reimpression) { <div class="t-centre t-gras">*** DUPLICATA ***</div> }
+        @if (r.EstHorsLigne) { <div class="t-centre t-gras">TICKET PROVISOIRE (hors connexion)</div> }
 
         <div class="t-sep"></div>
         @foreach (var l in r.Lignes)
@@ -481,7 +514,32 @@
     .article-card { background-color: #f8f9fa; border-color: #e9ecef !important; transition: all 0.15s ease-in-out; }
     .article-card:hover { border-color: #198754 !important; background-color: #f1f8f5; transform: translateY(-2px); }
     .article-prix { font-size: 1.15rem; font-weight: 700; white-space: nowrap; }
-    .article-prix small { font-size: .75rem; font-weight: 600; }
+    .article-prix small { font-size: .75rem; font-weight: 600;        }
+
+    .article-visuel {
+        width: 100%;
+        height: 110px;
+        border-radius: .5rem;
+        background: #fff;
+        border: 1px solid #eef1f4;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+
+        .article-visuel img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+    .article-initiales {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: #94a3b8;
+        letter-spacing: .05em;
+    }
     .min-w-0 { min-width: 0; }
 
     /* Ordinateur / tablette : catalogue à gauche (60 %), ticket à droite (40 %), sur toute la hauteur */
@@ -496,7 +554,7 @@
         .pos-catalogue, .pos-ticket { width: 100%; }
         .pos-catalogue { min-height: 0; }
         .pos-catalogue .row.g-2 { min-height: 40vh; align-content: flex-start; }
-
+                                               .article-visuel { height: 84px; }
         .pos-header { flex-wrap: wrap; gap: 8px; padding: 8px 12px !important; }
         .pos-header-info { flex: 1 1 100%; justify-content: space-between; }
         .pos-header-actions { flex: 1 1 100%; }
@@ -560,6 +618,66 @@
         .t-qr svg { width: 100%; height: 100%; }
     }
 </style>
+
+<!-- VENTES FAITES HORS CONNEXION -->
+@if (_afficherFile)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15,23,42,.6); z-index: 2000;">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-cloud-upload me-2"></i>Ventes faites hors connexion</h5>
+                    <button class="btn-close" @onclick="() => _afficherFile = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted">Elles sont gardées sur cet appareil et envoyées automatiquement dès que le réseau revient. Ne videz pas les données du navigateur avant leur envoi.</p>
+                    @if (!_file.Any())
+                    {
+                        <div class="text-center text-muted py-4">Aucune vente en attente.</div>
+                    }
+                    else
+                    {
+                        <table class="table table-sm align-middle">
+                            <thead class="small text-muted"><tr><th>Ticket provisoire</th><th>Heure</th><th class="text-end">Total</th><th>État</th></tr></thead>
+                            <tbody>
+                                @foreach (var v in _file)
+                                {
+                                    <tr>
+                                        <td class="font-monospace">@v.NumeroHorsLigne</td>
+                                        <td>@v.DateVenteLocale.ToLocalTime().ToString("dd/MM HH:mm")</td>
+                                        <td class="text-end font-monospace">@v.Total.ToString("N0")</td>
+                                        <td>
+                                            @if (v.Statut == "erreur")
+                                            {
+                                                <span class="badge bg-danger">Refusée</span>
+                                                <div class="small text-danger">@v.Erreur</div>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-warning text-dark">En attente</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @if (_ventesEnErreur > 0)
+                        {
+                            <div class="alert alert-danger small mb-0">Une vente refusée par le serveur reste ici : montrez ce message au gérant. Après correction (caisse rouverte, article réactivé…), touchez « Réessayer ».</div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-light" @onclick="() => _afficherFile = false">Fermer</button>
+                    <button class="btn btn-success fw-bold" @onclick="ReessayerFile" disabled="@(_synchronisation || !_file.Any())">
+                        @if (_synchronisation) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        @(_ventesEnErreur > 0 ? "Réessayer" : "Envoyer maintenant")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 <!-- TICKETS DE LA SESSION -->
 @if (_afficherTickets)
@@ -720,15 +838,42 @@
     private bool _afficherCloture;
     private decimal _declEspeces, _declCarte, _declMobile;
     private string? _commentaireCloture;
+    private bool _afficherImages = true;
+    // Zone image sur toutes les tuiles seulement si au moins un article affiché a une photo (sinon : tuiles compactes comme avant)
+    private bool AvecPhotos => _articlesFiltres.Any(a => Images.Url(a.Id) is not null);
+
+    private static string Initiales(string nom)
+    {
+        var mots = nom.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(m => m.Length > 2 || char.IsDigit(m[0])).ToList();
+        if (mots.Count == 0) mots = nom.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+        return string.Concat(mots.Take(2).Select(m => char.ToUpperInvariant(m[0])));
+    }
 
     protected override async Task OnInitializedAsync()
     {
+                try { _afficherImages = await JS.InvokeAsync<string?>("localStorage.getItem", "finama_caisse_images") != "0"; } catch { }
+        _ = Images.ChargerAsync().ContinueWith(_ => InvokeAsync(StateHasChanged));
         _chargementSession = true;
-        await ResoudreMagasinAsync();
-        if (_magasinId.HasValue) await ChargerSessionAsync();
-        _chargementSession = false;
-    }
+        try { _jsHorsLigne = await JS.InvokeAsync<IJSObjectReference>("import", "./js/finama-horsligne.js"); } catch { }
 
+        var enLigne = await EnLigneAsync();
+        if (enLigne)
+        {
+            await ResoudreMagasinAsync();
+            if (_magasinId.HasValue) await ChargerSessionAsync();
+        }
+        if (!enLigne || (_magasinId is null && EstErreurReseau()))
+            await ChargerContexteLocalAsync();
+
+        _chargementSession = false;
+        await RafraichirFileAsync();
+        _ = BoucleSynchronisationAsync();
+    }
+            private async Task BasculerImages()
+    {
+        _afficherImages = !_afficherImages;
+        try { await JS.InvokeVoidAsync("localStorage.setItem", "finama_caisse_images", _afficherImages ? "1" : "0"); } catch { }
+    }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -752,6 +897,16 @@
             else await JS.InvokeVoidAsync("localStorage.setItem", "finama_logo", _logo);
         }
         catch { /* on garde le cache */ }
+        // Ticket de caisse : logo en noir et blanc (aperçu, impression et réimpression identiques)
+        if (!string.IsNullOrEmpty(_logo))
+        {
+            try
+            {
+                await using var jsImage = await JS.InvokeAsync<IJSObjectReference>("import", ModulesJs.Image);
+                _logo = await jsImage.InvokeAsync<string>("noirEtBlanc", _logo);
+            }
+            catch { /* logo d'origine */ }
+        }
     }
 
     private sealed record LogoReponse(string? DataUrl);
@@ -800,8 +955,18 @@
 
     private async Task ChargerArticles()
     {
+        if (_horsLigne) return;   // hors connexion : catalogue local
         _chargementArticles = true;
-        _articles = (await CommerceApi.GetProduitsAsync(_magasinId)).Where(a => a.EstActif).ToList();
+        var articles = await CommerceApi.GetProduitsAsync(_magasinId);
+        if (EstErreurReseau())
+        {
+            _horsLigne = true;    // on garde le catalogue déjà affiché
+        }
+        else
+        {
+            _articles = articles.Where(a => a.EstActif).ToList();
+            await EnregistrerContexteLocalAsync();
+        }
         FiltrerArticles();
         _chargementArticles = false;
     }
@@ -862,7 +1027,7 @@
     // ── Panier ──
     private void AjouterAuPanier(ProduitCommerceDto art)
     {
-        if (art.GereStock && art.StockActuel <= 0)
+        if (art.GereStock && art.StockActuel <= 0 && !_horsLigne)
         {
             NotificationService.Erreur($"« {art.Designation} » est en rupture de stock.", "Rupture");
             return;
@@ -871,7 +1036,7 @@
         var existant = _panier.FirstOrDefault(p => p.ProduitId == art.Id);
         if (existant != null)
         {
-            if (art.GereStock && existant.Quantite + 1 > art.StockActuel)
+            if (art.GereStock && existant.Quantite + 1 > art.StockActuel && !_horsLigne)
             {
                 NotificationService.Avertir("Impossible d'ajouter plus que le stock disponible.", "Stock limité");
                 return;
@@ -886,7 +1051,7 @@
                 Designation = art.Designation,
                 PrixUnitaire = art.PrixVenteTtc,
                 Quantite = 1,
-                StockMax = art.GereStock ? art.StockActuel : 1_000_000m,
+                StockMax = art.GereStock && !_horsLigne ? art.StockActuel : 1_000_000m,
                 Vrac = art.EstVrac || (art.Unite ?? 0) != 0,   // quantité décimale : poids, litres, mètres, heures
                 Unite = UniteSuffixe(art)
             });
@@ -1003,17 +1168,36 @@
                 }).ToList()
             };
 
-            var ticket = await CommerceApi.EncaisserVenteAsync(requete);
-            if (ticket == null)
+            TicketPosDto? ticket = null;
+            var horsLigne = _horsLigne;
+            if (!horsLigne)
             {
-                NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Une erreur est survenue.", "Échec de l'encaissement");
-                return;
+                ticket = await CommerceApi.EncaisserVenteAsync(requete);
+                if (ticket == null && EstErreurReseau())
+                    horsLigne = _horsLigne = true;   // réseau perdu pendant l'encaissement : on garde la vente sur l'appareil
+                else if (ticket == null)
+                {
+                    NotificationService.Erreur(CommerceApi.DerniereErreur ?? "Une erreur est survenue.", "Échec de l'encaissement");
+                    return;
+                }
+            }
+
+            if (horsLigne)
+            {
+                if (paiementsRetenus.Any(p => p.Mode is ModePaiementPos.Credit or ModePaiementPos.Points))
+                {
+                    NotificationService.Avertir("Hors connexion, le crédit client et les points ne sont pas utilisables. Choisissez un autre paiement.", "Hors connexion");
+                    return;
+                }
+                ticket = await MettreEnFileAsync(requete, paiementsRetenus);
+                if (ticket is null) return;
             }
 
             // Photo de la vente AVANT de vider le panier : sert au ticket et à la réimpression
             _dernierRecu = new RecuCaisse
             {
-                Ticket = ticket,
+                Ticket = ticket!,
+                EstHorsLigne = horsLigne,
                 Entreprise = _entrepriseNom,
                 Logo = _logo,
                 Magasin = _magasinNom,
@@ -1030,7 +1214,8 @@
             _paiements.Clear();
             _client = null;
             _afficherPaiement = false;
-            _ = PrechargerRecuPdfAsync(ticket.Id);   // prêt avant le clic : le partage reste instantané sur mobile
+            if (!horsLigne)
+                _ = PrechargerRecuPdfAsync(ticket!.Id);   // prêt avant le clic : le partage reste instantané sur mobile
 
             if (_impressionAuto)
                 await ImprimerAsync(_dernierRecu, reimpression: false);
@@ -1076,6 +1261,238 @@
 
         try { await _jsPos.InvokeVoidAsync("imprimerTicket"); }
         catch { NotificationService.Avertir("L'impression n'a pas pu être lancée.", "Ticket"); }
+    }
+
+    // ══════════════ MODE HORS CONNEXION ══════════════
+    private IJSObjectReference? _jsHorsLigne;
+    private bool _horsLigne;
+    private int _ventesEnAttente, _ventesEnErreur;
+    private List<VenteEnFile> _file = new();
+    private bool _afficherFile, _synchronisation;
+    private readonly CancellationTokenSource _arretSynchronisation = new();
+
+    private const string CleContexte = "contexte-caisse";
+    private const string MessageReseau = "Impossible de joindre le serveur";
+
+    /// <summary>Vente gardée sur l'appareil (même forme que dans IndexedDB).</summary>
+    public sealed class VenteEnFile
+    {
+        public Guid Id { get; set; }
+        public string NumeroHorsLigne { get; set; } = "";
+        public DateTime DateVenteLocale { get; set; }
+        public decimal Total { get; set; }
+        public string Statut { get; set; } = "attente";
+        public string? Erreur { get; set; }
+        public CreerVentePosRequest Requete { get; set; } = new();
+    }
+
+    /// <summary>Ce qu'il faut pour vendre sans réseau : magasin, session ouverte, catalogue (dernier chargement en ligne).</summary>
+    public sealed class ContexteCaisse
+    {
+        public string Utilisateur { get; set; } = "";
+        public Guid MagasinId { get; set; }
+        public string MagasinNom { get; set; } = "";
+        public string? MagasinAdresse { get; set; }
+        public string? MagasinTelephone { get; set; }
+        public SessionPosDto? Session { get; set; }
+        public string CaisseLibelle { get; set; } = "";
+        public string CaisseCode { get; set; } = "";
+        public List<ProduitCommerceDto> Articles { get; set; } = new();
+        public DateTime EnregistreLe { get; set; }
+    }
+
+    private bool EstErreurReseau() => CommerceApi.DerniereErreur?.StartsWith(MessageReseau) == true;
+
+    private async Task<bool> EnLigneAsync()
+    {
+        try { return _jsHorsLigne is null || await _jsHorsLigne.InvokeAsync<bool>("enLigne"); } catch { return true; }
+    }
+
+    private async Task<string> UtilisateurAsync()
+    {
+        var etat = await AuthState.GetAuthenticationStateAsync();
+        return etat.User.FindFirst("sub")?.Value ?? etat.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+    }
+
+    private async Task EnregistrerContexteLocalAsync()
+    {
+        if (_jsHorsLigne is null || _session is null || _magasinId is null) return;
+        try
+        {
+            await _jsHorsLigne.InvokeVoidAsync("ecrire", CleContexte, new ContexteCaisse
+            {
+                Utilisateur = await UtilisateurAsync(),
+                MagasinId = _magasinId.Value, MagasinNom = _magasinNom, MagasinAdresse = _magasinAdresse, MagasinTelephone = _magasinTelephone,
+                Session = _session, CaisseLibelle = _caisseLibelle,
+                CaisseCode = _caisses.FirstOrDefault(c => c.Id == _session.CaisseId)?.Code ?? "C",
+                Articles = _articles, EnregistreLe = DateTime.UtcNow
+            });
+        }
+        catch { /* stockage indisponible (navigation privée) : pas de mode hors connexion */ }
+    }
+
+    private async Task ChargerContexteLocalAsync()
+    {
+        if (_jsHorsLigne is null) return;
+        try
+        {
+            var c = await _jsHorsLigne.InvokeAsync<ContexteCaisse?>("lire", CleContexte);
+            if (c?.Session is null || c.Utilisateur != await UtilisateurAsync()) return;   // jamais la caisse d'un autre utilisateur
+
+            _horsLigne = true;
+            _magasinId = c.MagasinId; _magasinNom = c.MagasinNom; _magasinAdresse = c.MagasinAdresse; _magasinTelephone = c.MagasinTelephone;
+            _session = c.Session; _caisseLibelle = c.CaisseLibelle;
+            _caisses = new() { new CaissePosDto { Id = c.Session.CaisseId, Code = c.CaisseCode, Libelle = c.CaisseLibelle, SessionOuverte = true } };
+            _articles = c.Articles;
+            FiltrerArticles();
+            NotificationService.Avertir($"Pas de réseau : la caisse fonctionne avec le catalogue du {c.EnregistreLe.ToLocalTime():dd/MM à HH:mm}. Les ventes seront envoyées au retour du réseau.", "Hors connexion");
+        }
+        catch { }
+    }
+
+    /// <summary>Garde la vente sur l'appareil et renvoie un ticket provisoire (numéro HL-CAISSE-AAMMJJ-n).</summary>
+    private async Task<TicketPosDto?> MettreEnFileAsync(CreerVentePosRequest requete, List<PaiementSaisi> paiements)
+    {
+        if (_jsHorsLigne is null || _session is null)
+        {
+            NotificationService.Erreur("Cet appareil ne peut pas garder de ventes hors connexion (navigation privée ?).", "Hors connexion");
+            return null;
+        }
+
+        var maintenant = DateTime.UtcNow;
+        var code = new string((_caisses.FirstOrDefault(c => c.Id == _session.CaisseId)?.Code ?? "C").ToUpperInvariant().Where(char.IsLetterOrDigit).Take(10).ToArray());
+        if (code.Length == 0) code = "C";
+        var jour = maintenant.ToLocalTime().ToString("yyMMdd");
+        var n = await _jsHorsLigne.InvokeAsync<int>("prochainNumero", $"compteur:{_session.CaisseId}:{jour}");
+        var numero = $"HL-{code}-{jour}-{n:D4}";
+
+        var vente = new VenteEnFile
+        {
+            Id = requete.ClientRequestId, NumeroHorsLigne = numero, DateVenteLocale = maintenant,
+            Total = TotalPanier, Requete = requete
+        };
+        await _jsHorsLigne.InvokeVoidAsync("fileAjouter", vente);
+
+        // Stock affiché : on retire ce qui vient d'être vendu (le serveur fera foi à la synchronisation)
+        foreach (var l in requete.Lignes)
+            if (_articles.FirstOrDefault(a => a.Id == l.ProduitId) is { GereStock: true } art) art.StockActuel -= l.Quantite;
+        await EnregistrerContexteLocalAsync();
+        await RafraichirFileAsync();
+
+        NotificationService.Avertir($"Vente enregistrée sur l'appareil (ticket {numero}). Elle sera envoyée automatiquement au retour du réseau.", "Hors connexion");
+        return new TicketPosDto
+        {
+            Id = requete.ClientRequestId, NumeroTicket = numero, DateVente = maintenant,
+            TotalTTC = TotalPanier, MontantPaye = paiements.Sum(p => p.Montant), RenduMonnaie = Rendu
+        };
+    }
+
+    private async Task RafraichirFileAsync()
+    {
+        if (_jsHorsLigne is null) return;
+        try
+        {
+            _file = await _jsHorsLigne.InvokeAsync<List<VenteEnFile>>("fileLister") ?? new();
+            _ventesEnAttente = _file.Count(v => v.Statut != "erreur");
+            _ventesEnErreur = _file.Count(v => v.Statut == "erreur");
+        }
+        catch { }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OuvrirFile()
+    {
+        await RafraichirFileAsync();
+        _afficherFile = true;
+    }
+
+    private async Task ReessayerFile()
+    {
+        if (_jsHorsLigne is not null) await _jsHorsLigne.InvokeVoidAsync("fileRemettreEnAttente");
+        await SynchroniserAsync(manuel: true);
+    }
+
+    /// <summary>Toutes les 15 secondes : retour du réseau détecté → envoi des ventes en attente, puis rechargement de la caisse.</summary>
+    private async Task BoucleSynchronisationAsync()
+    {
+        using var minuterie = new PeriodicTimer(TimeSpan.FromSeconds(15));
+        try
+        {
+            while (await minuterie.WaitForNextTickAsync(_arretSynchronisation.Token))
+            {
+                var enLigne = await EnLigneAsync();
+                if (!enLigne)
+                {
+                    if (!_horsLigne) { _horsLigne = true; await InvokeAsync(StateHasChanged); }
+                    continue;
+                }
+                if (_ventesEnAttente > 0 || _horsLigne) await SynchroniserAsync(manuel: false);
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task SynchroniserAsync(bool manuel)
+    {
+        if (_synchronisation || _jsHorsLigne is null) return;
+        _synchronisation = true;
+        var envoyees = 0;
+        var reseauOk = true;
+        try
+        {
+            var file = await _jsHorsLigne.InvokeAsync<List<VenteEnFile>>("fileLister") ?? new();
+            foreach (var v in file.Where(v => v.Statut != "erreur"))
+            {
+                HttpResponseMessage reponse;
+                try
+                {
+                    reponse = await Http.PostAsJsonAsync("api/commerce/pos/ventes/hors-ligne",
+                        new { Vente = v.Requete, DateVenteLocale = v.DateVenteLocale, NumeroHorsLigne = v.NumeroHorsLigne });
+                }
+                catch (HttpRequestException) { reseauOk = false; break; }   // toujours pas de réseau
+
+                using (reponse)
+                {
+                    if (reponse.IsSuccessStatusCode)
+                    {
+                        await _jsHorsLigne.InvokeVoidAsync("fileRetirer", v.Id);
+                        envoyees++;
+                    }
+                    else if ((int)reponse.StatusCode is 401 or 429 or >= 500)
+                    {
+                        reseauOk = (int)reponse.StatusCode != 401;
+                        break;   // session expirée, serveur occupé ou en panne : on réessaiera plus tard
+                    }
+                    else
+                    {
+                        string? message = null;
+                        try { message = (await reponse.Content.ReadFromJsonAsync<ReponseErreur>())?.Message; } catch { }
+                        await _jsHorsLigne.InvokeVoidAsync("fileMarquerErreur", v.Id, message ?? $"Refusée par le serveur (erreur {(int)reponse.StatusCode}).");
+                    }
+                }
+            }
+
+            if (reseauOk && _horsLigne)
+            {
+                // Réseau revenu : on repasse en ligne et on recharge la caisse depuis le serveur
+                _horsLigne = false;
+                await ResoudreMagasinAsync();
+                if (_magasinId.HasValue) await ChargerSessionAsync();
+                if (EstErreurReseau()) _horsLigne = true;
+            }
+        }
+        catch { /* réessai au prochain tour */ }
+        finally
+        {
+            _synchronisation = false;
+            await RafraichirFileAsync();
+            if (envoyees > 0)
+                NotificationService.Succes($"{envoyees} vente(s) faite(s) hors connexion envoyée(s) au serveur.", "Synchronisation");
+            else if (manuel && !reseauOk)
+                NotificationService.Avertir("Toujours pas de réseau : nouvel essai automatique dans quelques secondes.", "Synchronisation");
+            if (_ventesEnErreur > 0 && envoyees > 0)
+                NotificationService.Erreur($"{_ventesEnErreur} vente(s) refusée(s) par le serveur : ouvrez « à envoyer » pour le détail.", "Synchronisation");
+        }
     }
 
     // ── Reçu : WhatsApp direct au client (texte + lien PDF) ou partage du fichier PDF ──
@@ -1135,6 +1552,15 @@
         {
             _jsPartage ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/finama-partage.js");
 
+            if (r.EstHorsLigne)
+            {
+                // Ticket provisoire : pas encore de PDF sur le serveur → détail du ticket par WhatsApp
+                var tel = new string((r.ClientTelephone ?? "").Where(char.IsDigit).ToArray());
+                if (tel.Length == 8) tel = "228" + tel;
+                await _jsPartage.InvokeVoidAsync("ouvrir", $"https://wa.me/{tel}?text={Uri.EscapeDataString(MessageRecu(r))}");
+                return;
+            }
+
             if (_recuPdf is not { } pdf || pdf.VenteId != r.Ticket.Id)
             {
                 await PrechargerRecuPdfAsync(r.Ticket.Id);
@@ -1179,6 +1605,14 @@
     // ── Clôture ──
     private void OuvrirCloture()
     {
+        if (_horsLigne || _ventesEnAttente + _ventesEnErreur > 0)
+        {
+            NotificationService.Avertir(_horsLigne
+                ? "Pas de clôture hors connexion : attendez le retour du réseau."
+                : $"{_ventesEnAttente + _ventesEnErreur} vente(s) faite(s) hors connexion doivent d'abord être envoyées.", "Clôture impossible");
+            if (!_horsLigne) _afficherFile = true;
+            return;
+        }
         _declEspeces = _declCarte = _declMobile = 0;
         _commentaireCloture = null;
         _afficherCloture = true;
@@ -1315,6 +1749,9 @@
 
     public async ValueTask DisposeAsync()
     {
+        _arretSynchronisation.Cancel();
+        try { if (_jsHorsLigne is not null) await _jsHorsLigne.DisposeAsync(); }
+        catch { /* runtime JS arrêté */ }
         try { if (_jsPartage is not null) await _jsPartage.DisposeAsync(); }
         catch { /* runtime JS arrêté */ }
         try { if (_jsCodes is not null) await _jsCodes.DisposeAsync(); }
@@ -1386,6 +1823,7 @@
         public List<LigneRecu> Lignes { get; init; } = new();
         public List<PaiementRecu> Paiements { get; init; } = new();
         public bool Reimpression { get; init; }
+        public bool EstHorsLigne { get; init; }
     }
 
     public record LigneRecu(string Designation, decimal Quantite, decimal PrixUnitaire, decimal Total, string Unite);

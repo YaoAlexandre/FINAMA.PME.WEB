@@ -4,6 +4,7 @@
 @using Radzen
 @using System.Text.Json
 @layout MainLayout
+@inject IJSRuntime JS
 @inject FinamaApiService Api
 @inject NotificationService NotificationService
 
@@ -175,6 +176,11 @@ else
                         <h6 class="text-primary fw-bold mb-3"><i class="bi bi-building me-2"></i>Informations générales</h6>
                         <div class="row g-3 mb-4">
                             <div class="col-12">
+                                <label class="form-label small fw-bold">Nom de l'entreprise (raison sociale) *</label>
+                                <input class="form-control fw-bold" maxlength="150" @bind="_edition.Nom" @bind:event="oninput" required />
+                                <div class="form-text">Apparaît sur vos factures, devis, tickets et documents PDF.</div>
+                            </div>
+                            <div class="col-12">
                                 <label class="form-label small fw-bold">Adresse complète *</label>
                                 <input class="form-control" @bind="_edition.Adresse" required />
                             </div>
@@ -269,14 +275,24 @@ else
         _enregistrement = true;
         try
         {
+            if (string.IsNullOrWhiteSpace(_edition.Nom) || _edition.Nom.Trim().Length < 2)
+            {
+                NotificationService.Notify(NotificationSeverity.Warning, "Vérifiez la saisie", "Le nom de l'entreprise est obligatoire (2 caractères au minimum).");
+                return;
+            }
+            _edition.Nom = _edition.Nom.Trim();
             await Api.UpdateEntrepriseAsync(_edition);
-            NotificationService.Notify(NotificationSeverity.Success, "Succès", "Les informations de facturation ont été mises à jour.");
+
+            // Le menu (en bas à gauche) affiche le nom gardé à la connexion : on le met à jour tout de suite
+            try { await JS.InvokeVoidAsync("localStorage.setItem", "finama_entreprise", _edition.Nom); } catch { }
+
+            NotificationService.Notify(NotificationSeverity.Success, "Succès", "Les informations de l'entreprise ont été mises à jour.");
             FermerModal();
             await ChargerDonnees();
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            NotificationService.Notify(NotificationSeverity.Error, "Erreur", "Une erreur s'est produite lors de la sauvegarde.");
+            NotificationService.Notify(NotificationSeverity.Error, "Enregistrement impossible", ex.Message);
         }
         finally
         {

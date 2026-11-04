@@ -5,6 +5,7 @@
 @inject Radzen.NotificationService NotificationService
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject ImagesArticlesService Images
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
@@ -29,15 +30,14 @@
 <div class="card border-0 shadow-sm rounded-3 mb-4">
     <div class="card-body p-3">
         <div class="row g-3">
-            <div class="col-md-5">
+                       <div class="col-md-5">
                 <div class="input-group">
                     <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
-                    <div class="input-group">
-                        <input type="text" class="form-control font-monospace" @bind="_nouveauProduit.CodeBarres" placeholder="Facultatif" />
-                        <button class="btn btn-outline-success" type="button" title="Scanner avec la caméra" @onclick="() => _scannerCode.OuvrirAsync()">
-                            <i class="bi bi-camera"></i>
-                        </button>
-                    </div>
+                    <input type="text" class="form-control bg-light border-start-0" placeholder="Nom, référence, code-barres, ISBN…"
+                           @bind="_recherche" @bind:event="oninput" @bind:after="SurFiltre" />
+                    <button class="btn btn-outline-success" type="button" title="Chercher en scannant" @onclick="() => _scannerRecherche.OuvrirAsync()">
+                        <i class="bi bi-camera"></i>
+                    </button>
                 </div>
             </div>
             <div class="col-md-3">
@@ -96,8 +96,12 @@
                         {
                             <tr @key="p.Id" class="@(p.EstActif ? "" : "text-muted")">
                                 <td class="ps-4 font-monospace small fw-bold">@(p.CodeBarres ?? p.Isbn ?? p.Reference)</td>
-                                <td>
-                                    <div class="fw-bold text-dark">
+                                                                <td>
+                                    <div class="fw-bold text-dark d-flex align-items-center gap-2">
+                                        @if (Images.Url(p.Id) is { } photo)
+                                        {
+                                            <img src="@photo" alt="" class="rounded-2 border flex-shrink-0" style="width:36px;height:36px;object-fit:cover" loading="lazy" />
+                                        }
                                         @p.Designation
                                         @if (!p.EstActif) { <span class="badge bg-secondary ms-1">Inactif</span> }
                                         @if (p.EstService) { <span class="badge bg-primary bg-opacity-10 text-primary ms-1">Service</span> }
@@ -162,7 +166,12 @@
                     <div class="row g-3">
                         <div class="col-md-8">
                             <label class="form-label fw-bold small">Désignation *</label>
-                            <input type="text" class="form-control" @bind="_nouveauProduit.Designation" placeholder="Nom de l'article ou du service" />
+                                                        <div class="input-group">
+                                <input type="text" class="form-control font-monospace" @bind="_nouveauProduit.CodeBarres" placeholder="Facultatif" />
+                                <button class="btn btn-outline-success" type="button" title="Scanner avec la caméra" @onclick="() => _scannerCode.OuvrirAsync()">
+                                    <i class="bi bi-camera"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label fw-bold small">Type</label>
@@ -292,7 +301,10 @@
                                 </div>
                             }
                         }
-
+                                                        <div class="col-12">
+                            <label class="form-label fw-bold small">Photo</label>
+                            <PhotoArticle ProduitId="_produitEnCoursId" OnChange="StateHasChanged" />
+                        </div>
                         <div class="col-12">
                             <label class="form-label fw-bold small">Description</label>
                             <input type="text" class="form-control" @bind="_nouveauProduit.Description" placeholder="Facultatif" />
@@ -313,7 +325,9 @@
 
 <ConfirmDialog @ref="_confirm" />
 <ScannerCamera @ref="_scannerCode" OnCode="@(c => _nouveauProduit.CodeBarres = c)" Titre="Scanner le code-barres du produit" />
+<ScannerCamera @ref="_scannerRecherche" OnCode="@(c => { _recherche = c; SurFiltre(); })" Titre="Chercher un article" />
 @code {
+    private ScannerCamera _scannerRecherche = default!;
     private ScannerCamera _scannerCode = default!;
     private ConfirmDialog _confirm = default!;
     private List<ProduitCommerceDto> _produits = new();
@@ -337,6 +351,7 @@
         _parametres = await CommerceApi.GetParametresAsync() ?? new ParametresCommerceDto();
         _categories = await CommerceApi.GetCategoriesAsync();
         if (_parametres.UtiliseLivres) _editeurs = await CommerceApi.GetEditeursAsync();
+         await Images.ChargerAsync();
         await ChargerProduits();
     }
 

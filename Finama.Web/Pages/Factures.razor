@@ -192,6 +192,11 @@
                             </div>
                         </div>
                     </div>
+                    <ReglementsFacture FactureId="@_factureDetail.Id"
+                                       Solde="@_factureDetail.Solde"
+                                       Devise="@_factureDetail.EntrepriseDeviseSymbole"
+                                       PeutRegler="@(_factureDetail.Statut is not ("Brouillon" or "Annulee"))"
+                                       OnChange="ApresReglement" />
                 </div>
                 <div class="modal-footer bg-light border-0 p-3">
                     <button class="btn btn-light px-3 fw-semibold border" @onclick="() => _factureDetail = null">Fermer</button>
@@ -494,6 +499,14 @@
         "annulee" => "bg-secondary-subtle text-secondary border border-secondary-subtle",
         _ => "bg-danger-subtle text-danger border border-danger-subtle"
     };
+
+    // Après un règlement : liste rechargée et fiche ouverte mise à jour (statut, reste à payer)
+    private async Task ApresReglement()
+    {
+        var id = _factureDetail?.Id;
+        await ChargerAsync();
+        if (id is { } i) _factureDetail = _factures?.Items.FirstOrDefault(x => x.Id == i) ?? _factureDetail;
+    }
 
     private static bool EstEnRetard(FactureDto f)
         => f.DateEcheance.HasValue && f.DateEcheance < DateTime.Today

@@ -1,0 +1,195 @@
+@page "/comptabilite/liaison"
+@attribute [Authorize(Policy = "AdminTenant")]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject Radzen.NotificationService Notif
+
+<PageTitle>Liaison comptable — Finama</PageTitle>
+
+<div style="max-width: 900px;">
+    <h3 class="fw-bold mb-1"><i class="bi bi-link-45deg text-primary me-2"></i>Liaison comptable automatique</h3>
+    <p class="text-muted small mb-4">Quand elle est active, les factures, leurs règlements et les clôtures de caisse passent leur écriture comptable tout seuls.</p>
+
+    @if (_p is null)
+    {
+        <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    }
+    else
+    {
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <div class="form-check form-switch fs-5 m-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="actif" @bind="_p.LiaisonActive" />
+                        <label class="form-check-label fw-bold" for="actif">@(_p.LiaisonActive ? "Liaison active" : "Liaison désactivée")</label>
+                    </div>
+                    @if (_p.ActiveDepuis is { } d && _p.LiaisonActive)
+                    {
+                        <span class="badge bg-success-subtle text-success border">depuis le @d.ToLocalTime().ToString("dd/MM/yyyy")</span>
+                    }
+                </div>
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="valider" @bind="_p.ValiderAutomatiquement" />
+                    <label class="form-check-label" for="valider">Valider directement les écritures automatiques
+                        <span class="text-muted small d-block">Décoché : elles arrivent en brouillon, le comptable les vérifie puis les valide.</span></label>
+                </div>
+
+                <div class="alert alert-light border small mt-3 mb-0">
+                    <div class="fw-bold mb-1">Écritures passées automatiquement</div>
+                    <div>Facture de vente → <b>VT</b> : client au débit (TTC) / ventes (HT) et TVA collectée au crédit.</div>
+                    <div>Facture d'achat → <b>AC</b> : achats (HT) et TVA déductible au débit / fournisseur au crédit.</div>
+                    <div>Règlement → <b>BQ</b> ou <b>CA</b> : trésorerie / client, ou fournisseur / trésorerie.</div>
+                    <div>Clôture de caisse → <b>CA</b> : espèces, carte, Mobile Money, crédit, points / ventes (HT) et TVA.</div>
+                    <div class="text-muted mt-1">Une pièce n'est jamais comptabilisée deux fois. Les avoirs sont passés en sens inverse.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-body p-4">
+                <h6 class="fw-bold mb-1">Comptes utilisés</h6>
+                <p class="small text-muted">Numéro du plan comptable. S'il n'existe pas exactement, le premier compte qui commence par ce numéro est pris. Chaque compte est vérifié à l'enregistrement.</p>
+                <div class="row g-3">
+                    @foreach (var c in Champs)
+                    {
+                        var verif = _comptes.GetValueOrDefault(c.Cle) ?? "";
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold mb-1">@c.Libelle</label>
+                            <input class="form-control font-monospace" inputmode="numeric" maxlength="20" value="@c.Lire(_p)"
+                                   @onchange="e => c.Ecrire(_p, e.Value?.ToString() ?? string.Empty)" />
+                            <div class="small @(verif == "introuvable" ? "text-danger" : "text-muted")">
+                                @(verif == "introuvable" ? "Introuvable dans le plan comptable" : verif)
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="d-flex gap-2 mt-4">
+                    <button class="btn btn-primary fw-bold px-4" @onclick="Enregistrer" disabled="@_enCours">
+                        @if (_enCours) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Enregistrer
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-body p-4">
+                <h6 class="fw-bold mb-1">Pièces pas encore comptabilisées</h6>
+                <p class="small text-muted mb-3">Créées avant l'activation, ou dont l'écriture a échoué (compte manquant, exercice fermé…).</p>
+                <div class="d-flex gap-4 flex-wrap mb-3">
+                    <div><div class="fs-3 fw-bold">@_attente.Factures</div><div class="small text-muted">factures</div></div>
+                    <div><div class="fs-3 fw-bold">@_attente.Reglements</div><div class="small text-muted">règlements</div></div>
+                    <div><div class="fs-3 fw-bold">@_attente.Caisses</div><div class="small text-muted">clôtures de caisse</div></div>
+                </div>
+                <div class="d-flex align-items-end gap-2 flex-wrap">
+                    <div>
+                        <label class="form-label small fw-bold mb-1">À partir du (facultatif)</label>
+                        <input type="date" class="form-control" @bind="_depuis" />
+                    </div>
+                    <button class="btn btn-outline-primary fw-bold" @onclick="Rattraper" disabled="@(_enCours || !_p.LiaisonActive || _attente.Total == 0)">
+                        <i class="bi bi-arrow-repeat me-1"></i>Comptabiliser ces pièces
+                    </button>
+                </div>
+                <div class="small text-warning mt-2"><i class="bi bi-exclamation-triangle me-1"></i>Si ces pièces ont déjà été saisies à la main en comptabilité, elles seraient comptées deux fois : utilisez la date pour ne prendre que les plus récentes.</div>
+                @if (_erreurs.Any())
+                {
+                    <ul class="small text-danger mt-3 mb-0">@foreach (var e in _erreurs) { <li>@e</li> }</ul>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    public sealed class Parametres
+    {
+        public bool LiaisonActive { get; set; }
+        public bool ValiderAutomatiquement { get; set; }
+        public DateTime? ActiveDepuis { get; set; }
+        public string CompteVentes { get; set; } = "";
+        public string CompteAchats { get; set; } = "";
+        public string CompteTvaCollectee { get; set; } = "";
+        public string CompteTvaDeductible { get; set; } = "";
+        public string CompteClients { get; set; } = "";
+        public string CompteFournisseurs { get; set; } = "";
+        public string CompteBanque { get; set; } = "";
+        public string CompteCaisse { get; set; } = "";
+        public string CompteMobileMoney { get; set; } = "";
+        public string CompteClientsCaisse { get; set; } = "";
+        public string CompteRemisesFidelite { get; set; } = "";
+    }
+    public sealed record EnAttente(int Factures, int Reglements, int Caisses) { public int Total => Factures + Reglements + Caisses; }
+    private sealed record Reponse(Parametres Parametres, Dictionary<string, string> Comptes, EnAttente EnAttente);
+    private sealed record ReponseApi(string? Message, List<string>? Erreurs);
+    private sealed record Champ(string Cle, string Libelle, Func<Parametres, string> Lire, Action<Parametres, string> Ecrire);
+
+    private static readonly Champ[] Champs =
+    [
+        new("CompteVentes", "Ventes de marchandises", p => p.CompteVentes, (p, v) => p.CompteVentes = v),
+        new("CompteAchats", "Achats de marchandises", p => p.CompteAchats, (p, v) => p.CompteAchats = v),
+        new("CompteTvaCollectee", "TVA collectée (facturée)", p => p.CompteTvaCollectee, (p, v) => p.CompteTvaCollectee = v),
+        new("CompteTvaDeductible", "TVA déductible (récupérable)", p => p.CompteTvaDeductible, (p, v) => p.CompteTvaDeductible = v),
+        new("CompteClients", "Clients (tiers sans sous-compte)", p => p.CompteClients, (p, v) => p.CompteClients = v),
+        new("CompteFournisseurs", "Fournisseurs (tiers sans sous-compte)", p => p.CompteFournisseurs, (p, v) => p.CompteFournisseurs = v),
+        new("CompteBanque", "Banque (et paiements par carte)", p => p.CompteBanque, (p, v) => p.CompteBanque = v),
+        new("CompteCaisse", "Caisse (espèces)", p => p.CompteCaisse, (p, v) => p.CompteCaisse = v),
+        new("CompteMobileMoney", "Mobile Money (monnaie électronique)", p => p.CompteMobileMoney, (p, v) => p.CompteMobileMoney = v),
+        new("CompteClientsCaisse", "Clients de la caisse (ventes à crédit)", p => p.CompteClientsCaisse, (p, v) => p.CompteClientsCaisse = v),
+        new("CompteRemisesFidelite", "Remises de fidélité (paiements en points)", p => p.CompteRemisesFidelite, (p, v) => p.CompteRemisesFidelite = v),
+    ];
+
+    private Parametres? _p;
+    private Dictionary<string, string> _comptes = new();
+    private EnAttente _attente = new(0, 0, 0);
+    private List<string> _erreurs = new();
+    private DateTime? _depuis;
+    private bool _enCours;
+
+    protected override async Task OnInitializedAsync() => await Charger();
+
+    private async Task Charger()
+    {
+        try
+        {
+            var r = await Http.GetFromJsonAsync<Reponse>("api/compta/liaison");
+            _p = r?.Parametres; _comptes = r?.Comptes ?? new(); _attente = r?.EnAttente ?? new(0, 0, 0);
+        }
+        catch { Notif.Erreur("Paramètres indisponibles."); }
+    }
+
+    private async Task Enregistrer()
+    {
+        if (_p is null) return;
+        _enCours = true;
+        try
+        {
+            using var r = await Http.PutAsJsonAsync("api/compta/liaison", _p);
+            var m = await Lire(r);
+            if (r.IsSuccessStatusCode) Notif.Succes(m?.Message ?? "Enregistré.", "Liaison comptable");
+            else Notif.Erreur(m?.Message ?? "Enregistrement impossible.", "Liaison comptable");
+            await Charger();
+        }
+        finally { _enCours = false; }
+    }
+
+    private async Task Rattraper()
+    {
+        _enCours = true; _erreurs = new();
+        try
+        {
+            var url = "api/compta/liaison/rattrapage" + (_depuis is { } d ? $"?depuis={d:yyyy-MM-dd}" : "");
+            using var r = await Http.PostAsync(url, null);
+            var m = await Lire(r);
+            if (r.IsSuccessStatusCode) Notif.Succes(m?.Message ?? "Terminé.", "Rattrapage");
+            else Notif.Erreur(m?.Message ?? "Rattrapage impossible.", "Rattrapage");
+            _erreurs = m?.Erreurs ?? new();
+            await Charger();
+        }
+        finally { _enCours = false; }
+    }
+
+    private static async Task<ReponseApi?> Lire(HttpResponseMessage r)
+    {
+        try { return await r.Content.ReadFromJsonAsync<ReponseApi>(); } catch { return null; }
+    }
+}

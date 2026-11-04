@@ -1,0 +1,121 @@
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject Radzen.NotificationService Notif
+
+@* Règlements d'une facture : liste + saisie d'un encaissement (vente) ou d'un paiement (achat). *@
+<div class="mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="fw-bold mb-0"><i class="bi bi-cash-stack me-2 text-success"></i>Règlements</h6>
+        <span class="small">Reste à régler : <b class="@(Solde > 0 ? "text-danger" : "text-success")">@Solde.ToString("N0") @Devise</b></span>
+    </div>
+
+    @if (_liste.Any())
+    {
+        <table class="table table-sm small mb-3">
+            <thead class="table-light"><tr><th>Date</th><th>Mode</th><th>Référence</th><th class="text-end">Montant</th><th>Écriture</th></tr></thead>
+            <tbody>
+                @foreach (var r in _liste)
+                {
+                    <tr>
+                        <td>@r.DateReglement.ToString("dd/MM/yyyy")</td>
+                        <td>@Mode(r.Mode)</td>
+                        <td>@(r.Reference ?? "—")</td>
+                        <td class="text-end font-monospace">@r.Montant.ToString("N0")</td>
+                        <td class="font-monospace">@(r.Ecriture ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (Solde > 0 && PeutRegler)
+    {
+        <div class="row g-2 align-items-end p-2 bg-light rounded border">
+            <div class="col-6 col-md-3">
+                <label class="form-label small fw-bold mb-1">Date</label>
+                <input type="date" class="form-control form-control-sm" @bind="_date" />
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small fw-bold mb-1">Montant</label>
+                <input type="number" class="form-control form-control-sm text-end font-monospace" min="0" @bind="_montant" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small fw-bold mb-1">Mode</label>
+                <select class="form-select form-select-sm" @bind="_mode">
+                    <option value="0">Banque</option>
+                    <option value="1">Caisse</option>
+                    <option value="2">Mobile Money</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small fw-bold mb-1">Référence</label>
+                <input class="form-control form-control-sm" maxlength="100" placeholder="N° virement…" @bind="_reference" />
+            </div>
+            <div class="col-12 col-md-2">
+                <button class="btn btn-success btn-sm w-100 fw-bold" @onclick="Enregistrer" disabled="@(_enCours || _montant <= 0)">
+                    @if (_enCours) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    Enregistrer
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid FactureId { get; set; }
+    [Parameter] public decimal Solde { get; set; }
+    [Parameter] public string Devise { get; set; } = "FCFA";
+    [Parameter] public bool PeutRegler { get; set; } = true;
+    [Parameter] public EventCallback OnChange { get; set; }
+
+    private sealed record Reglement(Guid Id, DateTime DateReglement, decimal Montant, System.Text.Json.JsonElement Mode, string? Reference, string? Ecriture);
+    private sealed record ReponseApi(string? Message, decimal? Solde);
+
+    private List<Reglement> _liste = new();
+    private DateTime _date = DateTime.Today;
+    private decimal _montant;
+    private int _mode;
+    private string? _reference;
+    private bool _enCours;
+    private Guid _chargePour;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_chargePour == FactureId) return;
+        _chargePour = FactureId;
+        _montant = Solde;
+        await Charger();
+    }
+
+    private async Task Charger()
+    {
+        try { _liste = await Http.GetFromJsonAsync<List<Reglement>>($"api/factures/{FactureId}/reglements") ?? new(); }
+        catch { _liste = new(); }
+    }
+
+    private async Task Enregistrer()
+    {
+        _enCours = true;
+        try
+        {
+            using var r = await Http.PostAsJsonAsync($"api/factures/{FactureId}/reglements",
+                new { DateReglement = _date, Montant = _montant, Mode = _mode, Reference = _reference });
+            ReponseApi? m = null;
+            try { m = await r.Content.ReadFromJsonAsync<ReponseApi>(); } catch { }
+            if (!r.IsSuccessStatusCode) { Notif.Erreur(m?.Message ?? "Règlement refusé.", "Règlement"); return; }
+            Notif.Succes(m?.Message ?? "Règlement enregistré.", "Règlement");
+            Solde = m?.Solde ?? Solde - _montant;
+            _montant = Solde; _reference = null;
+            await Charger();
+            await OnChange.InvokeAsync();
+        }
+        finally { _enCours = false; }
+    }
+
+    // Le mode arrive en nombre (0, 1, 2) ou en texte selon la configuration JSON de l'API
+    private static string Mode(System.Text.Json.JsonElement m)
+    {
+        var v = m.ValueKind == System.Text.Json.JsonValueKind.Number ? m.GetInt32().ToString() : m.ToString();
+        return v switch { "1" or "Caisse" => "Caisse", "2" or "MobileMoney" => "Mobile Money", _ => "Banque" };
+    }
+}

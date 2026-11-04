@@ -323,13 +323,16 @@ public class FinamaApiService
         }
     }
     // ─── Reporting ────────────────────────────────────────────────────────────
-    public async Task<BalanceWrapper?> GetBalanceAsync(Guid exerciceId, string? classe = null)
+    public async Task<BalanceWrapper?> GetBalanceAsync(Guid exerciceId, string? classe = null,
+                                                   DateTime? dateDebut = null, DateTime? dateFin = null)
     {
         try
         {
             await SetAuthHeaderAsync();
             var url = $"api/Reporting/balance?exerciceId={exerciceId}";
             if (!string.IsNullOrEmpty(classe)) url += $"&classeCompte={classe}";
+            if (dateDebut is { } d) url += $"&dateDebut={d:yyyy-MM-dd}";
+            if (dateFin is { } f) url += $"&dateFin={f:yyyy-MM-dd}";
 
             return await _http.GetFromJsonAsync<BalanceWrapper>(url);
         }
@@ -570,7 +573,8 @@ public class FinamaApiService
 
     public async Task UpdateEntrepriseAsync(EntrepriseModel entreprise)
     {
-        await _http.PutAsJsonAsync("api/entreprise/profil", new
+        await SetAuthHeaderAsync();
+        var r = await _http.PutAsJsonAsync("api/entreprise/profil", new
         {
             Nom = entreprise.Nom,
             Adresse = entreprise.Adresse,
@@ -580,6 +584,8 @@ public class FinamaApiService
             BanqueBIC = entreprise.BanqueBIC,
             TauxTVA = entreprise.TauxTVA,
         });
+        if (!r.IsSuccessStatusCode)
+            throw new InvalidOperationException(await LireMessageErreurAsync(r, "Les informations n'ont pas pu être enregistrées."));
     }
 
     // ─── Devises ───────────────────────────────────────────────────────────────

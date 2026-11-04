@@ -6,6 +6,7 @@
     <!-- Cultures complètes (fr-FR) pour les formats de montants et de dates -->
     <BlazorWebAssemblyLoadAllGlobalizationData>true</BlazorWebAssemblyLoadAllGlobalizationData>
     <ImplicitUsings>enable</ImplicitUsings>
+	  <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,7 +17,9 @@
     <Content Remove="Pages\ModulesHub_old.razor" />
     <Compile Remove="Services\JwtAuthorizationHandler.cs" />
   </ItemGroup>
-
+	<ItemGroup>
+		<ServiceWorker Include="wwwroot\service-worker.js" PublishedContent="wwwroot\service-worker.published.js" />
+	</ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components" Version="9.0.16" />
     <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="9.0.16" />

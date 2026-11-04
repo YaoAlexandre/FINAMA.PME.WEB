@@ -161,6 +161,9 @@
 
                 @if (u.Role != "SuperAdmin")
                 {
+                    <button class="btn btn-sm btn-outline-primary mt-3" @onclick="() => OuvrirIdentite(u)" disabled="@occupe">
+                        <i class="bi bi-pencil-square me-1"></i>Modifier nom, prénom, e-mail
+                    </button>
                     <div class="mt-3">
                         <label class="form-label small fw-bold">Changer de profil</label>
                         <div class="input-group input-group-sm">
@@ -307,6 +310,48 @@
                OnConfirm="ExecuterConfirmation"
                OnCancel="() => _confirmation = null" />
 
+@if (_identite is not null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15,23,42,.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Modifier l'utilisateur</h5>
+                    <button class="btn-close" @onclick="() => _identite = null" disabled="@_identiteBusy"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Nom</label>
+                            <input class="form-control" maxlength="150" @bind="_identite.Nom" @bind:event="oninput" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Prénom</label>
+                            <input class="form-control" maxlength="150" @bind="_identite.Prenom" @bind:event="oninput" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold">E-mail (identifiant de connexion)</label>
+                            <ChampEmail @bind-Value="_identite.Email" />
+                            @if (!string.Equals(_identite.Email?.Trim(), _identite.EmailInitial, StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="form-text text-warning">Nouvelle adresse = nouvel identifiant : l'utilisateur sera déconnecté et recevra un code à sa prochaine connexion.</div>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-light" @onclick="() => _identite = null" disabled="@_identiteBusy">Annuler</button>
+                    <button class="btn btn-primary fw-bold" @onclick="EnregistrerIdentite"
+                            disabled="@(_identiteBusy || string.IsNullOrWhiteSpace(_identite.Nom) || string.IsNullOrWhiteSpace(_identite.Prenom) || ControlesSaisie.Email(_identite.Email) is not null || string.IsNullOrWhiteSpace(_identite.Email))">
+                        @if (_identiteBusy) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Enregistrer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private record Confirmation(string Titre, string Message, string Libelle, string Style, Func<Task> Action);
 
@@ -407,6 +452,37 @@
     }
 
     private sealed record ReponseApi(string? Message);
+
+    // ─── Modification de l'identité (nom, prénom, e-mail) ───
+    private sealed class Identite { public Guid Id { get; init; } public string Nom { get; set; } = ""; public string Prenom { get; set; } = ""; public string Email { get; set; } = ""; public string EmailInitial { get; init; } = ""; }
+    private Identite? _identite;
+    private bool _identiteBusy;
+
+    private void OuvrirIdentite(UtilisateurDto u)
+        => _identite = new Identite { Id = u.Id, Nom = u.Nom, Prenom = u.Prenom, Email = u.Email, EmailInitial = u.Email };
+
+    private async Task EnregistrerIdentite()
+    {
+        if (_identite is null) return;
+        _identiteBusy = true;
+        try
+        {
+            using var r = await Http.PutAsJsonAsync($"api/Utilisateurs/{_identite.Id}/identite",
+                new { Nom = _identite.Nom.Trim(), Prenom = _identite.Prenom.Trim(), Email = _identite.Email.Trim() });
+            string? message = null;
+            try { message = (await r.Content.ReadFromJsonAsync<ReponseApi>())?.Message; } catch { }
+            Notifier(r.IsSuccessStatusCode, r.IsSuccessStatusCode ? "Utilisateur modifié" : "Modification impossible", message ?? "");
+            if (r.IsSuccessStatusCode)
+            {
+                var id = _identite.Id;
+                _identite = null;
+                await ChargerUtilisateurs();
+                SynchroniserSelection(id);
+            }
+        }
+        catch { Notifier(false, "Erreur de communication", "Serveur injoignable."); }
+        finally { _identiteBusy = false; }
+    }
     private void FermerDetails() => _utilisateurSelectionne = null;
 
     private static string Initiales(UtilisateurDto u)

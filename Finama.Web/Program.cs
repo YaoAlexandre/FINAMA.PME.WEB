@@ -43,14 +43,8 @@ builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<CustomAuthStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<CustomAuthStateProvider>());
 builder.Services.AjouterPermissionsFinama();
-//builder.Services.AddAuthorizationCore(options =>
-//{
-//    options.AddPolicy("AdminTenant", p => p.RequireRole("AdminTenant", "SuperAdmin"));
-//    options.AddPolicy("Saisie", p => p.RequireRole("AdminTenant", "Comptable", "Collaborateur", "SuperAdmin"));
-//    options.AddPolicy("Comptable", p => p.RequireRole("AdminTenant", "Comptable", "SuperAdmin"));
-//    options.AddPolicy("LectureSeule", p => p.RequireRole("AdminTenant", "Comptable", "Collaborateur", "Lecture", "Commercial", "SuperAdmin"));
-//    options.AddPolicy("Commercial", p => p.RequireRole("AdminTenant", "Commercial", "SuperAdmin"));
-//});
+builder.Services.AddScoped<ImagesArticlesService>();
+
 
 // ─── Radzen (enregistre déjà NotificationService, DialogService, TooltipService…) ───
 builder.Services.AddRadzenComponents();
