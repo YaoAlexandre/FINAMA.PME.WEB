@@ -1,0 +1,65 @@
+@* Ventes encaissées sans réseau, gardées sur l'appareil en attendant leur envoi. *@
+
+<div class="modal fade show d-block" tabindex="-1" style="background: rgba(15,23,42,.6); z-index: 2000;">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="bi bi-cloud-upload me-2"></i>Ventes faites hors connexion</h5>
+                <button class="btn-close" @onclick="OnFermer"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">Elles sont gardées sur cet appareil et envoyées automatiquement dès que le réseau revient. Ne videz pas les données du navigateur avant leur envoi.</p>
+                @if (!Ventes.Any())
+                {
+                    <div class="text-center text-muted py-4">Aucune vente en attente.</div>
+                }
+                else
+                {
+                    <table class="table table-sm align-middle">
+                        <thead class="small text-muted"><tr><th>Ticket provisoire</th><th>Heure</th><th class="text-end">Total</th><th>État</th></tr></thead>
+                        <tbody>
+                            @foreach (var v in Ventes)
+                            {
+                                <tr>
+                                    <td class="font-monospace">@v.NumeroHorsLigne</td>
+                                    <td>@v.DateVenteLocale.ToLocalTime().ToString("dd/MM HH:mm")</td>
+                                    <td class="text-end font-monospace">@v.Total.ToString("N0")</td>
+                                    <td>
+                                        @if (v.Statut == "erreur")
+                                        {
+                                            <span class="badge bg-danger">Refusée</span>
+                                            <div class="small text-danger">@v.Erreur</div>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning text-dark">En attente</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (NbErreurs > 0)
+                    {
+                        <div class="alert alert-danger small mb-0">Une vente refusée par le serveur reste ici : montrez ce message au gérant. Après correction (caisse rouverte, article réactivé…), touchez « Réessayer ».</div>
+                    }
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-light" @onclick="OnFermer">Fermer</button>
+                <button class="btn btn-success fw-bold" @onclick="OnReessayer" disabled="@(Synchronisation || !Ventes.Any())">
+                    @if (Synchronisation) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    @(NbErreurs > 0 ? "Réessayer" : "Envoyer maintenant")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyCollection<VenteEnFile> Ventes { get; set; } = Array.Empty<VenteEnFile>();
+    [Parameter] public int NbErreurs { get; set; }
+    [Parameter] public bool Synchronisation { get; set; }
+    [Parameter] public EventCallback OnFermer { get; set; }
+    [Parameter] public EventCallback OnReessayer { get; set; }
+}

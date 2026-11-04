@@ -1,0 +1,67 @@
+@* Ticket de caisse 80 mm : invisible à l'écran, seul élément imprimé (styles @media print de la page Caisse). *@
+
+<div id="ticket-impression" class="ticket-impression" aria-hidden="true">
+    <div class="t-centre">
+        @if (!string.IsNullOrEmpty(Recu.Logo))
+        {
+            <img src="@Recu.Logo" class="t-logo" alt="" />
+        }
+        <div class="t-titre">@(string.IsNullOrWhiteSpace(Recu.Entreprise) ? "Finama" : Recu.Entreprise)</div>
+        <div>@Recu.Magasin</div>
+        @if (!string.IsNullOrWhiteSpace(Recu.MagasinAdresse)) { <div>@Recu.MagasinAdresse</div> }
+        @if (!string.IsNullOrWhiteSpace(Recu.MagasinTelephone)) { <div>Tél : @Recu.MagasinTelephone</div> }
+    </div>
+
+    <div class="t-sep"></div>
+    <div class="t-ligne"><span>Ticket</span><span>@Recu.Ticket.NumeroTicket</span></div>
+    <div class="t-ligne"><span>Date</span><span>@Recu.Ticket.DateVente.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span></div>
+    <div class="t-ligne"><span>Caisse</span><span>@Recu.Caisse</span></div>
+    @if (!string.IsNullOrWhiteSpace(Recu.ClientNom)) { <div class="t-ligne"><span>Client</span><span>@Recu.ClientNom</span></div> }
+    @if (Recu.Reimpression) { <div class="t-centre t-gras">*** DUPLICATA ***</div> }
+    @if (Recu.EstHorsLigne) { <div class="t-centre t-gras">TICKET PROVISOIRE (hors connexion)</div> }
+
+    <div class="t-sep"></div>
+    @foreach (var l in Recu.Lignes)
+    {
+        <div class="t-article">@l.Designation</div>
+        <div class="t-ligne">
+            <span>@l.Quantite.ToString("0.###") x @l.PrixUnitaire.ToString("N0")@l.Unite</span>
+            <span>@l.Total.ToString("N0")</span>
+        </div>
+    }
+
+    <div class="t-sep"></div>
+    @if (Recu.Ticket.TotalRemise > 0)
+    {
+        <div class="t-ligne"><span>Remise</span><span>-@Recu.Ticket.TotalRemise.ToString("N0")</span></div>
+    }
+    <div class="t-ligne"><span>Total HT</span><span>@Recu.Ticket.TotalHT.ToString("N0")</span></div>
+    <div class="t-ligne"><span>TVA</span><span>@Recu.Ticket.TotalTVA.ToString("N0")</span></div>
+    <div class="t-ligne t-total"><span>TOTAL TTC</span><span>@Recu.Ticket.TotalTTC.ToString("N0") FCFA</span></div>
+
+    <div class="t-sep"></div>
+    @foreach (var p in Recu.Paiements)
+    {
+        <div class="t-ligne"><span>@p.Libelle@(string.IsNullOrWhiteSpace(p.Reference) ? "" : $" ({p.Reference})")</span><span>@p.Montant.ToString("N0")</span></div>
+    }
+    @if (Recu.Ticket.RenduMonnaie > 0)
+    {
+        <div class="t-ligne t-gras"><span>Rendu</span><span>@Recu.Ticket.RenduMonnaie.ToString("N0")</span></div>
+    }
+
+    <div class="t-sep"></div>
+    @if (!string.IsNullOrEmpty(QrSvg))
+    {
+        <div class="t-qr">@((MarkupString)QrSvg)</div>
+    }
+    <div class="t-centre">Merci de votre visite !</div>
+    <div class="t-centre t-petit">Ce ticket ne tient pas lieu de facture.<br />Facture disponible sur demande.</div>
+</div>
+
+@code {
+    /// <summary>Vente à imprimer.</summary>
+    [Parameter, EditorRequired] public RecuCaisse Recu { get; set; } = default!;
+
+    /// <summary>QR code du ticket (SVG), facultatif.</summary>
+    [Parameter] public string? QrSvg { get; set; }
+}

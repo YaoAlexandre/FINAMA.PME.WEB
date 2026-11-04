@@ -1,0 +1,56 @@
+@* Annulation d'un ticket : motif obligatoire, validation d'un responsable si le caissier n'en a pas le droit. *@
+
+<div class="modal fade show d-block" tabindex="-1" style="background: rgba(15,23,42,.7); z-index: 2050;">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-x-octagon me-2"></i>Annuler le ticket @Demande.Numero</h5>
+                <button class="btn-close btn-close-white" @onclick="OnRetour" disabled="@EnCours"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small mb-3">Montant du ticket : <strong>@Demande.Total.ToString("N0") FCFA</strong>. Le stock sera réintégré, le crédit et les points du client rétablis.
+                    <strong>Rendez l'argent encaissé au client.</strong></p>
+
+                <label class="form-label small fw-bold">Motif *</label>
+                <select class="form-select mb-2" @onchange="e => Demande.Motif = e.Value?.ToString() ?? string.Empty">
+                    <option value="">— Choisir —</option>
+                    <option>Erreur de saisie</option>
+                    <option>Client a renoncé à l'achat</option>
+                    <option>Mauvais mode de paiement</option>
+                    <option>Article défectueux</option>
+                </select>
+                <input class="form-control mb-3" placeholder="Ou précisez…" maxlength="200" @bind="Demande.Motif" @bind:event="oninput" />
+
+                @if (!EstGerant)
+                {
+                    <div class="border rounded-3 p-3 bg-light">
+                        <div class="small fw-bold mb-2"><i class="bi bi-shield-lock me-1"></i>Validation d'un responsable obligatoire (gérant ou personne autorisée)</div>
+                        <input type="email" class="form-control form-control-sm mb-2" placeholder="E-mail du gérant" maxlength="254" autocomplete="off" @bind="Demande.GerantEmail" @bind:event="oninput" />
+                        <input type="password" class="form-control form-control-sm" placeholder="Mot de passe du gérant" maxlength="128" autocomplete="new-password" @bind="Demande.GerantMotDePasse" @bind:event="oninput" />
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-light" @onclick="OnRetour" disabled="@EnCours">Retour</button>
+                <button class="btn btn-danger fw-bold" @onclick="OnConfirmer" disabled="@(EnCours || !Valide)">
+                    @if (EnCours) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    Annuler le ticket
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>Saisie en cours, modifiée directement par la modale.</summary>
+    [Parameter, EditorRequired] public DemandeAnnulation Demande { get; set; } = default!;
+
+    /// <summary>Vrai si l'utilisateur peut annuler sans validation d'un responsable.</summary>
+    [Parameter] public bool EstGerant { get; set; }
+    [Parameter] public bool EnCours { get; set; }
+    [Parameter] public EventCallback OnRetour { get; set; }
+    [Parameter] public EventCallback OnConfirmer { get; set; }
+
+    private bool Valide => Demande.Motif.Trim().Length >= 3
+        && (EstGerant || (!string.IsNullOrWhiteSpace(Demande.GerantEmail) && !string.IsNullOrWhiteSpace(Demande.GerantMotDePasse)));
+}
