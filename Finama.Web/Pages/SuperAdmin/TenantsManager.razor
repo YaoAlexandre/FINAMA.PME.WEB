@@ -398,18 +398,11 @@
     </div>
 }
 
-<ConfirmModal Visible="@(confirmation is not null)"
-               Titre="@confirmation?.Titre"
-               Message="@confirmation?.Message"
-               LibelleConfirmer="@(confirmation?.Libelle ?? "Confirmer")"
-               Style="@(confirmation?.Style ?? "primary")"
-               Busy="confirmationBusy"
-               OnConfirm="ExecuterConfirmation"
-               OnCancel="() => confirmation = null" />
+<ConfirmDialog @ref="_confirm" />
 
 @code {
     private enum Filtre { Tous, Actifs, Suspendus, Echeance }
-    private record Confirmation(string Titre, string Message, string Libelle, string Style, Func<Task> Action);
+    private ConfirmDialog _confirm = default!;
 
     private List<TenantAdminDto> tenants = new();
     private DashboardStatsDto? stats;
@@ -418,8 +411,6 @@
     private string rechercheTerme = string.Empty;
     private Filtre filtre = Filtre.Tous;
 
-    private Confirmation? confirmation;
-    private bool confirmationBusy;
 
     private TenantAdminDto? tenantAbo;
     private int planChoisi = PlansAbonnement.Liste[0].Valeur;
@@ -654,13 +645,10 @@
     private static string LibelleDuree(int jours) => jours switch { 30 => "1 mois", 90 => "3 mois", 180 => "6 mois", 365 => "1 an", _ => $"{jours} j" };
 
     // ---- Confirmation générique ----
-    private async Task ExecuterConfirmation()
-    {
-        if (confirmation is null) return;
-        confirmationBusy = true;
-        try { await confirmation.Action(); }
-        finally { confirmationBusy = false; confirmation = null; }
-    }
+    // Style "danger" = action destructrice (focus sur « Annuler ») ; le reste est une simple question.
+    private Task Confirmer(string titre, string message, string libelle, string style, Func<Task> action) =>
+        _confirm.ExecuterAsync(message, titre, libelle,
+            style == "danger" ? ConfirmationType.Danger : ConfirmationType.Question, action);
 
     private async Task<bool> Executer(Func<Task<ResultatApi>> action)
     {
@@ -678,10 +666,10 @@
     }
 
     // ---- Entreprises ----
-    private void DemanderBascule(TenantAdminDto t)
+    private Task DemanderBascule(TenantAdminDto t)
     {
         var suspendre = t.EstActif;
-        confirmation = new Confirmation(
+        return Confirmer(
             suspendre ? "Suspendre l'accès ?" : "Réactiver l'accès ?",
             suspendre
                 ? $"Les {t.NbUtilisateurs} utilisateur(s) de « {t.Nom} » seront déconnectés et ne pourront plus se connecter."
@@ -695,9 +683,9 @@
             });
     }
 
-    private void DemanderInitCompta(TenantAdminDto t)
+    private Task DemanderInitCompta(TenantAdminDto t)
     {
-        confirmation = new Confirmation(
+        return Confirmer(
             "Initialiser la comptabilité ?",
             $"Crée les classes, le plan de comptes OHADA et l'exercice de l'année pour « {t.Nom} ». Ce qui existe déjà n'est pas modifié.",
             "Initialiser", "primary",
@@ -748,18 +736,18 @@
             u.EstActif = !u.EstActif;
     }
 
-    private void DemanderReinitialisation(UtilisateurAdminDto u)
+    private Task DemanderReinitialisation(UtilisateurAdminDto u)
     {
-        confirmation = new Confirmation(
+        return Confirmer(
             "Réinitialiser le mot de passe ?",
             $"Un mot de passe temporaire sera envoyé à {u.Email}. Ses sessions ouvertes seront fermées.",
             "Réinitialiser", "primary",
             async () => await Executer(() => TenantService.ReinitialiserMotDePasseAsync(u.Id)));
     }
 
-    private void DemanderSuppression(UtilisateurAdminDto u)
+    private Task DemanderSuppression(UtilisateurAdminDto u)
     {
-        confirmation = new Confirmation(
+        return Confirmer(
             "Supprimer l'utilisateur ?",
             $"{u.Prenom} {u.Nom} ne pourra plus se connecter. L'adresse {u.Email} ne pourra pas être réutilisée.",
             "Supprimer", "danger",

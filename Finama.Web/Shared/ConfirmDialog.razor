@@ -3,6 +3,8 @@
 @* Boîte de confirmation unique pour toute l'application (remplace window.confirm).
    Usage :  <ConfirmDialog @ref="_confirm" />
             if (!await _confirm.DemanderAsync("Message", "Titre", "Supprimer", type: ConfirmationType.Danger)) return;
+   Pour garder la boîte ouverte (boutons désactivés, indicateur) pendant l'action :
+            await _confirm.ExecuterAsync("Message", "Titre", "Supprimer", ConfirmationType.Danger, () => SupprimerAsync(id));
    Règles UX : titre = la question, message = la conséquence, bouton d'action = un verbe précis (jamais « OK »),
    Échap ou clic à l'extérieur = annuler, le focus démarre sur « Annuler » pour une action dangereuse. *@
 
@@ -22,8 +24,14 @@
                     <p id="confirm-message" class="text-muted mb-0" style="white-space: pre-line;">@_message</p>
                 </div>
                 <div class="modal-footer border-0 justify-content-center gap-2 pb-4 pt-0">
-                    <button type="button" class="btn btn-light px-4" @ref="_boutonAnnuler" @onclick="() => Terminer(false)">@_libelleAnnuler</button>
-                    <button type="button" class="btn @ClasseBoutonConfirmer px-4 fw-bold" @ref="_boutonConfirmer" @onclick="() => Terminer(true)">@_libelleConfirmer</button>
+                    <button type="button" class="btn btn-light px-4" @ref="_boutonAnnuler" disabled="@_occupe" @onclick="() => Terminer(false)">@_libelleAnnuler</button>
+                    <button type="button" class="btn @ClasseBoutonConfirmer px-4 fw-bold" @ref="_boutonConfirmer" disabled="@_occupe" @onclick="Confirmer">
+                        @if (_occupe)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                        }
+                        @_libelleConfirmer
+                    </button>
                 </div>
             </div>
         </div>
@@ -33,6 +41,8 @@
 @code {
     private bool _visible;
     private bool _focusEnAttente;
+    private bool _occupe;
+    private Func<Task>? _action;
     private string _titre = "";
     private string _message = "";
     private string _libelleConfirmer = "Confirmer";
@@ -73,6 +83,9 @@
     {
         _resultat?.TrySetResult(false);   // une seule confirmation à la fois
 
+        _action = null;
+        _occupe = false;
+
         _message = message;
         _titre = titre;
         _libelleConfirmer = libelleConfirmer;
@@ -84,6 +97,22 @@
 
         StateHasChanged();
         return _resultat.Task;
+    }
+
+    /// <summary>
+    /// Demande confirmation puis exécute l'action en gardant la boîte ouverte (boutons désactivés, indicateur)
+    /// jusqu'à la fin de l'action. Une erreur levée par l'action ferme la boîte et est propagée à l'appelant.
+    /// </summary>
+    public async Task ExecuterAsync(
+        string message,
+        string titre,
+        string libelleConfirmer,
+        ConfirmationType type,
+        Func<Task> action)
+    {
+        var attente = DemanderAsync(message, titre, libelleConfirmer, type: type);
+        _action = action;
+        await attente;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -101,9 +130,34 @@
         if (e.Key == "Escape") Terminer(false);
     }
 
+    private async Task Confirmer()
+    {
+        if (_occupe) return;
+        if (_action is null) { Terminer(true); return; }
+
+        var resultat = _resultat;
+        _occupe = true;
+        try
+        {
+            await _action();
+            _occupe = false;
+            Terminer(true);
+        }
+        catch (Exception ex)
+        {
+            _occupe = false;
+            _visible = false;
+            _action = null;
+            _resultat = null;
+            resultat?.TrySetException(ex);
+        }
+    }
+
     private void Terminer(bool confirme)
     {
+        if (_occupe) return;   // pas de fermeture pendant l'exécution de l'action
         _visible = false;
+        _action = null;
         _resultat?.TrySetResult(confirme);
         _resultat = null;
     }

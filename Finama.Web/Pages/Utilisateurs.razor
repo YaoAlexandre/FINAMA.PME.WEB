@@ -301,14 +301,7 @@
     </div>
 }
 
-<ConfirmModal Visible="@(_confirmation is not null)"
-               Titre="@_confirmation?.Titre"
-               Message="@_confirmation?.Message"
-               LibelleConfirmer="@(_confirmation?.Libelle ?? "Confirmer")"
-               Style="@(_confirmation?.Style ?? "primary")"
-               Busy="_confirmationBusy"
-               OnConfirm="ExecuterConfirmation"
-               OnCancel="() => _confirmation = null" />
+<ConfirmDialog @ref="_confirm" />
 
 @if (_identite is not null)
 {
@@ -353,7 +346,7 @@
 }
 
 @code {
-    private record Confirmation(string Titre, string Message, string Libelle, string Style, Func<Task> Action);
+    private ConfirmDialog _confirm = default!;
 
     private List<UtilisateurDto>? _utilisateurs;
     private UtilisateurDto? _utilisateurSelectionne;
@@ -361,8 +354,6 @@
     private CreerCollaborateurRequest _request = new();
 
     private readonly HashSet<Guid> _enCours = new();
-    private Confirmation? _confirmation;
-    private bool _confirmationBusy;
     private (string Utilisateur, string MotDePasse)? _motDePasseAffiche;
     private bool _copie;
 
@@ -514,10 +505,10 @@
     }
 
     // ---- Suspendre / réactiver ----
-    private void DemanderBascule(UtilisateurDto u)
+    private Task DemanderBascule(UtilisateurDto u)
     {
         var suspendre = u.EstActif;
-        _confirmation = new Confirmation(
+        return Confirmer(
             suspendre ? "Suspendre cet accès ?" : "Réactiver cet accès ?",
             suspendre
                 ? $"{u.Prenom} {u.Nom} sera déconnecté et ne pourra plus se connecter tant que son accès n'est pas réactivé."
@@ -538,9 +529,9 @@
     }
 
     // ---- Réinitialiser le mot de passe ----
-    private void DemanderReinitialisation(UtilisateurDto u)
+    private Task DemanderReinitialisation(UtilisateurDto u)
     {
-        _confirmation = new Confirmation(
+        return Confirmer(
             "Réinitialiser le mot de passe ?",
             $"Un mot de passe temporaire sera envoyé à {u.Email}. Ses sessions ouvertes seront fermées et il devra choisir un nouveau mot de passe à sa prochaine connexion.",
             "Réinitialiser", "primary",
@@ -561,14 +552,15 @@
             });
     }
 
-    private async Task ExecuterConfirmation()
-    {
-        if (_confirmation is null) return;
-        _confirmationBusy = true;
-        try { await _confirmation.Action(); }
-        catch (Exception ex) { Notifier(false, "Erreur de communication", ex.Message); }
-        finally { _confirmationBusy = false; _confirmation = null; }
-    }
+    // Style "danger" = action destructrice (focus sur « Annuler ») ; le reste est une simple question.
+    private Task Confirmer(string titre, string message, string libelle, string style, Func<Task> action) =>
+        _confirm.ExecuterAsync(message, titre, libelle,
+            style == "danger" ? ConfirmationType.Danger : ConfirmationType.Question,
+            async () =>
+            {
+                try { await action(); }
+                catch (Exception ex) { Notifier(false, "Erreur de communication", ex.Message); }
+            });
 
     private async Task CopierMotDePasse()
     {

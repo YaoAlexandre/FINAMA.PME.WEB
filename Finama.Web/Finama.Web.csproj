@@ -9,14 +9,6 @@
 	  <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Compile Remove="Models\TenantAdminModels.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Remove="Pages\ModulesHub_old.razor" />
-    <Compile Remove="Services\JwtAuthorizationHandler.cs" />
-  </ItemGroup>
 	<ItemGroup>
 		<ServiceWorker Include="wwwroot\service-worker.js" PublishedContent="wwwroot\service-worker.published.js" />
 	</ItemGroup>

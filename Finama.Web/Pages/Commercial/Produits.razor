@@ -2,7 +2,7 @@
 @using Finama.Web
 @using Finama.Web.Services
 @inject CommerceApiService CommerceApi
-@inject Radzen.NotificationService NotificationService
+@inject NotificationService NotificationService
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject ImagesArticlesService Images
@@ -148,7 +148,10 @@
                 </tbody>
             </table>
         </div>
-        <Pager @bind-Page="_page" @bind-PageSize="_taillePage" TotalItems="_produitsFiltres.Count" />
+        <div class="border-top py-2 px-3">
+            <Pagination Page="_page" PageSize="_taillePage" TotalItems="_produitsFiltres.Count" Unite="articles"
+                        OnPageChange="p => _page = p" OnPageSizeChange="t => { _taillePage = t; _page = 1; }" />
+        </div>
     </div>
 </div>
 

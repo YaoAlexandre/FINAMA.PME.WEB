@@ -131,25 +131,16 @@
     }
 </div>
 
-<ConfirmModal Visible="@(confirmation is not null)"
-               Titre="@confirmation?.Titre"
-               Message="@confirmation?.Message"
-               LibelleConfirmer="@(confirmation?.Libelle ?? "Confirmer")"
-               Style="@(confirmation?.Style ?? "primary")"
-               Busy="traitementEnCours"
-               OnConfirm="ExecuterConfirmation"
-               OnCancel="() => confirmation = null" />
+<ConfirmDialog @ref="_confirm" />
 
 @code {
     private enum Onglet { EnAttente, Traitees }
-    private record Confirmation(string Titre, string Message, string Libelle, string Style, Func<Task<ResultatApi>> Action);
+    private ConfirmDialog _confirm = default!;
 
     // Statut : 0 = en attente, 1 = approuvée, 2 = rejetée
     private List<DemandeAccesResponseDto>? demandes;
     private Onglet onglet = Onglet.EnAttente;
     private bool chargement;
-    private bool traitementEnCours;
-    private Confirmation? confirmation;
 
     private int _page = 1;
     private int _taille = 10;
@@ -195,31 +186,21 @@
               <i class="bi @(d.Statut == 1 ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i>@(d.Statut == 1 ? "Approuvée" : "Refusée")
           </span>;
 
-    private void DemanderApprobation(DemandeAccesResponseDto d)
-    {
-        confirmation = new Confirmation(
-            "Approuver cette demande ?",
-            $"« {d.NomEntreprise} » sera créée avec son plan comptable et un essai gratuit. Les identifiants temporaires seront envoyés à {d.Email}.",
-            "Approuver et créer", "success",
-            () => TenantService.ApprouverDemandeAsync(d.Id));
-    }
+    private Task DemanderApprobation(DemandeAccesResponseDto d) => _confirm.ExecuterAsync(
+        $"« {d.NomEntreprise} » sera créée avec son plan comptable et un essai gratuit. Les identifiants temporaires seront envoyés à {d.Email}.",
+        "Approuver cette demande ?", "Approuver et créer", ConfirmationType.Question,
+        () => Traiter(() => TenantService.ApprouverDemandeAsync(d.Id)));
 
-    private void DemanderRefus(DemandeAccesResponseDto d)
-    {
-        confirmation = new Confirmation(
-            "Refuser cette demande ?",
-            $"La demande de « {d.NomEntreprise} » sera marquée comme refusée. Aucun compte ne sera créé.",
-            "Refuser", "danger",
-            () => TenantService.RefuserDemandeAsync(d.Id));
-    }
+    private Task DemanderRefus(DemandeAccesResponseDto d) => _confirm.ExecuterAsync(
+        $"La demande de « {d.NomEntreprise} » sera marquée comme refusée. Aucun compte ne sera créé.",
+        "Refuser cette demande ?", "Refuser", ConfirmationType.Danger,
+        () => Traiter(() => TenantService.RefuserDemandeAsync(d.Id)));
 
-    private async Task ExecuterConfirmation()
+    private async Task Traiter(Func<Task<ResultatApi>> action)
     {
-        if (confirmation is null || traitementEnCours) return;
-        traitementEnCours = true;
         try
         {
-            var r = await confirmation.Action();
+            var r = await action();
             Notifier(r.Message, r.Succes ? "success" : "danger");
             // Recharge dans tous les cas : une demande déjà traitée doit disparaître de « À traiter »
             await ChargerDemandes();
@@ -227,11 +208,6 @@
         catch (Exception ex)
         {
             Notifier($"Erreur de communication : {ex.Message}", "danger");
-        }
-        finally
-        {
-            traitementEnCours = false;
-            confirmation = null;
         }
     }
 
