@@ -196,21 +196,6 @@ public class DevisApiService
         }
     }
 
-    // ─── Commercial : Clients ───────────────────────────────────────────────────
-
-    public async Task<List<ClientCommercialDto>> GetClientsCommercialAsync()
-    {
-        try
-        {
-            await SetAuthHeaderAsync();
-            return await _http.GetFromJsonAsync<List<ClientCommercialDto>>("api/commercial/clients") ?? new();
-        }
-        catch (Exception)
-        {
-            return new();
-        }
-    }
-
     // ─── Commercial : Pipeline Kanban ───────────────────────────────────────────
 
     public async Task<List<OpportuniteDto>> GetPipelineOpportunitesAsync()

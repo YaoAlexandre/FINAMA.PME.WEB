@@ -87,18 +87,6 @@ public class ChangerEtapeRequest
     public EtapePipeline NouvelleEtape { get; set; }
 }
 
-// ─── Vue Spécifique Commercial Clients ────────────────────────────────────────
-public class ClientCommercialDto
-{
-    public Guid Id { get; set; }
-    public string Nom { get; set; } = string.Empty;
-    public string Telephone { get; set; } = string.Empty;
-    public string Ville { get; set; } = string.Empty;
-    public string Pays { get; set; } = string.Empty;
-    public int DevisEnCoursCompte { get; set; }
-    public decimal VolumeAffairesTTC { get; set; }
-}
-
 
 public class ArticleDto
 {
